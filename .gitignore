@@ -1,0 +1,95 @@
+# Environment variables
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+logs
+*.log
+
+# Build artifacts
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# Database
+*.sqlite
+*.sqlite3
+*.db
+prisma/generated/
+prisma/.env
+
+# React/Vite specific
+.DS_Store
+*.local
+.vite/
+dist-ssr/
+
+# IDE specific files
+.idea/
+.vscode/
+*.code-workspace
+.history/
+*.sublime-project
+*.sublime-workspace
+
+# OS specific files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Testing
+coverage/
+.nyc_output/
+
+# Temporary files
+*.swp
+*.swo
+*.tmp
+*~
+.cache/
+
+# Dependency directories
+jspm_packages/
+.pnp/
+.pnp.js
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Debug log from npm
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Yarn Integrity file
+.yarn-integrity
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Misc
+.vercel
+.netlify
+.serverless/
+.fusebox/
+.dynamodb/
+.tern-port
+.webpack/
+.lock-wscript
+.turbo

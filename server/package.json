@@ -1,0 +1,35 @@
+{
+    "name": "viaguild-server",
+    "version": "1.0.0",
+    "description": "Backend server for ViaGuild",
+    "main": "src/server.js",
+    "scripts": {
+        "start": "node src/server.js",
+        "dev": "nodemon src/server.js",
+        "test": "jest",
+        "prisma:generate": "prisma generate",
+        "prisma:migrate": "prisma migrate dev",
+        "prisma:studio": "prisma studio"
+    },
+    "dependencies": {
+        "@prisma/client": "^5.22.0",
+        "bcrypt": "^5.1.1",
+        "cors": "^2.8.5",
+        "express": "^4.21.2",
+        "express-validator": "^7.2.1",
+        "helmet": "^7.2.0",
+        "jsonwebtoken": "^9.0.2",
+        "morgan": "^1.10.0",
+        "passport": "^0.6.0",
+        "passport-jwt": "^4.0.1"
+    },
+    "devDependencies": {
+        "jest": "^29.7.0",
+        "nodemon": "^3.1.9",
+        "prisma": "^5.22.0",
+        "supertest": "^6.3.4"
+    },
+    "keywords": [],
+    "author": "",
+    "license": "ISC"
+}
