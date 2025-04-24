@@ -41,6 +41,17 @@ const socialAccountService = {
   },
 
   /**
+   * Connect a Bluesky account using app password
+   * @param {Object} credentials - Object containing identifier and appPassword
+   * @returns {Promise<Object>} Response data with the connected account
+   */
+  async connectBlueskyAccount(credentials) {
+    const api = this.getAuthAxios();
+    const response = await api.post('/social-accounts/bluesky', credentials);
+    return response.data;
+  },
+
+  /**
    * Connect a Twitter account (using mock API for development)
    * @returns {Promise<Object>} Response data with the connected account
    */

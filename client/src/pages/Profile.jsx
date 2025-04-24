@@ -1,26 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import SocialAccountsList from '../components/SocialAccountsList';
+import BlueskyConnectForm from '../components/BlueskyConnectForm';
 import socialAccountService from '../services/socialAccountService';
-import axios from 'axios';
 
 /**
  * Profile page component
  * Displays user information and manages social account connections
  */
 function Profile() {
-  const { currentUser, connectSocialAccount } = useAuth();
+  const { currentUser } = useAuth();
   const [socialAccounts, setSocialAccounts] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
-
-  // Create API instance with authentication header
-  const api = axios.create({
-    baseURL: '/api',
-    headers: {
-      Authorization: `Bearer ${localStorage.getItem('token')}`,
-    },
-  });
+  const [isConnecting, setIsConnecting] = useState(false);
 
   /**
    * Fetch user's social accounts on component mount
@@ -40,26 +33,43 @@ function Profile() {
     fetchSocialAccounts();
   }, []);
 
-/**
-   * Handle connecting a social account
-   * @param {string} provider - Social provider ('twitter' or 'bluesky')
+  /**
+   * Handle connecting a Twitter account (still using mock for now)
    */
-const handleConnectAccount = async (provider) => {
+  const handleConnectTwitter = async () => {
     try {
       setError('');
+      setIsConnecting(true);
       
-      // For development, use mock endpoints
-      let response;
-      if (provider === 'twitter') {
-        response = await socialAccountService.connectTwitterMock();
-      } else if (provider === 'bluesky') {
-        response = await socialAccountService.connectBlueskyMock();
-      }
+      // For development, use mock endpoint
+      const response = await socialAccountService.connectTwitterMock();
       
       // Add the new account to the list
       setSocialAccounts([...socialAccounts, response.socialAccount]);
     } catch (error) {
-      setError(`Failed to connect ${provider} account: ${error.response?.data?.message || error.message}`);
+      setError(`Failed to connect Twitter account: ${error.response?.data?.message || error.message}`);
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
+  /**
+   * Handle connecting a Bluesky account with app password
+   * @param {Object} credentials - Object containing identifier and appPassword
+   */
+  const handleConnectBluesky = async (credentials) => {
+    try {
+      setError('');
+      setIsConnecting(true);
+      
+      const response = await socialAccountService.connectBlueskyAccount(credentials);
+      
+      // Add the new account to the list
+      setSocialAccounts([...socialAccounts, response.socialAccount]);
+    } catch (error) {
+      setError(`Failed to connect Bluesky account: ${error.response?.data?.message || error.message}`);
+    } finally {
+      setIsConnecting(false);
     }
   };
 
@@ -117,17 +127,17 @@ const handleConnectAccount = async (provider) => {
         <div className="social-buttons">
           <button 
             className="twitter-btn"
-            onClick={() => handleConnectAccount('twitter')}
+            onClick={handleConnectTwitter}
+            disabled={isConnecting}
           >
             Connect Twitter
           </button>
           
-          <button 
-            className="bluesky-btn"
-            onClick={() => handleConnectAccount('bluesky')}
-          >
-            Connect Bluesky
-          </button>
+          {/* Replace the button with our new component */}
+          <BlueskyConnectForm 
+            onConnect={handleConnectBluesky}
+            isLoading={isConnecting}
+          />
         </div>
         
         <SocialAccountsList 
