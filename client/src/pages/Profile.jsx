@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import SocialAccountsList from '../components/SocialAccountsList';
-import BlueskyConnectForm from '../components/BlueskyConnectForm';
 import socialAccountService from '../services/socialAccountService';
+import '../styles/social.css';
+import twitterIcon from '../assets/twitter.svg';
+import blueskyIcon from '../assets/bluesky.svg';  // Correct import
 
 /**
  * Profile page component
@@ -14,6 +16,7 @@ function Profile() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [showBlueskyForm, setShowBlueskyForm] = useState(false);
 
   /**
    * Fetch user's social accounts on component mount
@@ -66,6 +69,7 @@ function Profile() {
       
       // Add the new account to the list
       setSocialAccounts([...socialAccounts, response.socialAccount]);
+      setShowBlueskyForm(false);
     } catch (error) {
       setError(`Failed to connect Bluesky account: ${error.response?.data?.message || error.message}`);
     } finally {
@@ -125,20 +129,90 @@ function Profile() {
         <p>Connect your social media accounts to ViaGuild.</p>
         
         <div className="social-buttons">
+          {/* Twitter connect button */}
           <button 
-            className="twitter-btn"
+            className="social-btn twitter-btn"
             onClick={handleConnectTwitter}
             disabled={isConnecting}
           >
-            Connect Twitter
+            <img src={twitterIcon} alt="Twitter logo" className="icon" />
+            <span>Connect Twitter</span>
           </button>
           
-          {/* Replace the button with our new component */}
-          <BlueskyConnectForm 
-            onConnect={handleConnectBluesky}
-            isLoading={isConnecting}
-          />
+          {/* Bluesky connect button (not form) - FIXED ICON */}
+          {!showBlueskyForm && (
+            <button 
+              className="social-btn bluesky-btn"
+              onClick={() => setShowBlueskyForm(true)}
+              disabled={isConnecting}
+            >
+              <img src={blueskyIcon} alt="Bluesky logo" className="icon" />
+              <span>Connect Bluesky</span>
+            </button>
+          )}
         </div>
+        
+        {/* Bluesky connection form */}
+        {showBlueskyForm && (
+          <div className="bluesky-form">
+            <h4>Connect your Bluesky Account</h4>
+            
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              const formData = new FormData(e.target);
+              handleConnectBluesky({
+                identifier: formData.get('identifier'),
+                appPassword: formData.get('appPassword'),
+              });
+            }}>
+              <div className="form-group">
+                <label htmlFor="identifier">Username or Email</label>
+                <input
+                  id="identifier"
+                  name="identifier"
+                  type="text"
+                  placeholder="e.g., username.bsky.social"
+                  required
+                />
+              </div>
+              
+              <div className="form-group">
+                <label htmlFor="appPassword">App Password</label>
+                <input
+                  id="appPassword"
+                  name="appPassword"
+                  type="password"
+                  required
+                />
+              </div>
+              
+              <div className="form-help">
+                <p><small>
+                  <a href="https://bsky.app/settings/app-passwords" target="_blank" rel="noopener noreferrer">
+                    Create an app password
+                  </a> in your Bluesky settings.
+                </small></p>
+              </div>
+              
+              <div className="form-actions">
+                <button 
+                  type="button" 
+                  className="btn-secondary"
+                  onClick={() => setShowBlueskyForm(false)}
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit"
+                  className="btn-primary"
+                  disabled={isConnecting}
+                >
+                  {isConnecting ? 'Connecting...' : 'Connect'}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
         
         <SocialAccountsList 
           accounts={socialAccounts} 

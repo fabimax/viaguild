@@ -1,0 +1,194 @@
+/* Social account styling */
+.social-section {
+  background-color: white;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-top: 2rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.social-section h3 {
+  margin-bottom: 0.75rem;
+  color: var(--primary-color);
+  font-size: 1.25rem;
+}
+
+.social-buttons {
+  display: flex;
+  gap: 1rem;
+  margin: 1.5rem 0;
+  flex-wrap: wrap;
+}
+
+/* Social button styling */
+.social-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1rem;
+  border-radius: 4px;
+  font-weight: 500;
+  font-size: 0.9rem;
+  cursor: pointer;
+  color: white;
+  border: none;
+  width: 180px;
+  height: 40px;
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+.social-btn:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.social-btn:active {
+  transform: translateY(0);
+}
+
+.social-btn .icon {
+  width: 18px;
+  height: 18px;
+}
+
+.twitter-btn {
+  background-color: #1DA1F2;
+}
+
+.bluesky-btn {
+  background-color: #0063cc;
+}
+
+/* Bluesky form styling */
+.bluesky-form {
+  background-color: #f8fafc;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-top: 1rem;
+  border: 1px solid #e2e8f0;
+  max-width: 450px;
+}
+
+.bluesky-form h4 {
+  margin-bottom: 1rem;
+  color: var(--primary-color);
+}
+
+.form-help {
+  margin: 0.5rem 0 1rem;
+}
+
+.form-help a {
+  color: var(--accent-color);
+  text-decoration: none;
+}
+
+.form-help a:hover {
+  text-decoration: underline;
+}
+
+.form-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  margin-top: 1rem;
+}
+
+/* Connected accounts list styling */
+.accounts-list {
+  margin-top: 2rem;
+}
+
+.accounts-list h3 {
+  margin-bottom: 1rem;
+  font-size: 1.1rem;
+  color: var(--primary-color);
+}
+
+.account-items {
+  list-style-type: none;
+  padding: 0;
+}
+
+.account-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  background-color: #f8fafc;
+  border-radius: 6px;
+  margin-bottom: 0.75rem;
+  border: 1px solid #e2e8f0;
+  transition: transform 0.15s ease;
+}
+
+.account-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+}
+
+.account-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.account-icon {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+}
+
+.account-icon img {
+  width: 18px;
+  height: 18px;
+}
+
+.provider {
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.provider.twitter {
+  color: #1DA1F2;
+}
+
+.provider.bluesky {
+  color: #0063cc;
+}
+
+.username {
+  color: var(--secondary-color);
+  font-size: 0.9rem;
+  margin-left: 0.5rem;
+}
+
+.remove-btn {
+  background-color: transparent;
+  color: #e53e3e;
+  border: 1px solid #e53e3e;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.8rem;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.remove-btn:hover {
+  background-color: #e53e3e;
+  color: white;
+}
+
+.no-accounts {
+  padding: 1.5rem;
+  text-align: center;
+  background-color: #f8fafc;
+  border-radius: 6px;
+  border: 1px dashed #e2e8f0;
+  color: var(--secondary-color);
+}

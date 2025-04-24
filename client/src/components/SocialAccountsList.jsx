@@ -1,5 +1,7 @@
 import React from 'react';
 import PropTypes from 'prop-types';
+import twitterIcon from '../assets/twitter.svg';
+import blueskyIcon from '../assets/bluesky.svg';
 
 /**
  * Component to display a list of connected social accounts
@@ -16,6 +18,11 @@ function SocialAccountsList({ accounts, onRemove }) {
     );
   }
 
+  // Helper function to get the appropriate icon
+  const getProviderIcon = (provider) => {
+    return provider === 'twitter' ? twitterIcon : blueskyIcon;
+  };
+
   return (
     <div className="accounts-list">
       <h3>Connected Accounts</h3>
@@ -24,10 +31,18 @@ function SocialAccountsList({ accounts, onRemove }) {
         {accounts.map((account) => (
           <li key={account.id} className="account-item">
             <div className="account-info">
-              <span className={`provider ${account.provider}`}>
-                {account.provider === 'twitter' ? 'Twitter' : 'Bluesky'}
-              </span>
-              <span className="username">@{account.username}</span>
+              <div className="account-icon">
+                <img 
+                  src={getProviderIcon(account.provider)} 
+                  alt={`${account.provider} icon`} 
+                />
+              </div>
+              <div>
+                <span className={`provider ${account.provider}`}>
+                  {account.provider === 'twitter' ? 'Twitter' : 'Bluesky'}
+                </span>
+                <span className="username">@{account.username}</span>
+              </div>
             </div>
             
             <button 

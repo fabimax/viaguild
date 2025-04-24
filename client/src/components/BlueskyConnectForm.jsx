@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import PropTypes from 'prop-types';
+import blueskyIcon from '../assets/bluesky.svg';
 
 /**
  * Component for connecting a Bluesky account with app password
@@ -33,16 +34,12 @@ function BlueskyConnectForm({ onConnect, isLoading }) {
     return (
       <div className="connect-bluesky">
         <button
-          className="bluesky-btn"
+          className="social-btn bluesky-btn"
           onClick={() => setShowForm(true)}
         >
-          Connect Bluesky
+          <img src={blueskyIcon} alt="Bluesky logo" className="icon" />
+          <span>Connect Bluesky</span>
         </button>
-        <p className="info-text">
-          <small>
-            Connect with your Bluesky account using an app password
-          </small>
-        </p>
       </div>
     );
   }
