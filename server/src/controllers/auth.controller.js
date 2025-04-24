@@ -117,27 +117,15 @@ exports.getMe = async (req, res, next) => {
 
 /**
  * Initiate Twitter OAuth authentication
- * In a real implementation, this would redirect to Twitter's OAuth page
+ * Redirects to Twitter's OAuth authorization page
  */
-exports.connectTwitter = (req, res) => {
-  // For now, redirect to our mock endpoint
-  res.redirect(`/api/social-accounts/mock/twitter`);
-};
+exports.connectTwitter = require('../controllers/twitter.controller').initiateTwitterAuth;
 
 /**
  * Handle Twitter OAuth callback
- * This would be called by Twitter after the user authorizes the app
+ * Called by Twitter after the user authorizes the app
  */
-exports.twitterCallback = (req, res) => {
-  // In a real implementation, this would:
-  // 1. Validate the OAuth callback from Twitter
-  // 2. Get the user's Twitter profile information
-  // 3. Create/update the social account in our database
-  // 4. Redirect back to the frontend profile page
-  
-  // For now, just redirect back to the profile page
-  res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/profile`);
-};
+exports.twitterCallback = require('../controllers/twitter.controller').twitterCallback;
 
 /**
  * Initiate Bluesky authentication

@@ -21,9 +21,10 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(passport.initialize());
 
-// Make Prisma available in the request object
+// Make Prisma available in the request object and app.locals
 app.use((req, res, next) => {
   req.prisma = prisma;
+  app.locals.prisma = prisma;
   next();
 });
 

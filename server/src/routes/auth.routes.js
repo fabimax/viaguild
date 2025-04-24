@@ -16,7 +16,7 @@ router.post('/login', validateLogin, authController.login);
 // Protected route to get current user info
 router.get('/me', authenticate, authController.getMe);
 
-// Social authentication routes (placeholders for now)
+// Social authentication routes 
 router.get('/connect/twitter', authenticate, authController.connectTwitter);
 router.get('/connect/twitter/callback', authController.twitterCallback);
 router.get('/connect/bluesky', authenticate, authController.connectBluesky);

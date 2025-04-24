@@ -3,18 +3,28 @@ const config = require('../config/config');
 
 /**
  * Authentication middleware to protect routes
- * Validates JWT token from Authorization header
+ * Validates JWT token from Authorization header or query parameter
  * Adds user object to request if authenticated
  */
 const authenticate = async (req, res, next) => {
   try {
-    // Get token from header
+    // Get token from header or query parameter
+    let token;
+    
+    // Check for token in authorization header
     const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.split(' ')[1];
+    }
+    
+    // If not in header, check query parameter (for OAuth redirects)
+    if (!token && req.query.token) {
+      token = req.query.token;
+    }
+    
+    if (!token) {
       return res.status(401).json({ message: 'Authentication required' });
     }
-
-    const token = authHeader.split(' ')[1];
 
     // Verify token
     const decoded = jwt.verify(token, config.JWT_SECRET);
