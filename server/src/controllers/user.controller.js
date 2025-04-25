@@ -191,20 +191,47 @@ exports.getUserSocialAccounts = async (req, res, next) => {
 
 /**
  * Update a user's profile settings
- * Allows updating bio, profile visibility, and hidden accounts
+ * Allows updating bio, avatar, profile visibility, and hidden accounts
  */
 exports.updateProfile = async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const { bio, isPublic, hiddenAccounts } = req.body;
+    const { bio, avatar, isPublic, hiddenAccounts } = req.body;
     
     // Prepare update data
     const updateData = {};
     
     // Only include fields that are provided
     if (bio !== undefined) updateData.bio = bio;
+    if (avatar !== undefined) updateData.avatar = avatar;
     if (isPublic !== undefined) updateData.isPublic = isPublic;
     if (hiddenAccounts !== undefined) updateData.hiddenAccounts = hiddenAccounts;
+    
+    // Validate avatar size if provided
+    if (avatar) {
+      try {
+        // Calculate approximate size of Base64 string 
+        // (removing metadata part like "data:image/jpeg;base64,")
+        const base64Data = avatar.split(',')[1] || avatar;
+        const approximateSize = Math.ceil((base64Data.length * 3) / 4);
+        
+        // Log size for debugging
+        console.log(`Avatar size: ${Math.round(approximateSize / 1024)}KB`);
+        
+        // Limit to ~800KB (strict limit to prevent payload issues)
+        const MAX_AVATAR_SIZE = 800 * 1024; 
+        if (approximateSize > MAX_AVATAR_SIZE) {
+          return res.status(400).json({ 
+            message: 'Avatar image is too large. Please upload a smaller image (max 800KB).' 
+          });
+        }
+      } catch (error) {
+        console.error('Error validating avatar:', error);
+        return res.status(400).json({
+          message: 'Invalid avatar format. Please try uploading again.'
+        });
+      }
+    }
     
     // Update user profile
     const updatedUser = await req.prisma.user.update({
@@ -214,6 +241,7 @@ exports.updateProfile = async (req, res, next) => {
         id: true,
         username: true,
         bio: true,
+        avatar: true,
         isPublic: true,
         hiddenAccounts: true,
       },
@@ -244,6 +272,7 @@ exports.getUserProfile = async (req, res, next) => {
         id: true,
         username: true,
         bio: true,
+        avatar: true,
         isPublic: true,
         hiddenAccounts: true,
         socialAccounts: {

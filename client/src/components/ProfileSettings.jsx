@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import userService from '../services/userService';
+import AvatarUpload from './AvatarUpload';
 
 /**
  * ProfileSettings component with enhanced validation
@@ -13,9 +14,11 @@ import userService from '../services/userService';
 function ProfileSettings({ user, onUpdate }) {
   const [isEditing, setIsEditing] = useState(false);
   const [bio, setBio] = useState(user.bio || '');
+  const [avatar, setAvatar] = useState(user.avatar || null);
   const [isPublic, setIsPublic] = useState(user.isPublic !== false); // Default to true if undefined
   const [hiddenAccounts, setHiddenAccounts] = useState(user.hiddenAccounts || []);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isAvatarUploading, setIsAvatarUploading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [validation, setValidation] = useState({ bio: '' });
@@ -60,6 +63,7 @@ function ProfileSettings({ user, onUpdate }) {
    */
   const handleCancel = () => {
     setBio(user.bio || '');
+    setAvatar(user.avatar || null);
     setIsPublic(user.isPublic !== false);
     setHiddenAccounts(user.hiddenAccounts || []);
     setIsEditing(false);
@@ -89,6 +93,16 @@ function ProfileSettings({ user, onUpdate }) {
       }));
     }
   };
+
+  /**
+   * Handle avatar change from the AvatarUpload component
+   * @param {string} newAvatar - New avatar data (Base64 string)
+   */
+  const handleAvatarChange = (newAvatar) => {
+    setIsAvatarUploading(true);
+    setAvatar(newAvatar);
+    setIsAvatarUploading(false);
+  };
   
   /**
    * Submit profile updates
@@ -108,6 +122,7 @@ function ProfileSettings({ user, onUpdate }) {
     try {
       const updatedData = {
         bio,
+        avatar,
         isPublic,
         hiddenAccounts
       };
@@ -149,6 +164,24 @@ function ProfileSettings({ user, onUpdate }) {
         )}
         
         <div className="settings-info">
+          {/* Avatar display */}
+          <div className="settings-group">
+            <h4>Avatar</h4>
+            <div className="avatar-container">
+              {user.avatar ? (
+                <img 
+                  src={user.avatar} 
+                  alt={`${user.username}'s avatar`} 
+                  className="avatar-display"
+                />
+              ) : (
+                <div className="avatar-placeholder">
+                  <span>{user.username?.charAt(0).toUpperCase() || '?'}</span>
+                </div>
+              )}
+            </div>
+          </div>
+          
           <div className="settings-group">
             <h4>Bio</h4>
             <p className="bio-text">{user.bio || 'No bio provided'}</p>
@@ -184,6 +217,16 @@ function ProfileSettings({ user, onUpdate }) {
       )}
       
       <form onSubmit={handleSubmit} noValidate>
+        {/* Avatar upload section */}
+        <div className="form-group">
+          <label>Profile Avatar</label>
+          <AvatarUpload 
+            currentAvatar={avatar} 
+            onAvatarChange={handleAvatarChange}
+            isLoading={isAvatarUploading}
+          />
+        </div>
+        
         <div className={`form-group ${validation.bio ? 'has-error' : ''}`}>
           <label htmlFor="bio">Bio</label>
           <textarea
@@ -282,6 +325,7 @@ ProfileSettings.propTypes = {
     id: PropTypes.string.isRequired,
     username: PropTypes.string.isRequired,
     bio: PropTypes.string,
+    avatar: PropTypes.string,
     isPublic: PropTypes.bool,
     hiddenAccounts: PropTypes.arrayOf(PropTypes.string),
     socialAccounts: PropTypes.arrayOf(

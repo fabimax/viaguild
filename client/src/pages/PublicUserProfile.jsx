@@ -133,6 +133,15 @@ function PublicUserProfile() {
       });
   };
   
+  /**
+   * Generate initials from username for avatar placeholder
+   * @param {string} username - User's username
+   * @returns {string} - First character of username, capitalized
+   */
+  const getInitials = (username) => {
+    return username ? username.charAt(0).toUpperCase() : '?';
+  };
+  
   // Show loading state
   if (isLoading) {
     return (
@@ -204,6 +213,21 @@ function PublicUserProfile() {
       )}
       
       <div className="profile-header">
+        {/* User avatar */}
+        <div className="profile-avatar">
+          {userData.avatar ? (
+            <img 
+              src={userData.avatar} 
+              alt={`${userData.username}'s avatar`} 
+              className="avatar-display"
+            />
+          ) : (
+            <div className="avatar-placeholder">
+              <span>{getInitials(userData.username)}</span>
+            </div>
+          )}
+        </div>
+        
         <h2>{userData.username}</h2>
         
         {/* Bio section (if available) */}

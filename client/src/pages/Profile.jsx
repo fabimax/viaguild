@@ -157,14 +157,33 @@ function Profile() {
       {error && <div className="error">{error}</div>}
       
       <div className="profile-info">
-        <div className="info-group">
-          <label>Username:</label>
-          <p>{currentUser.username}</p>
-        </div>
-        
-        <div className="info-group">
-          <label>Email:</label>
-          <p>{currentUser.email}</p>
+        <div className="profile-info-flex">
+          {/* Avatar display */}
+          <div className="profile-avatar">
+            {profileData && profileData.avatar ? (
+              <img 
+                src={profileData.avatar} 
+                alt={`${currentUser.username}'s avatar`} 
+                className="avatar-display"
+              />
+            ) : (
+              <div className="avatar-placeholder">
+                <span>{currentUser.username?.charAt(0).toUpperCase() || '?'}</span>
+              </div>
+            )}
+          </div>
+          
+          <div className="profile-details">
+            <div className="info-group">
+              <label>Username:</label>
+              <p>{currentUser.username}</p>
+            </div>
+            
+            <div className="info-group">
+              <label>Email:</label>
+              <p>{currentUser.email}</p>
+            </div>
+          </div>
         </div>
       </div>
       
