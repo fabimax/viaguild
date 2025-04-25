@@ -1,8 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import SocialAccountsList from '../components/SocialAccountsList';
+import ProfileSettings from '../components/ProfileSettings';
 import socialAccountService from '../services/socialAccountService';
+import userService from '../services/userService';
 import '../styles/social.css';
+import '../styles/profile.css';
 import twitterIcon from '../assets/twitter.svg';
 import blueskyIcon from '../assets/bluesky.svg';
 import twitchIcon from '../assets/twitch.svg';
@@ -14,28 +18,36 @@ import twitchIcon from '../assets/twitch.svg';
 function Profile() {
   const { currentUser, connectSocialAccount } = useAuth();
   const [socialAccounts, setSocialAccounts] = useState([]);
+  const [profileData, setProfileData] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [isConnecting, setIsConnecting] = useState(false);
   const [showBlueskyForm, setShowBlueskyForm] = useState(false);
+  const [activeTab, setActiveTab] = useState('accounts'); // 'accounts' or 'settings'
 
   /**
-   * Fetch user's social accounts on component mount
+   * Fetch user's social accounts and profile data on component mount
    */
   useEffect(() => {
-    const fetchSocialAccounts = async () => {
+    const fetchUserData = async () => {
       try {
+        // Fetch social accounts
         const accounts = await socialAccountService.getSocialAccounts();
         setSocialAccounts(accounts);
+        
+        // Fetch user profile data
+        const userData = await userService.getUserProfile(currentUser.username);
+        setProfileData(userData.user);
+        
         setLoading(false);
       } catch (error) {
-        setError('Failed to load social accounts');
+        setError('Failed to load user data');
         setLoading(false);
       }
     };
 
-    fetchSocialAccounts();
-  }, []);
+    fetchUserData();
+  }, [currentUser.username]);
 
   /**
    * Handle connecting a Twitter account
@@ -99,6 +111,14 @@ function Profile() {
       setError(`Failed to remove social account: ${error.response?.data?.message || error.message}`);
     }
   };
+  
+  /**
+   * Handle profile data update
+   * @param {Object} updatedUser - Updated user profile data
+   */
+  const handleProfileUpdate = (updatedUser) => {
+    setProfileData(updatedUser);
+  };
 
   // Parse URL query parameters to check for error/success messages
   useEffect(() => {
@@ -148,111 +168,156 @@ function Profile() {
         </div>
       </div>
       
-      <div className="social-section">
-        <h3>Social Accounts</h3>
-        <p>Connect your social media accounts to ViaGuild.</p>
-        
-        <div className="social-buttons">
-          {/* Twitter connect button */}
-          <button 
-            className="social-btn twitter-btn"
-            onClick={handleConnectTwitter}
-            disabled={isConnecting}
-          >
-            <img src={twitterIcon} alt="Twitter logo" className="icon" />
-            <span>Connect Twitter</span>
-          </button>
+      {/* Profile tabs navigation */}
+      <div className="profile-tabs">
+        <button 
+          className={`tab-button ${activeTab === 'accounts' ? 'active' : ''}`}
+          onClick={() => setActiveTab('accounts')}
+        >
+          Social Accounts
+        </button>
+        <button 
+          className={`tab-button ${activeTab === 'settings' ? 'active' : ''}`}
+          onClick={() => setActiveTab('settings')}
+        >
+          Profile Settings
+        </button>
+      </div>
+      
+      {/* Social accounts tab */}
+      {activeTab === 'accounts' && (
+        <div className="social-section">
+          <h3>Social Accounts</h3>
+          <p>Connect your social media accounts to ViaGuild.</p>
           
-          {/* Bluesky connect button (not form) */}
-          {!showBlueskyForm && (
+          <div className="social-buttons">
+            {/* Twitter connect button */}
             <button 
-              className="social-btn bluesky-btn"
-              onClick={() => setShowBlueskyForm(true)}
+              className="social-btn twitter-btn"
+              onClick={handleConnectTwitter}
               disabled={isConnecting}
             >
-              <img src={blueskyIcon} alt="Bluesky logo" className="icon" />
-              <span>Connect Bluesky</span>
+              <img src={twitterIcon} alt="Twitter logo" className="icon" />
+              <span>Connect Twitter</span>
             </button>
+            
+            {/* Bluesky connect button (not form) */}
+            {!showBlueskyForm && (
+              <button 
+                className="social-btn bluesky-btn"
+                onClick={() => setShowBlueskyForm(true)}
+                disabled={isConnecting}
+              >
+                <img src={blueskyIcon} alt="Bluesky logo" className="icon" />
+                <span>Connect Bluesky</span>
+              </button>
+            )}
+            
+            {/* Twitch connect button */}
+            <button 
+              className="social-btn twitch-btn"
+              onClick={handleConnectTwitch}
+              disabled={isConnecting}
+            >
+              <img src={twitchIcon} alt="Twitch logo" className="icon" />
+              <span>Connect Twitch</span>
+            </button>
+          </div>
+          
+          {/* Bluesky connection form */}
+          {showBlueskyForm && (
+            <div className="bluesky-form">
+              <h4>Connect your Bluesky Account</h4>
+              
+              <form onSubmit={(e) => {
+                e.preventDefault();
+                const formData = new FormData(e.target);
+                handleConnectBluesky({
+                  identifier: formData.get('identifier'),
+                  appPassword: formData.get('appPassword'),
+                });
+              }}>
+                <div className="form-group">
+                  <label htmlFor="identifier">Username or Email</label>
+                  <input
+                    id="identifier"
+                    name="identifier"
+                    type="text"
+                    placeholder="e.g., username.bsky.social"
+                    required
+                  />
+                </div>
+                
+                <div className="form-group">
+                  <label htmlFor="appPassword">App Password</label>
+                  <input
+                    id="appPassword"
+                    name="appPassword"
+                    type="password"
+                    required
+                  />
+                </div>
+                
+                <div className="form-help">
+                  <p><small>
+                    <a href="https://bsky.app/settings/app-passwords" target="_blank" rel="noopener noreferrer">
+                      Create an app password
+                    </a> in your Bluesky settings.
+                  </small></p>
+                </div>
+                
+                <div className="form-actions">
+                  <button 
+                    type="button" 
+                    className="btn-secondary"
+                    onClick={() => setShowBlueskyForm(false)}
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="submit"
+                    className="btn-primary"
+                    disabled={isConnecting}
+                  >
+                    {isConnecting ? 'Connecting...' : 'Connect'}
+                  </button>
+                </div>
+              </form>
+            </div>
           )}
           
-          {/* Twitch connect button */}
-          <button 
-            className="social-btn twitch-btn"
-            onClick={handleConnectTwitch}
-            disabled={isConnecting}
-          >
-            <img src={twitchIcon} alt="Twitch logo" className="icon" />
-            <span>Connect Twitch</span>
-          </button>
+          <SocialAccountsList 
+            accounts={socialAccounts} 
+            onRemove={handleRemoveAccount} 
+          />
         </div>
-        
-        {/* Bluesky connection form */}
-        {showBlueskyForm && (
-          <div className="bluesky-form">
-            <h4>Connect your Bluesky Account</h4>
-            
-            <form onSubmit={(e) => {
-              e.preventDefault();
-              const formData = new FormData(e.target);
-              handleConnectBluesky({
-                identifier: formData.get('identifier'),
-                appPassword: formData.get('appPassword'),
-              });
-            }}>
-              <div className="form-group">
-                <label htmlFor="identifier">Username or Email</label>
-                <input
-                  id="identifier"
-                  name="identifier"
-                  type="text"
-                  placeholder="e.g., username.bsky.social"
-                  required
-                />
-              </div>
-              
-              <div className="form-group">
-                <label htmlFor="appPassword">App Password</label>
-                <input
-                  id="appPassword"
-                  name="appPassword"
-                  type="password"
-                  required
-                />
-              </div>
-              
-              <div className="form-help">
-                <p><small>
-                  <a href="https://bsky.app/settings/app-passwords" target="_blank" rel="noopener noreferrer">
-                    Create an app password
-                  </a> in your Bluesky settings.
-                </small></p>
-              </div>
-              
-              <div className="form-actions">
-                <button 
-                  type="button" 
-                  className="btn-secondary"
-                  onClick={() => setShowBlueskyForm(false)}
-                >
-                  Cancel
-                </button>
-                <button 
-                  type="submit"
-                  className="btn-primary"
-                  disabled={isConnecting}
-                >
-                  {isConnecting ? 'Connecting...' : 'Connect'}
-                </button>
-              </div>
-            </form>
+      )}
+      
+      {/* Profile settings tab */}
+      {activeTab === 'settings' && profileData && (
+        <div className="settings-section">
+          <ProfileSettings 
+            user={{
+              ...profileData,
+              socialAccounts: socialAccounts
+            }}
+            onUpdate={handleProfileUpdate}
+          />
+          
+          <div className="public-profile-link">
+            <p>
+              <span className="view-public-label">View your profile as others see it:</span>
+              <Link to={`/users/${currentUser.username}`} className="public-view-link">
+                <span className="public-view-icon">👁️</span>
+                Public View
+              </Link>
+              <small className="public-view-hint">
+                See how your profile appears to other users
+              </small>
+            </p>
           </div>
-        )}
-        
-        <SocialAccountsList 
-          accounts={socialAccounts} 
-          onRemove={handleRemoveAccount} 
-        />
-      </div>
+        </div>
+      )}
     </div>
   );
 }

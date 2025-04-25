@@ -1,0 +1,141 @@
+/* Error handling styles */
+
+/* Common error styling */
+.error {
+    background-color: rgba(229, 62, 62, 0.1);
+    border-left: 4px solid #e53e3e;
+    color: #c53030;
+    padding: 1rem 1.25rem;
+    border-radius: 4px;
+    margin-bottom: 1.5rem;
+  }
+  
+  /* Specific error types */
+  .error-not-found {
+    background-color: rgba(247, 144, 30, 0.1);
+    border-left-color: #f7901e;
+    color: #dd6b20;
+  }
+  
+  .error-private {
+    background-color: rgba(113, 128, 150, 0.1);
+    border-left-color: #718096;
+    color: #4a5568;
+  }
+  
+  /* Success message */
+  .success {
+    background-color: rgba(56, 161, 105, 0.1);
+    border-left: 4px solid #38a169;
+    color: #2f855a;
+    padding: 1rem 1.25rem;
+    border-radius: 4px;
+    margin-bottom: 1.5rem;
+  }
+  
+  /* Validation messages */
+  .validation-message {
+    font-size: 0.85rem;
+    color: #e53e3e;
+    margin-top: 0.25rem;
+  }
+  
+  /* Form field with validation error */
+  .form-group.has-error input,
+  .form-group.has-error textarea,
+  .form-group.has-error select {
+    border-color: #e53e3e;
+  }
+  
+  .search-input.has-error {
+    border-color: #e53e3e;
+    box-shadow: 0 0 0 1px #e53e3e;
+  }
+  
+  /* Character counter */
+  .char-count {
+    text-align: right;
+    font-size: 0.8rem;
+    color: var(--secondary-color);
+    margin-top: 0.25rem;
+  }
+  
+  .char-count-limit {
+    color: #e53e3e;
+    font-weight: 500;
+  }
+  
+  /* Loading spinner */
+  .loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    text-align: center;
+    color: var(--secondary-color);
+  }
+  
+  .loading-spinner {
+    border: 3px solid #f3f3f3;
+    border-top: 3px solid var(--accent-color);
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    animation: spin 1s linear infinite;
+    margin-bottom: 1rem;
+  }
+  
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+  
+  /* Retry button */
+  .retry-btn {
+    margin: 1rem 0;
+  }
+  
+  /* Error boundary */
+  .error-boundary {
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    padding: 2rem;
+    max-width: 800px;
+    margin: 2rem auto;
+    text-align: center;
+  }
+  
+  .error-boundary h2 {
+    color: #e53e3e;
+    margin-bottom: 1rem;
+  }
+  
+  .error-details {
+    margin: 1.5rem 0;
+    text-align: left;
+    background-color: #f8fafc;
+    padding: 1rem;
+    border-radius: 4px;
+  }
+  
+  .error-details summary {
+    cursor: pointer;
+    font-weight: 500;
+    margin-bottom: 1rem;
+    color: var(--primary-color);
+  }
+  
+  .error-stack {
+    background-color: #edf2f7;
+    padding: 1rem;
+    overflow-x: auto;
+    font-size: 0.85rem;
+    border-radius: 4px;
+    white-space: pre-wrap;
+  }
+  
+  .reset-button {
+    margin-top: 1.5rem;
+  }

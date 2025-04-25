@@ -1,0 +1,59 @@
+/* Debug styling */
+
+.debug-info {
+    margin-top: 2rem;
+    border-top: 1px dashed #ccc;
+    padding-top: 1rem;
+  }
+  
+  .debug-info details {
+    background-color: #f8f8f8;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 1rem;
+    margin-top: 1rem;
+  }
+  
+  .debug-info summary {
+    cursor: pointer;
+    font-weight: 500;
+    color: #444;
+    user-select: none;
+  }
+  
+  .debug-info pre {
+    background-color: #eee;
+    padding: 1rem;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    font-family: monospace;
+    font-size: 0.85rem;
+    line-height: 1.4;
+    margin-top: 0.5rem;
+    max-height: 300px;
+    overflow-y: auto;
+  }
+  
+  .retry-btn {
+    margin-left: 1rem;
+    font-size: 0.85rem;
+    padding: 0.25rem 0.5rem;
+  }
+  
+  /* Enhanced loading spinner */
+  .loading-spinner {
+    border: 3px solid #f3f3f3;
+    border-top: 3px solid var(--accent-color);
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 1rem;
+  }
+  
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+  
+  /* Add this to main.jsx */

@@ -7,6 +7,7 @@
 /**
  * Search for users by username or connected social accounts
  * Supports filtering by platform and partial string matching
+ * Respects user privacy settings for hidden accounts
  */
 exports.searchUsers = async (req, res, next) => {
   try {
@@ -22,12 +23,14 @@ exports.searchUsers = async (req, res, next) => {
     // Normalize the search query (lowercase for case-insensitive search)
     const normalizedQuery = query.toLowerCase().trim();
     
-    // Initialize base query to find users
-    const baseQuery = {
+    // First, get all users with their hidden accounts info
+    // We'll use this to filter out hidden accounts from search results
+    const users = await req.prisma.user.findMany({
       select: {
         id: true,
         username: true,
-        email: true, // Will be removed before sending to client
+        isPublic: true,
+        hiddenAccounts: true,
         socialAccounts: {
           select: {
             id: true,
@@ -36,56 +39,24 @@ exports.searchUsers = async (req, res, next) => {
           },
         },
       },
-    };
-
-    // Add OR conditions based on platform filter
-    let whereConditions = [];
+    });
     
-    // Handle platform-specific searches
-    if (platform === 'viaguild' || platform === 'all' || !platform) {
-      // Search in ViaGuild usernames
-      whereConditions.push({
-        username: {
-          contains: normalizedQuery,
-          mode: 'insensitive', // Case-insensitive search
-        },
-      });
-    }
-
-    // If searching social accounts, add those conditions
-    if (platform !== 'viaguild') {
-      // Initialize social account filter
-      const socialAccountFilter = {
-        socialAccounts: {
-          some: {
-            username: {
-              contains: normalizedQuery,
-              mode: 'insensitive',
-            },
-          },
-        },
-      };
-
-      // Add provider filter if a specific platform is selected
-      if (platform && platform !== 'all') {
-        socialAccountFilter.socialAccounts.some.provider = platform;
-      }
-
-      whereConditions.push(socialAccountFilter);
-    }
-
-    // Combine all conditions with OR
-    baseQuery.where = { OR: whereConditions };
-
-    // Execute the search
-    const users = await req.prisma.user.findMany(baseQuery);
-
-    // Process results to format them appropriately and remove sensitive info
+    // Process results to filter out hidden accounts and format appropriately
     const processedResults = users.map(user => {
-      // Remove email address for privacy
-      const { email, ...userWithoutEmail } = user;
+      // Skip private profiles entirely
+      if (user.isPublic === false) {
+        return null;
+      }
       
-      // Find which account matched the search query
+      // Ensure hiddenAccounts is an array
+      const hiddenAccountIds = Array.isArray(user.hiddenAccounts) ? user.hiddenAccounts : [];
+      
+      // Filter out hidden social accounts
+      const visibleSocialAccounts = user.socialAccounts.filter(
+        account => !hiddenAccountIds.includes(account.id)
+      );
+      
+      // Find which accounts matched the search query
       const matchedAccounts = [];
       
       // Check if the ViaGuild username matched
@@ -97,8 +68,13 @@ exports.searchUsers = async (req, res, next) => {
         });
       }
       
-      // Check which social accounts matched
-      user.socialAccounts.forEach(account => {
+      // Check which visible social accounts matched
+      visibleSocialAccounts.forEach(account => {
+        // Apply platform filter if specified
+        if (platform && platform !== 'all' && platform !== 'viaguild' && platform !== account.provider) {
+          return;
+        }
+        
         if (account.username.toLowerCase().includes(normalizedQuery)) {
           matchedAccounts.push({
             type: account.provider,
@@ -108,16 +84,21 @@ exports.searchUsers = async (req, res, next) => {
         }
       });
       
+      // Skip users with no matches
+      if (matchedAccounts.length === 0) {
+        return null;
+      }
+      
       return {
-        ...userWithoutEmail,
+        id: user.id,
+        username: user.username,
+        socialAccounts: visibleSocialAccounts,
         matchedAccounts,
       };
     });
 
-    // Only return users with at least one match
-    const filteredResults = processedResults.filter(
-      user => user.matchedAccounts.length > 0
-    );
+    // Filter out null results (users with no matches or private profiles)
+    const filteredResults = processedResults.filter(result => result !== null);
 
     // Sort results by relevance (matches at the beginning are ranked higher)
     filteredResults.sort((a, b) => {

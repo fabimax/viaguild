@@ -9,12 +9,13 @@ import twitchIcon from '../assets/twitch.svg';
  * @param {Object} props - Component props
  * @param {Array} props.accounts - Array of social account objects
  * @param {Function} props.onRemove - Function to call when removing an account
+ * @param {boolean} props.isPublicView - Whether this is for public profile view
  */
-function SocialAccountsList({ accounts, onRemove }) {
+function SocialAccountsList({ accounts = [], onRemove, isPublicView = false }) {
   if (!accounts || accounts.length === 0) {
     return (
       <div className="no-accounts">
-        <p>No social accounts connected yet.</p>
+        <p>No social accounts connected{isPublicView ? '' : ' yet'}.</p>
       </div>
     );
   }
@@ -31,9 +32,23 @@ function SocialAccountsList({ accounts, onRemove }) {
     }
   };
 
+  // Helper function to get formatted provider name
+  const getProviderName = (provider) => {
+    switch (provider) {
+      case 'twitter':
+        return 'Twitter';
+      case 'twitch':
+        return 'Twitch';
+      case 'bluesky':
+        return 'Bluesky';
+      default:
+        return provider;
+    }
+  };
+
   return (
     <div className="accounts-list">
-      <h3>Connected Accounts</h3>
+      <h3>{isPublicView ? 'Connected Accounts' : 'Connected Accounts'}</h3>
       
       <ul className="account-items">
         {accounts.map((account) => (
@@ -47,20 +62,22 @@ function SocialAccountsList({ accounts, onRemove }) {
               </div>
               <div>
                 <span className={`provider ${account.provider}`}>
-                  {account.provider === 'twitter' ? 'Twitter' : 
-                   account.provider === 'twitch' ? 'Twitch' : 'Bluesky'}
+                  {getProviderName(account.provider)}
                 </span>
                 <span className="username">@{account.username}</span>
               </div>
             </div>
             
-            <button 
-              className="remove-btn"
-              onClick={() => onRemove(account.id)}
-              aria-label={`Remove ${account.provider} account`}
-            >
-              Remove
-            </button>
+            {/* Only show remove button if not in public view and onRemove is provided */}
+            {!isPublicView && onRemove && (
+              <button 
+                className="remove-btn"
+                onClick={() => onRemove(account.id)}
+                aria-label={`Remove ${account.provider} account`}
+              >
+                Remove
+              </button>
+            )}
           </li>
         ))}
       </ul>
@@ -76,11 +93,8 @@ SocialAccountsList.propTypes = {
       username: PropTypes.string.isRequired,
     })
   ),
-  onRemove: PropTypes.func.isRequired,
-};
-
-SocialAccountsList.defaultProps = {
-  accounts: [],
+  onRemove: PropTypes.func,
+  isPublicView: PropTypes.bool
 };
 
 export default SocialAccountsList;

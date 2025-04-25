@@ -26,6 +26,9 @@ function Header() {
       </div>
       <nav className="nav">
         <ul>
+          {/* Search link is always visible */}
+          <li><Link to="/search">Search</Link></li>
+          
           {currentUser ? (
             <>
               <li><Link to="/profile">Profile</Link></li>

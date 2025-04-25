@@ -1,0 +1,280 @@
+/* Search Page Styles */
+
+.search-page {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 1rem;
+  }
+  
+  .search-page h1 {
+    margin-bottom: 1.5rem;
+    color: var(--primary-color);
+    text-align: center;
+  }
+  
+  /* Search Bar Styles */
+  .search-bar {
+    margin-bottom: 2rem;
+  }
+  
+  .search-container {
+    display: flex;
+    width: 100%;
+    max-width: 800px;
+    margin: 0 auto;
+  }
+  
+  .search-input-wrapper {
+    display: flex;
+    flex: 1;
+    border: 1px solid #e2e8f0;
+    border-radius: 4px 0 0 4px;
+    overflow: hidden;
+  }
+  
+  .search-input {
+    flex: 1;
+    padding: 0.75rem 1rem;
+    border: none;
+    font-size: 1rem;
+    outline: none;
+  }
+  
+  .platform-selector {
+    border-left: 1px solid #e2e8f0;
+  }
+  
+  .platform-select {
+    height: 100%;
+    padding: 0.75rem;
+    border: none;
+    background-color: #f8fafc;
+    color: var(--secondary-color);
+    font-size: 0.9rem;
+    outline: none;
+    cursor: pointer;
+  }
+  
+  .search-button {
+    padding: 0 1.5rem;
+    background-color: var(--accent-color);
+    color: white;
+    border: none;
+    border-radius: 0 4px 4px 0;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s;
+  }
+  
+  .search-button:hover {
+    background-color: #2c5282;
+  }
+  
+  .search-button:disabled {
+    background-color: var(--secondary-color);
+    cursor: not-allowed;
+  }
+  
+  /* Search Results Styles */
+  .search-results {
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    overflow: hidden;
+  }
+  
+  .search-results.loading,
+  .search-results.empty {
+    padding: 2rem;
+    text-align: center;
+    color: var(--secondary-color);
+  }
+  
+  .results-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    background-color: #f8fafc;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  
+  .results-count {
+    font-weight: 500;
+    color: var(--primary-color);
+  }
+  
+  .count-number {
+    font-weight: 600;
+    color: var(--accent-color);
+  }
+  
+  .platform-counts {
+    display: flex;
+    gap: 1rem;
+    font-size: 0.9rem;
+  }
+  
+  .platform-count {
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    background-color: #edf2f7;
+  }
+  
+  .platform-count.viaguild {
+    background-color: #ebf4ff;
+    color: #3182ce;
+  }
+  
+  .platform-count.twitter {
+    background-color: #e6f7ff;
+    color: #1DA1F2;
+  }
+  
+  .platform-count.bluesky {
+    background-color: #e6f6ff;
+    color: #0063cc;
+  }
+  
+  .platform-count.twitch {
+    background-color: #f5eeff;
+    color: #9146FF;
+  }
+  
+  /* Search Result Item styles */
+  .results-list {
+    max-height: 600px;
+    overflow-y: auto;
+  }
+  
+  .search-result-item {
+    border-bottom: 1px solid #e2e8f0;
+    transition: background-color 0.2s;
+  }
+  
+  .search-result-item:last-child {
+    border-bottom: none;
+  }
+  
+  .search-result-item:hover {
+    background-color: #f8fafc;
+  }
+  
+  .result-link {
+    display: block;
+    padding: 1rem 1.5rem;
+    color: inherit;
+    text-decoration: none;
+  }
+  
+  .result-user {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .result-username {
+    font-weight: 500;
+    color: var(--primary-color);
+  }
+  
+  .matched-accounts {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  
+  .matched-account {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+  }
+  
+  .platform-icon {
+    width: 16px;
+    height: 16px;
+  }
+  
+  .account-platform {
+    color: var(--secondary-color);
+    min-width: 70px;
+  }
+  
+  .account-username .highlight {
+    color: var(--accent-color);
+    font-weight: 600;
+  }
+  
+  /* Search help styles */
+  .search-help {
+    margin-top: 2rem;
+    padding: 1.5rem;
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  }
+  
+  .search-help h2 {
+    font-size: 1.25rem;
+    margin-bottom: 1rem;
+    color: var(--primary-color);
+  }
+  
+  .search-help ul {
+    padding-left: 1.5rem;
+  }
+  
+  .search-help li {
+    margin-bottom: 0.5rem;
+    color: var(--secondary-color);
+  }
+  
+  /* Public Profile styles */
+  .public-profile {
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    padding: 2rem;
+    max-width: 800px;
+    margin: 2rem auto;
+  }
+  
+  .profile-header {
+    margin-bottom: 2rem;
+  }
+  
+  .profile-header h2 {
+    margin-bottom: 0.5rem;
+    color: var(--primary-color);
+  }
+  
+  .profile-bio {
+    color: var(--secondary-color);
+    margin: 1rem 0;
+    padding: 1rem;
+    background-color: #f8fafc;
+    border-radius: 4px;
+    border-left: 4px solid #e2e8f0;
+  }
+  
+  .profile-social {
+    margin-bottom: 2rem;
+  }
+  
+  .profile-actions {
+    margin-top: 2rem;
+    display: flex;
+    justify-content: center;
+  }
+  
+  .back-link {
+    display: inline-block;
+    margin-top: 1rem;
+    color: var(--accent-color);
+    text-decoration: none;
+  }
+  
+  .back-link:hover {
+    text-decoration: underline;
+  }
