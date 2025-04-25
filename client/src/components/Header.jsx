@@ -26,7 +26,6 @@ function Header() {
       </div>
       <nav className="nav">
         <ul>
-          <li><Link to="/">Home</Link></li>
           {currentUser ? (
             <>
               <li><Link to="/profile">Profile</Link></li>
