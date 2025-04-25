@@ -8,6 +8,7 @@ const passport = require('passport');
 // Import routes
 const authRoutes = require('./routes/auth.routes');
 const socialAccountRoutes = require('./routes/socialAccount.routes');
+const userRoutes = require('./routes/user.routes');
 
 // Initialize Express app
 const app = express();
@@ -31,18 +32,58 @@ app.use((req, res, next) => {
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/social-accounts', socialAccountRoutes);
+app.use('/api/users', userRoutes);
 
 // Basic route for testing
 app.get('/', (req, res) => {
   res.send('ViaGuild API is running');
 });
 
+// 404 handler
+app.use((req, res, next) => {
+  res.status(404).json({
+    message: `Route ${req.originalUrl} not found`,
+    status: 404
+  });
+});
+
 // Global error handler
 app.use((err, req, res, next) => {
+  // Log the error details
+  console.error('=============== SERVER ERROR ===============');
+  console.error(`${new Date().toISOString()} - ${req.method} ${req.originalUrl}`);
+  
+  // Log the error stack
   console.error(err.stack);
-  res.status(500).json({
+  
+  // Prisma specific error handling
+  if (err.name === 'PrismaClientKnownRequestError') {
+    // Check for common prisma errors
+    if (err.code === 'P2025') {
+      return res.status(404).json({
+        message: 'The requested resource was not found',
+        error: process.env.NODE_ENV === 'production' ? {} : err,
+      });
+    }
+    
+    if (err.code === 'P2002') {
+      return res.status(409).json({
+        message: 'A resource with this identifier already exists',
+        error: process.env.NODE_ENV === 'production' ? {} : err,
+      });
+    }
+  }
+  
+  // Send appropriate response
+  const statusCode = err.statusCode || 500;
+  res.status(statusCode).json({
     message: err.message || 'Something went wrong!',
-    error: process.env.NODE_ENV === 'production' ? {} : err,
+    status: statusCode,
+    error: process.env.NODE_ENV === 'production' ? {} : {
+      name: err.name,
+      stack: err.stack,
+      details: err
+    },
   });
 });
 
