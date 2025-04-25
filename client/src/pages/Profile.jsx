@@ -4,14 +4,14 @@ import SocialAccountsList from '../components/SocialAccountsList';
 import socialAccountService from '../services/socialAccountService';
 import '../styles/social.css';
 import twitterIcon from '../assets/twitter.svg';
-import blueskyIcon from '../assets/bluesky.svg';  // Correct import
+import blueskyIcon from '../assets/bluesky.svg';
 
 /**
  * Profile page component
  * Displays user information and manages social account connections
  */
 function Profile() {
-  const { currentUser } = useAuth();
+  const { currentUser, connectSocialAccount } = useAuth();
   const [socialAccounts, setSocialAccounts] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -37,22 +37,15 @@ function Profile() {
   }, []);
 
   /**
-   * Handle connecting a Twitter account (still using mock for now)
+   * Handle connecting a Twitter account
+   * Uses the OAuth authentication flow via AuthContext
    */
-  const handleConnectTwitter = async () => {
+  const handleConnectTwitter = () => {
     try {
       setError('');
-      setIsConnecting(true);
-      
-      // For development, use mock endpoint
-      const response = await socialAccountService.connectTwitterMock();
-      
-      // Add the new account to the list
-      setSocialAccounts([...socialAccounts, response.socialAccount]);
+      connectSocialAccount('twitter');
     } catch (error) {
-      setError(`Failed to connect Twitter account: ${error.response?.data?.message || error.message}`);
-    } finally {
-      setIsConnecting(false);
+      setError(`Failed to initiate Twitter connection: ${error.message}`);
     }
   };
 
@@ -93,6 +86,32 @@ function Profile() {
     }
   };
 
+  // Parse URL query parameters to check for error/success messages
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const errorMsg = urlParams.get('error');
+    const successMsg = urlParams.get('success');
+    
+    if (errorMsg) {
+      setError(decodeURIComponent(errorMsg));
+      // Clean URL without refreshing
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } else if (successMsg) {
+      // If success message, refresh social accounts
+      const fetchAccounts = async () => {
+        try {
+          const accounts = await socialAccountService.getSocialAccounts();
+          setSocialAccounts(accounts);
+        } catch (err) {
+          console.error('Failed to refresh accounts after successful connection', err);
+        }
+      };
+      fetchAccounts();
+      // Clean URL without refreshing
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
+
   if (loading) {
     return <div className="loading">Loading profile...</div>;
   }
@@ -105,23 +124,14 @@ function Profile() {
       
       <div className="profile-info">
         <div className="info-group">
+          <label>Username:</label>
+          <p>{currentUser.username}</p>
+        </div>
+        
+        <div className="info-group">
           <label>Email:</label>
           <p>{currentUser.email}</p>
         </div>
-        
-        {currentUser.firstName && (
-          <div className="info-group">
-            <label>First Name:</label>
-            <p>{currentUser.firstName}</p>
-          </div>
-        )}
-        
-        {currentUser.lastName && (
-          <div className="info-group">
-            <label>Last Name:</label>
-            <p>{currentUser.lastName}</p>
-          </div>
-        )}
       </div>
       
       <div className="social-section">
@@ -139,7 +149,7 @@ function Profile() {
             <span>Connect Twitter</span>
           </button>
           
-          {/* Bluesky connect button (not form) - FIXED ICON */}
+          {/* Bluesky connect button (not form) */}
           {!showBlueskyForm && (
             <button 
               className="social-btn bluesky-btn"

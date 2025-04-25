@@ -27,9 +27,8 @@ describe('Twitter OAuth', () => {
     testUser = await prisma.user.create({
       data: {
         email: 'twitter-test@example.com',
+        username: 'twittertest',
         passwordHash,
-        firstName: 'Twitter',
-        lastName: 'Test',
       },
     });
 

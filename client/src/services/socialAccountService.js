@@ -52,32 +52,39 @@ const socialAccountService = {
   },
 
   /**
+   * DEPRECATED: Use AuthContext.connectSocialAccount instead
    * Connect a Twitter account (using mock API for development)
    * @returns {Promise<Object>} Response data with the connected account
    */
   async connectTwitterMock() {
+    console.warn('DEPRECATED: Use connectSocialAccount from AuthContext instead');
     const api = this.getAuthAxios();
     const response = await api.post('/social-accounts/mock/twitter');
     return response.data;
   },
 
   /**
+   * DEPRECATED: Use AuthContext.connectSocialAccount instead
    * Connect a Bluesky account (using mock API for development)
    * @returns {Promise<Object>} Response data with the connected account
    */
   async connectBlueskyMock() {
+    console.warn('DEPRECATED: Use connectSocialAccount from AuthContext instead');
     const api = this.getAuthAxios();
     const response = await api.post('/social-accounts/mock/bluesky');
     return response.data;
   },
 
   /**
+   * DEPRECATED: Use AuthContext.connectSocialAccount instead
    * Connect a social account through the real OAuth flow
    * This will redirect the user to the social platform's authorization page
    * @param {string} provider - Social provider ('twitter' or 'bluesky')
    */
   connectSocialAccount(provider) {
-    window.location.href = `/api/auth/connect/${provider}`;
+    console.warn('DEPRECATED: Use connectSocialAccount from AuthContext instead');
+    const token = localStorage.getItem('token');
+    window.location.href = `/api/auth/connect/${provider}?token=${token}`;
   }
 };
 

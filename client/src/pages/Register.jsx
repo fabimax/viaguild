@@ -52,6 +52,30 @@ function Register() {
       
       <form onSubmit={handleSubmit(onSubmit)}>
         <div className="form-group">
+          <label htmlFor="username">Username</label>
+          <input
+            id="username"
+            type="text"
+            {...register('username', {
+              required: 'Username is required',
+              minLength: {
+                value: 3,
+                message: 'Username must be at least 3 characters'
+              },
+              maxLength: {
+                value: 30,
+                message: 'Username cannot exceed 30 characters'
+              },
+              pattern: {
+                value: /^[a-zA-Z0-9_]+$/,
+                message: 'Username can only contain letters, numbers, and underscores'
+              }
+            })}
+          />
+          {errors.username && <span className="error">{errors.username.message}</span>}
+        </div>
+        
+        <div className="form-group">
           <label htmlFor="email">Email</label>
           <input
             id="email"
@@ -98,24 +122,6 @@ function Register() {
             })}
           />
           {errors.confirmPassword && <span className="error">{errors.confirmPassword.message}</span>}
-        </div>
-        
-        <div className="form-group">
-          <label htmlFor="firstName">First Name (Optional)</label>
-          <input
-            id="firstName"
-            type="text"
-            {...register('firstName')}
-          />
-        </div>
-        
-        <div className="form-group">
-          <label htmlFor="lastName">Last Name (Optional)</label>
-          <input
-            id="lastName"
-            type="text"
-            {...register('lastName')}
-          />
         </div>
         
         <button type="submit" disabled={isLoading}>

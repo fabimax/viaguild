@@ -13,9 +13,9 @@ datasource db {
 model User {
   id             String          @id @default(uuid())
   email          String          @unique
+  username       String          @unique // Added username field with unique constraint
   passwordHash   String
-  firstName      String?
-  lastName       String?
+  // Removed firstName and lastName fields
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
   socialAccounts SocialAccount[]

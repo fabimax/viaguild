@@ -24,9 +24,8 @@ describe('Social Account API', () => {
     testUser = await prisma.user.create({
       data: {
         email: 'social-test@example.com',
+        username: 'socialtest',
         passwordHash,
-        firstName: 'Social',
-        lastName: 'Test',
       },
     });
 

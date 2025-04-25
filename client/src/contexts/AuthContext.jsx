@@ -115,11 +115,19 @@ export const AuthProvider = ({ children }) => {
   /**
    * Connect a social account
    * Redirects to the social provider authorization page
+   * Includes JWT token in the URL for authentication
    * 
    * @param {string} provider - The social provider (twitter or bluesky)
    */
   const connectSocialAccount = (provider) => {
-    window.location.href = `/api/auth/connect/${provider}`;
+    // Include the token in the URL to maintain authentication through redirects
+    const currentToken = localStorage.getItem('token');
+    if (!currentToken) {
+      console.error('No token available for authentication');
+      return;
+    }
+    
+    window.location.href = `/api/auth/connect/${provider}?token=${currentToken}`;
   };
 
   // Effect to load user on first render if token exists

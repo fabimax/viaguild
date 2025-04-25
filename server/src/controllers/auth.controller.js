@@ -19,15 +19,24 @@ const generateToken = (userId) => {
  */
 exports.register = async (req, res, next) => {
   try {
-    const { email, password, firstName, lastName } = req.body;
+    const { email, username, password } = req.body;
 
-    // Check if user already exists
-    const existingUser = await req.prisma.user.findUnique({
+    // Check if user email already exists
+    const existingUserByEmail = await req.prisma.user.findUnique({
       where: { email },
     });
 
-    if (existingUser) {
-      return res.status(400).json({ message: 'User already exists' });
+    if (existingUserByEmail) {
+      return res.status(400).json({ message: 'Email already in use' });
+    }
+
+    // Check if username already exists
+    const existingUserByUsername = await req.prisma.user.findUnique({
+      where: { username },
+    });
+
+    if (existingUserByUsername) {
+      return res.status(400).json({ message: 'Username already taken' });
     }
 
     // Hash password
@@ -38,9 +47,8 @@ exports.register = async (req, res, next) => {
     const newUser = await req.prisma.user.create({
       data: {
         email,
+        username,
         passwordHash,
-        firstName,
-        lastName,
       },
     });
 

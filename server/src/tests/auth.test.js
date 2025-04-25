@@ -12,10 +12,9 @@ describe('Authentication API', () => {
   // Test user data
   const testUser = {
     email: 'test@example.com',
+    username: 'testuser',
     password: 'Password123',
     confirmPassword: 'Password123',
-    firstName: 'Test',
-    lastName: 'User',
   };
   
   let authToken;
@@ -42,6 +41,7 @@ describe('Authentication API', () => {
       expect(response.body.message).toBe('User registered successfully');
       expect(response.body.user).toHaveProperty('id');
       expect(response.body.user.email).toBe(testUser.email);
+      expect(response.body.user.username).toBe(testUser.username);
       expect(response.body.token).toBeDefined();
       
       // Save token for later tests
@@ -54,7 +54,19 @@ describe('Authentication API', () => {
         .send(testUser)
         .expect(400);
 
-      expect(response.body.message).toBe('User already exists');
+      expect(response.body.message).toBe('Email already in use');
+    });
+
+    it('should not register a user with an existing username', async () => {
+      const response = await request(app)
+        .post('/api/auth/register')
+        .send({
+          ...testUser,
+          email: 'another@example.com', // different email
+        })
+        .expect(400);
+
+      expect(response.body.message).toBe('Username already taken');
     });
 
     it('should validate email format', async () => {
@@ -63,6 +75,20 @@ describe('Authentication API', () => {
         .send({
           ...testUser,
           email: 'invalid-email',
+          username: 'uniqueuser1', // unique username
+        })
+        .expect(400);
+
+      expect(response.body.errors).toBeDefined();
+    });
+
+    it('should validate username format', async () => {
+      const response = await request(app)
+        .post('/api/auth/register')
+        .send({
+          ...testUser,
+          email: 'another@example.com', // different email
+          username: 'invalid username!', // invalid username with spaces and special characters
         })
         .expect(400);
 
@@ -74,7 +100,8 @@ describe('Authentication API', () => {
         .post('/api/auth/register')
         .send({
           ...testUser,
-          email: 'another@example.com', // Use different email to avoid duplicate
+          email: 'another@example.com', // different email
+          username: 'uniqueuser2', // unique username
           password: 'weak',
           confirmPassword: 'weak',
         })
@@ -96,6 +123,7 @@ describe('Authentication API', () => {
 
       expect(response.body.message).toBe('Login successful');
       expect(response.body.user).toHaveProperty('id');
+      expect(response.body.user.username).toBe(testUser.username);
       expect(response.body.token).toBeDefined();
     });
 
@@ -121,6 +149,7 @@ describe('Authentication API', () => {
 
       expect(response.body.user).toHaveProperty('id');
       expect(response.body.user.email).toBe(testUser.email);
+      expect(response.body.user.username).toBe(testUser.username);
       expect(response.body.user).not.toHaveProperty('passwordHash');
     });
 
