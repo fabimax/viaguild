@@ -5,6 +5,7 @@ import socialAccountService from '../services/socialAccountService';
 import '../styles/social.css';
 import twitterIcon from '../assets/twitter.svg';
 import blueskyIcon from '../assets/bluesky.svg';
+import twitchIcon from '../assets/twitch.svg';
 
 /**
  * Profile page component
@@ -46,6 +47,19 @@ function Profile() {
       connectSocialAccount('twitter');
     } catch (error) {
       setError(`Failed to initiate Twitter connection: ${error.message}`);
+    }
+  };
+  
+  /**
+   * Handle connecting a Twitch account
+   * Uses the OAuth authentication flow via AuthContext
+   */
+  const handleConnectTwitch = () => {
+    try {
+      setError('');
+      connectSocialAccount('twitch');
+    } catch (error) {
+      setError(`Failed to initiate Twitch connection: ${error.message}`);
     }
   };
 
@@ -160,6 +174,16 @@ function Profile() {
               <span>Connect Bluesky</span>
             </button>
           )}
+          
+          {/* Twitch connect button */}
+          <button 
+            className="social-btn twitch-btn"
+            onClick={handleConnectTwitch}
+            disabled={isConnecting}
+          >
+            <img src={twitchIcon} alt="Twitch logo" className="icon" />
+            <span>Connect Twitch</span>
+          </button>
         </div>
         
         {/* Bluesky connection form */}

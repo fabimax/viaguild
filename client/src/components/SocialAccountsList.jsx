@@ -2,6 +2,7 @@ import React from 'react';
 import PropTypes from 'prop-types';
 import twitterIcon from '../assets/twitter.svg';
 import blueskyIcon from '../assets/bluesky.svg';
+import twitchIcon from '../assets/twitch.svg';
 
 /**
  * Component to display a list of connected social accounts
@@ -20,7 +21,14 @@ function SocialAccountsList({ accounts, onRemove }) {
 
   // Helper function to get the appropriate icon
   const getProviderIcon = (provider) => {
-    return provider === 'twitter' ? twitterIcon : blueskyIcon;
+    switch (provider) {
+      case 'twitter':
+        return twitterIcon;
+      case 'twitch':
+        return twitchIcon;
+      default:
+        return blueskyIcon;
+    }
   };
 
   return (
@@ -39,7 +47,8 @@ function SocialAccountsList({ accounts, onRemove }) {
               </div>
               <div>
                 <span className={`provider ${account.provider}`}>
-                  {account.provider === 'twitter' ? 'Twitter' : 'Bluesky'}
+                  {account.provider === 'twitter' ? 'Twitter' : 
+                   account.provider === 'twitch' ? 'Twitch' : 'Bluesky'}
                 </span>
                 <span className="username">@{account.username}</span>
               </div>

@@ -136,19 +136,13 @@ exports.connectTwitter = require('../controllers/twitter.controller').initiateTw
 exports.twitterCallback = require('../controllers/twitter.controller').twitterCallback;
 
 /**
- * Initiate Bluesky authentication
- * Bluesky might use a different auth method than OAuth
+ * Initiate Twitch OAuth authentication
+ * Redirects to Twitch's OAuth authorization page
  */
-exports.connectBluesky = (req, res) => {
-  // For now, redirect to our mock endpoint
-  res.redirect(`/api/social-accounts/mock/bluesky`);
-};
+exports.connectTwitch = require('../controllers/twitch.controller').initiateTwitchAuth;
 
 /**
- * Handle Bluesky authentication callback
+ * Handle Twitch OAuth callback
+ * Called by Twitch after the user authorizes the app
  */
-exports.blueskyCallback = (req, res) => {
-  // Similar to Twitter callback, but for Bluesky
-  // For now, just redirect back to the profile page
-  res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/profile`);
-};
+exports.twitchCallback = require('../controllers/twitch.controller').twitchCallback;
