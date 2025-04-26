@@ -6,7 +6,8 @@ import './styles/social.css';
 import './styles/search.css';
 import './styles/profile.css';
 import './styles/error.css';
-import './styles/debug.css'; // Added debug CSS
+import './styles/header.css'; // Added header styles
+import './styles/debug.css';
 
 /**
  * Application entry point

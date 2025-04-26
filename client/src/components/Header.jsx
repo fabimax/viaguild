@@ -1,9 +1,10 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import viaguildLogo from '../assets/viaguild.svg';
 
 /**
- * Header component with navigation links
+ * Header component with navigation links and logo
  * Shows different options based on authentication state
  */
 function Header() {
@@ -22,7 +23,10 @@ function Header() {
   return (
     <header className="header">
       <div className="logo">
-        <Link to="/">ViaGuild</Link>
+        <Link to="/" className="logo-link">
+          <img src={viaguildLogo} alt="ViaGuild Logo" className="logo-image" />
+          <span className="logo-text">ViaGuild</span>
+        </Link>
       </div>
       <nav className="nav">
         <ul>
