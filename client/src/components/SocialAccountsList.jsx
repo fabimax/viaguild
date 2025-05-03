@@ -3,6 +3,7 @@ import PropTypes from 'prop-types';
 import twitterIcon from '../assets/twitter.svg';
 import blueskyIcon from '../assets/bluesky.svg';
 import twitchIcon from '../assets/twitch.svg';
+import discordIcon from '../assets/discord.svg';
 
 /**
  * Component to display a list of connected social accounts
@@ -27,6 +28,8 @@ function SocialAccountsList({ accounts = [], onRemove, isPublicView = false }) {
         return twitterIcon;
       case 'twitch':
         return twitchIcon;
+      case 'discord':
+        return discordIcon;
       default:
         return blueskyIcon;
     }
@@ -39,6 +42,8 @@ function SocialAccountsList({ accounts = [], onRemove, isPublicView = false }) {
         return 'Twitter';
       case 'twitch':
         return 'Twitch';
+      case 'discord':
+        return 'Discord';
       case 'bluesky':
         return 'Bluesky';
       default:

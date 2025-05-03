@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import twitterIcon from '../assets/twitter.svg';
 import blueskyIcon from '../assets/bluesky.svg';
 import twitchIcon from '../assets/twitch.svg';
+import discordIcon from '../assets/discord.svg';
 
 /**
  * SearchResultItem component to display a single search result
@@ -27,6 +28,8 @@ function SearchResultItem({ result, searchQuery }) {
         return blueskyIcon;
       case 'twitch':
         return twitchIcon;
+      case 'discord':
+        return discordIcon;
       default:
         return null; // No icon for ViaGuild usernames
     }

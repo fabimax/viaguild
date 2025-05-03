@@ -64,6 +64,10 @@
   background-color: #9146FF;
 }
 
+.discord-btn {
+  background-color: #5865F2;
+}
+
 /* Bluesky form styling */
 .bluesky-form {
   background-color: #f8fafc;
@@ -169,6 +173,10 @@
 
 .provider.twitch {
   color: #9146FF;
+}
+
+.provider.discord {
+  color: #5865F2;
 }
 
 .username {

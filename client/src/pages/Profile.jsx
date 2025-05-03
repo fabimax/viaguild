@@ -10,6 +10,7 @@ import '../styles/profile.css';
 import twitterIcon from '../assets/twitter.svg';
 import blueskyIcon from '../assets/bluesky.svg';
 import twitchIcon from '../assets/twitch.svg';
+import discordIcon from '../assets/discord.svg';
 
 /**
  * Profile page component
@@ -72,6 +73,19 @@ function Profile() {
       connectSocialAccount('twitch');
     } catch (error) {
       setError(`Failed to initiate Twitch connection: ${error.message}`);
+    }
+  };
+
+  /**
+   * Handle connecting a Discord account
+   * Uses the OAuth authentication flow via AuthContext
+   */
+  const handleConnectDiscord = () => {
+    try {
+      setError('');
+      connectSocialAccount('discord');
+    } catch (error) {
+      setError(`Failed to initiate Discord connection: ${error.message}`);
     }
   };
 
@@ -240,6 +254,16 @@ function Profile() {
             >
               <img src={twitchIcon} alt="Twitch logo" className="icon" />
               <span>Connect Twitch</span>
+            </button>
+            
+            {/* Discord connect button (New) */}
+            <button 
+              className="social-btn discord-btn"
+              onClick={handleConnectDiscord}
+              disabled={isConnecting}
+            >
+              <img src={discordIcon} alt="Discord logo" className="icon" />
+              <span>Connect Discord</span>
             </button>
           </div>
           

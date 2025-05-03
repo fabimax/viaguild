@@ -97,6 +97,7 @@ function SearchBar({ onSearch, initialQuery = '', initialPlatform = 'all' }) {
                 <option value="twitter">Twitter</option>
                 <option value="bluesky">Bluesky</option>
                 <option value="twitch">Twitch</option>
+                <option value="discord">Discord</option>
               </select>
             </div>
           </div>

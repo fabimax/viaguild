@@ -71,7 +71,8 @@ exports.searchUsers = async (req, res, next) => {
       // Check which visible social accounts matched
       visibleSocialAccounts.forEach(account => {
         // Apply platform filter if specified
-        if (platform && platform !== 'all' && platform !== 'viaguild' && platform !== account.provider) {
+        if (platform && platform !== 'all' && platform !== 'viaguild' && account.provider !== platform) {
+          // Skip if the platform filter is set and doesn't match the account provider
           return;
         }
         
@@ -117,6 +118,7 @@ exports.searchUsers = async (req, res, next) => {
       twitter: 0,
       bluesky: 0,
       twitch: 0,
+      discord: 0,
     };
 
     // Calculate counts for each platform
