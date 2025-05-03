@@ -246,16 +246,6 @@ function PublicUserProfile() {
           isPublicView={true}
         />
       </div>
-      
-      {/* Navigation */}
-      <div className="profile-actions">
-        <button 
-          onClick={goToSearch}
-          className="btn-secondary"
-        >
-          Back to Search
-        </button>
-      </div>
     </div>
   );
 }
