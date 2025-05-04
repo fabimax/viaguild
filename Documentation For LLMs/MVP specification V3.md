@@ -13,7 +13,7 @@ ViaGuild (VG) is a web application that enables users to create and join Guilds 
 
 ### Creation & Management
 - Guild creation with name, description, and avatar
-- Guild privacy settings (public/private)
+- Guild joining settings (open/invite-only)
 - Guild search functionality with filters
 - Guild profiles displaying members and badges
 

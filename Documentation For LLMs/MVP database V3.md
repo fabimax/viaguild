@@ -11,7 +11,7 @@ model Guild {
   name          String      @unique
   description   String      @db.Text
   avatar        String?     // URL to image storage
-  isPublic      Boolean     @default(true)
+  isOpen        Boolean     @default(false)
   createdById   String      // Reference to User who created the guild
   updatedById   String?     // Reference to User who last updated the guild
   createdAt     DateTime    @default(now())
