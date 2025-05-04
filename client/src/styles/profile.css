@@ -2,28 +2,255 @@
 
 .profile-container {
     max-width: 800px;
-    margin: 0 auto;
-    padding: 2rem 1rem;
+    margin: 2rem auto;
+    padding: 2rem;
+    background-color: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
   }
   
   .profile-container h2 {
-    margin-bottom: 1.5rem;
-    color: var(--primary-color);
-    text-align: center;
+    color: #333;
   }
   
   .profile-info {
-    background-color: white;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    position: relative;
+    background-color: #f9f9f9;
     padding: 1.5rem;
+    border-radius: 8px;
     margin-bottom: 2rem;
+    border: 1px solid #eee;
+  }
+  
+  .profile-page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+  
+  .profile-page-header h2 {
+    margin: 0;
+    text-align: center;
+    flex-grow: 1;
+  }
+  
+  .edit-profile-button {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-shrink: 0;
+    width: 110px;
+    justify-content: center;
+  }
+  
+  .edit-profile-button svg {
+    width: 16px;
+    height: 16px;
+  }
+  
+  .header-spacer {
+    width: 110px;
+    flex-shrink: 0;
+    visibility: hidden;
+  }
+  
+  .profile-info-flex {
+    display: flex;
+    align-items: flex-start;
+    gap: 2rem;
+  }
+  
+  .profile-avatar {
+    flex-shrink: 0;
+    text-align: center;
+  }
+  
+  .avatar-display {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 3px solid #ddd;
+  }
+  
+  .avatar-placeholder {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    background-color: #e0e0e0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.5rem;
+    font-weight: bold;
+    color: #777;
+    border: 3px solid #ddd;
+  }
+  
+  .profile-details {
+    flex-grow: 1;
   }
   
   .info-group {
+    margin-bottom: 1rem;
+  }
+  
+  .info-group label {
+    display: block;
+    font-weight: 600;
+    color: #555;
+    margin-bottom: 0.3rem;
+  }
+  
+  .info-group p {
+    margin: 0;
+    color: #333;
+    word-break: break-word;
+  }
+  
+  .bio-section {
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid #eee;
+  }
+  
+  .bio-section h3 {
+    margin-bottom: 0.5rem;
+    color: #444;
+  }
+  
+  /* Profile Tabs */
+  .profile-tabs {
     display: flex;
-    gap: 1rem;
-    margin-bottom: 0.75rem;
+    margin-bottom: 1.5rem;
+    border-bottom: 1px solid #ccc;
+  }
+  
+  .tab-button {
+    padding: 0.8rem 1.5rem;
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-size: 1rem;
+    color: #555;
+    border-bottom: 3px solid transparent;
+    transition: all 0.2s ease;
+  }
+  
+  .tab-button:hover {
+    color: #007bff;
+  }
+  
+  .tab-button.active {
+    color: #007bff;
+    font-weight: 600;
+    border-bottom-color: #007bff;
+  }
+  
+  /* Settings Section (within profile page) */
+  .settings-section {
+    padding-top: 1rem;
+  }
+  
+  /* Styles for ProfileSettings component in VIEW mode */
+  .profile-settings-view {
+    /* Add any specific container styles if needed */
+  }
+  
+  .settings-view-content {
+    margin-top: 1rem;
+    border-top: 1px solid #eee;
+    padding-top: 1rem;
+  }
+  
+  .setting-item {
+    margin-bottom: 1rem;
+  }
+  
+  .setting-item h4 {
+    margin-bottom: 0.3rem;
+    color: #555;
+    font-size: 1rem;
+  }
+  
+  .setting-item p {
+    margin: 0;
+    color: #333;
+  }
+  
+  /* Styles for ProfileSettings component in EDIT mode are handled by existing form styles */
+  
+  /* Public Profile Link Section */
+  .public-profile-link {
+    margin-top: 2rem;
+    padding-top: 1rem;
+    border-top: 1px dashed #ddd;
+    text-align: center;
+  }
+  
+  .view-public-label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+    color: #666;
+  }
+  
+  .public-view-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    text-decoration: none;
+    color: #007bff;
+    padding: 0.5rem 1rem;
+    border: 1px solid #007bff;
+    border-radius: 4px;
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+  
+  .public-view-link:hover {
+    background-color: #007bff;
+    color: #fff;
+  }
+  
+  .public-view-icon {
+    font-size: 1.2em;
+  }
+  
+  .public-view-hint {
+    display: block;
+    margin-top: 0.5rem;
+    font-size: 0.8rem;
+    color: #888;
+  }
+  
+  /* Specific styles for EditProfile page */
+  .edit-profile-section {
+    margin-top: 1.5rem;
+  }
+  
+  /* Re-use profile settings styles from ProfileSettings component */
+  /* Add any overrides if needed */
+  
+  .profile-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+  }
+  
+  .profile-header h2 {
+    margin: 0;
+    text-align: left;
+  }
+  
+  .back-button {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
   }
   
   .info-group:last-child {
@@ -39,50 +266,6 @@
   .info-group p {
     font-weight: 500;
     color: var(--primary-color);
-  }
-  
-  /* Profile Tabs */
-  .profile-tabs {
-    display: flex;
-    margin-bottom: 1.5rem;
-    border-bottom: 1px solid #e2e8f0;
-  }
-  
-  .tab-button {
-    flex: 1;
-    background: none;
-    border: none;
-    padding: 0.75rem 1rem;
-    font-size: 0.95rem;
-    font-weight: 500;
-    color: var(--secondary-color);
-    cursor: pointer;
-    border-bottom: 2px solid transparent;
-    transition: all 0.2s;
-  }
-  
-  .tab-button:hover {
-    background-color: #f8fafc;
-    color: var(--accent-color);
-  }
-  
-  .tab-button.active {
-    color: var(--accent-color);
-    border-bottom-color: var(--accent-color);
-  }
-  
-  /* Profile Settings Styles */
-  .settings-section {
-    background-color: white;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-    padding: 1.5rem;
-  }
-  
-  .profile-settings h3 {
-    margin-bottom: 1.5rem;
-    color: var(--primary-color);
-    font-size: 1.25rem;
   }
   
   .settings-header {
@@ -196,13 +379,6 @@
     margin-top: 2rem;
   }
   
-  .public-profile-link {
-    margin-top: 2rem;
-    text-align: center;
-    font-size: 0.9rem;
-    color: var(--secondary-color);
-  }
-  
   .public-profile-link a {
     margin-left: 0.5rem;
     color: var(--accent-color);
@@ -219,11 +395,6 @@
     padding: 0.75rem 1rem;
     border-radius: 4px;
     margin-bottom: 1rem;
-  }
-
-
-  .public-profile-link a:hover {
-    text-decoration: underline;
   }
   
   /* Info banner for own public profile */
@@ -248,8 +419,7 @@
     padding: 0.3rem 0.75rem;
     font-size: 0.85rem;
   }
-
-
+  
   .public-profile-link {
     margin-top: 2rem;
     text-align: center;
@@ -258,13 +428,6 @@
     padding: 1rem;
     background-color: #f8fafc;
     border-radius: 8px;
-  }
-  
-  .view-public-label {
-    display: block;
-    margin-bottom: 0.5rem;
-    font-weight: 500;
-    color: var(--primary-color);
   }
   
   .public-view-link {
@@ -293,7 +456,6 @@
     font-size: 0.8rem;
     color: var(--secondary-color);
   }
-
 
   /* Avatar Styling */
 
@@ -448,8 +610,6 @@
   }
 }
 
-
-
 /* Profile page with avatar */
 .profile-info {
   margin-bottom: 1.5rem;
@@ -478,13 +638,13 @@
 }
 
 .info-group {
-  display: contents; /* This makes the children become direct children of the grid */
+  display: contents;
 }
 
 .info-group label {
   font-weight: 500;
   color: var(--secondary-color);
-  text-align: left; /* Align text to the left */
+  text-align: left;
   grid-column: 1;
 }
 

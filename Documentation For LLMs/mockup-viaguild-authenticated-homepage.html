@@ -1,0 +1,1167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ViaGuild - Home</title>
+    <style>
+        :root {
+            --primary: #4f46e5;
+            --primary-light: #818cf8;
+            --secondary: #64748b;
+            --dark: #1e293b;
+            --light: #f8fafc;
+            --light-gray: #e2e8f0;
+            --gold: #f59e0b;
+            --silver: #94a3b8;
+            --bronze: #b45309;
+            --danger: #ef4444;
+            --success: #10b981;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+        }
+        
+        body {
+            background-color: #f8fafc;
+            color: var(--dark);
+        }
+        
+        header {
+            background-color: white;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            padding: 1rem;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .logo {
+            font-weight: 700;
+            font-size: 1.5rem;
+            color: var(--primary);
+        }
+        
+        .search-bar {
+            background-color: var(--light-gray);
+            border-radius: 9999px;
+            padding: 0.5rem 1rem;
+            display: flex;
+            align-items: center;
+            width: 400px;
+        }
+        
+        .search-bar input {
+            background: transparent;
+            border: none;
+            outline: none;
+            width: 100%;
+            margin-left: 0.5rem;
+        }
+        
+        .user-menu {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        
+        .notifications {
+            position: relative;
+        }
+        
+        .notification-badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background-color: var(--danger);
+            color: white;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            width: 18px;
+            height: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 9999px;
+            background-color: var(--primary-light);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            position: relative;
+        }
+        
+        .user-dropdown {
+            position: absolute;
+            top: 50px;
+            right: 0;
+            background-color: white;
+            border-radius: 0.5rem;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            width: 200px;
+            z-index: 100;
+            display: none;
+        }
+        
+        .profile-links {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin: 1rem 0 2rem;
+        }
+        
+        .profile-link {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            background-color: white;
+            color: var(--dark);
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            text-decoration: none;
+            font-weight: 500;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            transition: all 0.2s;
+        }
+        
+        .profile-link:hover {
+            background-color: var(--primary);
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        .profile-link:hover svg {
+            stroke: white;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem 1rem;
+        }
+        
+        .welcome-section {
+            margin-bottom: 2rem;
+        }
+        
+        .welcome-section h1 {
+            font-size: 1.875rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+        
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+        
+        .section-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+        
+        .section-actions {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        
+        .view-all {
+            color: var(--primary);
+            text-decoration: none;
+            font-weight: 500;
+        }
+        
+        .create-button {
+            background-color: var(--primary);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            text-decoration: none;
+            transition: all 0.2s;
+            border: none;
+            cursor: pointer;
+        }
+        
+        .create-button:hover {
+            background-color: var(--primary-light);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        .guild-carousel {
+            display: flex;
+            gap: 1rem;
+            overflow-x: auto;
+            padding: 0.5rem 0;
+            margin-bottom: 1rem;
+            scroll-behavior: smooth;
+        }
+        
+        .guild-carousel::-webkit-scrollbar {
+            height: 8px;
+        }
+        
+        .guild-carousel::-webkit-scrollbar-track {
+            background: var(--light-gray);
+            border-radius: 9999px;
+        }
+        
+        .guild-carousel::-webkit-scrollbar-thumb {
+            background: var(--secondary);
+            border-radius: 9999px;
+        }
+        
+        .guild-card {
+            min-width: 220px;
+            background-color: white;
+            border-radius: 0.5rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            transition: transform 0.2s;
+        }
+        
+        .guild-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        .guild-banner {
+            height: 80px;
+            background-color: #ddd;
+            position: relative;
+        }
+        
+        .guild-banner.primary {
+            background-color: var(--primary-light);
+        }
+        
+        .guild-banner.gaming {
+            background-color: #8b5cf6;
+        }
+        
+        .guild-banner.art {
+            background-color: #ec4899;
+        }
+        
+        .guild-banner.tech {
+            background-color: #0ea5e9;
+        }
+        
+        .primary-badge {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            background-color: var(--gold);
+            color: white;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        
+        .guild-avatar {
+            width: 60px;
+            height: 60px;
+            border-radius: 9999px;
+            background-color: white;
+            position: absolute;
+            bottom: -25px;
+            left: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 1.5rem;
+            color: var(--primary);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        
+        .guild-content {
+            padding: 2rem 1rem 1rem;
+        }
+        
+        .guild-name {
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+            display: -webkit-box;
+            -webkit-line-clamp: 1;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        
+        .guild-meta {
+            display: flex;
+            justify-content: space-between;
+            color: var(--secondary);
+            font-size: 0.875rem;
+        }
+        
+        .create-guild-card {
+            min-width: 220px;
+            background-color: var(--light-gray);
+            border-radius: 0.5rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        
+        .create-guild-card:hover {
+            background-color: #cbd5e1;
+        }
+        
+        .create-guild-icon {
+            width: 50px;
+            height: 50px;
+            border-radius: 9999px;
+            background-color: var(--primary);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+        }
+        
+        .badge-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        
+        .badge-received {
+            background-color: white;
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        
+        .badges-list {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+        
+        .badge {
+            width: 50px;
+            height: 50px;
+            border-radius: 9999px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            position: relative;
+        }
+        
+        .badge-gold {
+            background-color: var(--gold);
+            color: white;
+        }
+        
+        .badge-silver {
+            background-color: var(--silver);
+            color: white;
+        }
+        
+        .badge-bronze {
+            background-color: var(--bronze);
+            color: white;
+        }
+        
+        .badge-giver {
+            position: absolute;
+            bottom: -5px;
+            right: -5px;
+            width: 20px;
+            height: 20px;
+            border-radius: 9999px;
+            background-color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        
+        .badge-available {
+            background-color: white;
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        
+        .badge-counts {
+            margin-top: 1rem;
+            display: flex;
+            gap: 1rem;
+        }
+        
+        .badge-count {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .count-indicator {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 30px;
+            height: 30px;
+            border-radius: 9999px;
+            font-weight: 600;
+            color: white;
+        }
+        
+        .gold-count {
+            background-color: var(--gold);
+        }
+        
+        .silver-count {
+            background-color: var(--silver);
+        }
+        
+        .bronze-count {
+            background-color: var(--bronze);
+        }
+        
+        .trophy-case {
+            background-color: white;
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            margin-bottom: 2rem;
+        }
+        
+        .trophy-case-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+        
+        .trophy-case-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        
+        .trophy-badge {
+            position: relative;
+            width: 80px;
+            height: 80px;
+            margin: 0 auto;
+        }
+        
+        /* Circle badge */
+        .badge-circle-border {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-color: var(--gold);
+            border-radius: 50%;
+        }
+        
+        .badge-circle-inner {
+            position: absolute;
+            width: calc(100% - 8px);
+            height: calc(100% - 8px);
+            top: 4px;
+            left: 4px;
+            background-color: white;
+            border-radius: 50%;
+            overflow: hidden;
+        }
+        
+        .badge-circle-inner img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        /* Star badge using SVG for consistent border */
+        .badge-star-border {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-color: var(--silver);
+            -webkit-mask-size: 100% 100%;
+            mask-size: 100% 100%;
+            -webkit-mask-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M50,0 L63,38 L100,38 L69,59 L82,95 L50,73 L18,95 L31,59 L0,38 L37,38 Z' /%3E%3C/svg%3E");
+            mask-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M50,0 L63,38 L100,38 L69,59 L82,95 L50,73 L18,95 L31,59 L0,38 L37,38 Z' /%3E%3C/svg%3E");
+        }
+        
+        .badge-star-inner {
+            position: absolute;
+            width: calc(100% - 8px);
+            height: calc(100% - 8px);
+            top: 4px;
+            left: 4px;
+            background-color: white;
+            -webkit-mask-size: 100% 100%;
+            mask-size: 100% 100%;
+            -webkit-mask-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M50,0 L63,38 L100,38 L69,59 L82,95 L50,73 L18,95 L31,59 L0,38 L37,38 Z' /%3E%3C/svg%3E");
+            mask-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M50,0 L63,38 L100,38 L69,59 L82,95 L50,73 L18,95 L31,59 L0,38 L37,38 Z' /%3E%3C/svg%3E");
+            overflow: hidden;
+        }
+        
+        .badge-star-inner img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        /* Heart badge using SVG path for more control */
+        .badge-heart-border {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-color: var(--bronze);
+            -webkit-mask-size: 100% 100%;
+            mask-size: 100% 100%;
+            -webkit-mask-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M50,90 C45,85 20,65 10,45 C0,25 10,5 30,5 C40,5 45,10 50,15 C55,10 60,5 70,5 C90,5 100,25 90,45 C80,65 55,85 50,90 Z' /%3E%3C/svg%3E");
+            mask-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M50,90 C45,85 20,65 10,45 C0,25 10,5 30,5 C40,5 45,10 50,15 C55,10 60,5 70,5 C90,5 100,25 90,45 C80,65 55,85 50,90 Z' /%3E%3C/svg%3E");
+        }
+        
+        .badge-heart-inner {
+            position: absolute;
+            width: calc(100% - 8px);
+            height: calc(100% - 8px);
+            top: 4px;
+            left: 4px;
+            background-color: white;
+            -webkit-mask-size: 100% 100%;
+            mask-size: 100% 100%;
+            -webkit-mask-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M50,90 C45,85 20,65 10,45 C0,25 10,5 30,5 C40,5 45,10 50,15 C55,10 60,5 70,5 C90,5 100,25 90,45 C80,65 55,85 50,90 Z' /%3E%3C/svg%3E");
+            mask-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M50,90 C45,85 20,65 10,45 C0,25 10,5 30,5 C40,5 45,10 50,15 C55,10 60,5 70,5 C90,5 100,25 90,45 C80,65 55,85 50,90 Z' /%3E%3C/svg%3E");
+            overflow: hidden;
+        }
+        
+        .badge-heart-inner img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        /* Hexagon badge */
+        .badge-hexagon-border {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-color: #14b8a6;
+            clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+        }
+        
+        .badge-hexagon-inner {
+            position: absolute;
+            width: calc(100% - 8px);
+            height: calc(100% - 8px);
+            top: 4px;
+            left: 4px;
+            background-color: white;
+            clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+            overflow: hidden;
+        }
+        
+        .badge-hexagon-inner img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .badge-giver {
+            position: absolute;
+            bottom: -5px;
+            right: -5px;
+            width: 20px;
+            height: 20px;
+            border-radius: 9999px;
+            background-color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            z-index: 10; /* Ensure it's above everything else */
+        }
+        
+        .badge-heart-inner img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        /* Hexagon badge */
+        .badge-hexagon-border {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-color: #14b8a6;
+            clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+        }
+        
+        .badge-hexagon-inner {
+            position: absolute;
+            width: calc(100% - 8px);
+            height: calc(100% - 8px);
+            top: 4px;
+            left: 4px;
+            background-color: white;
+            clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+            overflow: hidden;
+        }
+        
+        .badge-hexagon-inner img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .badge-giver {
+            position: absolute;
+            bottom: -5px;
+            right: -5px;
+            width: 20px;
+            height: 20px;
+            border-radius: 9999px;
+            background-color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            z-index: 10; /* Ensure it's above everything else */
+        }
+        
+        .badge-giver {
+            position: absolute;
+            bottom: -5px;
+            right: -5px;
+            width: 20px;
+            height: 20px;
+            border-radius: 9999px;
+            background-color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        
+        .trophy-badge-name {
+            font-size: 0.875rem;
+            text-align: center;
+            margin-top: 0.5rem;
+            font-weight: 500;
+        }
+        
+        .trophy-badge-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .edit-button {
+            background-color: var(--light-gray);
+            color: var(--dark);
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .edit-button:hover {
+            background-color: var(--secondary);
+            color: white;
+        }
+        
+        @media screen and (max-width: 768px) {
+            .trophy-case-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        
+        .notifications-panel {
+            background-color: white;
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        
+        .notification-list {
+            margin-top: 1rem;
+        }
+        
+        .notification-item {
+            display: flex;
+            gap: 1rem;
+            padding: 1rem 0;
+            border-bottom: 1px solid var(--light-gray);
+        }
+        
+        .notification-item:last-child {
+            border-bottom: none;
+        }
+        
+        .notification-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 9999px;
+            background-color: var(--light-gray);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        
+        .notification-content {
+            flex-grow: 1;
+        }
+        
+        .notification-content p {
+            margin-bottom: 0.25rem;
+        }
+        
+        .notification-time {
+            color: var(--secondary);
+            font-size: 0.875rem;
+        }
+        
+        .notification-actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+        
+        .action-button {
+            padding: 0.25rem 0.75rem;
+            border-radius: 0.25rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            border: none;
+        }
+        
+        .accept-button {
+            background-color: var(--success);
+            color: white;
+        }
+        
+        .decline-button {
+            background-color: var(--light-gray);
+            color: var(--dark);
+        }
+        
+        .carousel-controls {
+            display: flex;
+            justify-content: center;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+        
+        .carousel-control {
+            width: 40px;
+            height: 40px;
+            border-radius: 9999px;
+            background-color: white;
+            border: 1px solid var(--light-gray);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        
+        .carousel-control:hover {
+            background-color: var(--light-gray);
+        }
+        
+        .carousel-control:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        /* Media Queries */
+        @media screen and (max-width: 768px) {
+            .badge-section {
+                grid-template-columns: 1fr;
+            }
+            
+            .search-bar {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="logo">ViaGuild</div>
+        <div class="search-bar">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input type="text" placeholder="Search users or guilds...">
+        </div>
+        <div class="user-menu">
+            <div class="notifications">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                    <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                </svg>
+                <div class="notification-badge">3</div>
+            </div>
+            <div class="avatar">JS</div>
+        </div>
+    </header>
+    
+    <div class="container">
+        <div class="welcome-section">
+            <h1>Welcome back, Jane!</h1>
+        </div>
+        
+        <div class="section-header">
+            <h2 class="section-title">Your Guilds</h2>
+            <div class="section-actions">
+                <a href="/guilds/create" class="create-button">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                    Create Guild
+                </a>
+                <a href="#" class="view-all">View All</a>
+            </div>
+        </div>
+        
+        <div class="guild-carousel" id="guild-carousel">
+            <div class="guild-card">
+                <div class="guild-banner primary">
+                    <div class="primary-badge">Primary</div>
+                    <div class="guild-avatar">D</div>
+                </div>
+                <div class="guild-content">
+                    <h3 class="guild-name">Design Masters</h3>
+                    <div class="guild-meta">
+                        <div>125 members</div>
+                        <div>Owner</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="guild-card">
+                <div class="guild-banner gaming">
+                    <div class="guild-avatar">G</div>
+                </div>
+                <div class="guild-content">
+                    <h3 class="guild-name">Gamers United</h3>
+                    <div class="guild-meta">
+                        <div>237 members</div>
+                        <div>Member</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="guild-card">
+                <div class="guild-banner art">
+                    <div class="guild-avatar">A</div>
+                </div>
+                <div class="guild-content">
+                    <h3 class="guild-name">Art Enthusiasts</h3>
+                    <div class="guild-meta">
+                        <div>89 members</div>
+                        <div>Admin</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="guild-card">
+                <div class="guild-banner tech">
+                    <div class="guild-avatar">T</div>
+                </div>
+                <div class="guild-content">
+                    <h3 class="guild-name">Tech Innovators</h3>
+                    <div class="guild-meta">
+                        <div>156 members</div>
+                        <div>Member</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="create-guild-card">
+                <div class="create-guild-icon">+</div>
+                <div>Create New Guild</div>
+            </div>
+        </div>
+        
+        <div class="carousel-controls">
+            <button class="carousel-control" id="prev-button">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+            </button>
+            <button class="carousel-control" id="next-button">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="9 18 15 12 9 6"></polyline>
+                </svg>
+            </button>
+        </div>
+        
+        <div class="profile-links">
+            <a href="/profile" class="profile-link">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="12" cy="7" r="4"></circle>
+                </svg>
+                View My Profile
+            </a>
+            <a href="/profile/edit" class="profile-link">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                </svg>
+                Edit Profile
+            </a>
+        </div>
+        
+        <div class="badge-section">
+            <div class="badge-received">
+                <div class="section-title">Recent Badges</div>
+                <div class="badges-list">
+                    <div class="badge-container">
+                        <div class="trophy-badge" style="width: 50px; height: 50px;">
+                            <div class="badge-circle-border"></div>
+                            <div class="badge-circle-inner">
+                                <img src="/api/placeholder/50/50" alt="Gold badge">
+                            </div>
+                            <div class="badge-giver">T</div>
+                        </div>
+                    </div>
+                    
+                    <div class="badge-container">
+                        <div class="trophy-badge" style="width: 50px; height: 50px;">
+                            <div class="badge-star-border"></div>
+                            <div class="badge-star-inner">
+                                <img src="/api/placeholder/50/50" alt="Silver badge">
+                            </div>
+                            <div class="badge-giver">G</div>
+                        </div>
+                    </div>
+                    
+                    <div class="badge-container">
+                        <div class="trophy-badge" style="width: 50px; height: 50px;">
+                            <div class="badge-heart-border"></div>
+                            <div class="badge-heart-inner">
+                                <img src="/api/placeholder/50/50" alt="Bronze badge">
+                            </div>
+                            <div class="badge-giver">A</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="badge-available">
+                <div class="section-title">Available Badges to Give</div>
+                <div class="badge-counts">
+                    <div class="badge-count">
+                        <div class="count-indicator gold-count">3</div>
+                        <div>Gold</div>
+                    </div>
+                    <div class="badge-count">
+                        <div class="count-indicator silver-count">7</div>
+                        <div>Silver</div>
+                    </div>
+                    <div class="badge-count">
+                        <div class="count-indicator bronze-count">18</div>
+                        <div>Bronze</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="trophy-case">
+            <div class="trophy-case-header">
+                <div class="section-title">Trophy Case</div>
+                <button class="edit-button" id="edit-trophies-button">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                    </svg>
+                    Edit Display
+                </button>
+            </div>
+            <div class="trophy-case-grid">
+                <div class="trophy-badge-container">
+                    <div class="trophy-badge">
+                        <div class="badge-circle-border"></div>
+                        <div class="badge-circle-inner">
+                            <img src="/api/placeholder/80/80" alt="Supreme Coder badge">
+                        </div>
+                        <div class="badge-giver">T</div>
+                    </div>
+                    <div class="trophy-badge-name">Supreme Coder</div>
+                </div>
+                
+                <div class="trophy-badge-container">
+                    <div class="trophy-badge">
+                        <div class="badge-star-border"></div>
+                        <div class="badge-star-inner">
+                            <img src="/api/placeholder/80/80" alt="Gem Finder badge">
+                        </div>
+                        <div class="badge-giver">M</div>
+                    </div>
+                    <div class="trophy-badge-name">Gem Finder</div>
+                </div>
+                
+                <div class="trophy-badge-container">
+                    <div class="trophy-badge">
+                        <div class="badge-heart-border"></div>
+                        <div class="badge-heart-inner">
+                            <img src="/api/placeholder/80/80" alt="Community Heart badge">
+                        </div>
+                        <div class="badge-giver">A</div>
+                    </div>
+                    <div class="trophy-badge-name">Community Heart</div>
+                </div>
+                
+                <div class="trophy-badge-container">
+                    <div class="trophy-badge">
+                        <div class="badge-hexagon-border"></div>
+                        <div class="badge-hexagon-inner">
+                            <img src="/api/placeholder/80/80" alt="Rapid Response badge">
+                        </div>
+                        <div class="badge-giver">K</div>
+                    </div>
+                    <div class="trophy-badge-name">Rapid Response</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="notifications-panel">
+            <div class="section-title">Notifications</div>
+            <div class="notification-list">
+                <div class="notification-item">
+                    <div class="notification-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="9" cy="7" r="4"></circle>
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                        </svg>
+                    </div>
+                    <div class="notification-content">
+                        <p><strong>Writers Club</strong> has invited you to join their guild</p>
+                        <div class="notification-time">2 hours ago</div>
+                        <div class="notification-actions">
+                            <button class="action-button accept-button">Accept</button>
+                            <button class="action-button decline-button">Decline</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="notification-item">
+                    <div class="notification-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                        </svg>
+                    </div>
+                    <div class="notification-content">
+                        <p>You received a <strong>Gold Badge</strong> from <strong>Alex</strong> in <strong>Tech Innovators</strong></p>
+                        <div class="notification-time">Yesterday</div>
+                    </div>
+                </div>
+                
+                <div class="notification-item">
+                    <div class="notification-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                        </svg>
+                    </div>
+                    <div class="notification-content">
+                        <p><strong>Sarah</strong> has joined <strong>Design Masters</strong> using your invite</p>
+                        <div class="notification-time">2 days ago</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Carousel functionality
+        const carousel = document.getElementById('guild-carousel');
+        const prevButton = document.getElementById('prev-button');
+        const nextButton = document.getElementById('next-button');
+        
+        // Scroll amount (width of one card + gap)
+        const scrollAmount = 220 + 16; // card width + gap
+        
+        nextButton.addEventListener('click', () => {
+            carousel.scrollLeft += scrollAmount;
+        });
+        
+        prevButton.addEventListener('click', () => {
+            carousel.scrollLeft -= scrollAmount;
+        });
+        
+        // Check if scroll buttons should be disabled
+        function updateScrollButtons() {
+            prevButton.disabled = carousel.scrollLeft <= 0;
+            nextButton.disabled = carousel.scrollLeft + carousel.clientWidth >= carousel.scrollWidth;
+        }
+        
+        carousel.addEventListener('scroll', updateScrollButtons);
+        
+        // Initial check
+        updateScrollButtons();
+        
+        // Check on window resize
+        window.addEventListener('resize', updateScrollButtons);
+        
+        // Trophy case edit functionality
+        const editTrophiesButton = document.getElementById('edit-trophies-button');
+        
+        editTrophiesButton.addEventListener('click', () => {
+            // In a real implementation, this would open a modal or navigate to an edit page
+            alert('This would open the trophy case editor to select which badges to display');
+            
+            // Example of what the flow might be:
+            // 1. Show a modal with all available badges
+            // 2. Allow user to select/deselect badges
+            // 3. Save the selection to user preferences
+            // 4. Update the trophy case display
+        });
+    </script>
+</body>
+</html>

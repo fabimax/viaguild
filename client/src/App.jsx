@@ -12,6 +12,7 @@ import Home from './pages/Home';
 import Register from './pages/Register';
 import Login from './pages/Login';
 import Profile from './pages/Profile';
+import EditProfile from './pages/EditProfile';
 import Search from './pages/Search';
 import PublicUserProfile from './pages/PublicUserProfile';
 
@@ -63,6 +64,13 @@ function App() {
                   <ProtectedRoute>
                     <ErrorBoundary>
                       <Profile />
+                    </ErrorBoundary>
+                  </ProtectedRoute>
+                } />
+                <Route path="/profile/edit" element={
+                  <ProtectedRoute>
+                    <ErrorBoundary>
+                      <EditProfile />
                     </ErrorBoundary>
                   </ProtectedRoute>
                 } />

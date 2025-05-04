@@ -10,9 +10,12 @@ import AvatarUpload from './AvatarUpload';
  * @param {Object} props - Component props
  * @param {Object} props.user - Current user data
  * @param {Function} props.onUpdate - Function to call when profile is updated
+ * @param {boolean} props.initialEditMode - Whether to start in edit mode
+ * @param {boolean} props.showCancelButton - Whether to show cancel button in view mode
+ * @param {Function} props.onCancel - Function to call when cancel button is clicked
  */
-function ProfileSettings({ user, onUpdate }) {
-  const [isEditing, setIsEditing] = useState(false);
+function ProfileSettings({ user, onUpdate, initialEditMode = false, showCancelButton = false, onCancel }) {
+  const [isEditing, setIsEditing] = useState(initialEditMode);
   const [bio, setBio] = useState(user.bio || '');
   const [avatar, setAvatar] = useState(user.avatar || null);
   const [isPublic, setIsPublic] = useState(user.isPublic !== false); // Default to true if undefined
@@ -25,6 +28,19 @@ function ProfileSettings({ user, onUpdate }) {
   
   // Bio character limit
   const BIO_MAX_LENGTH = 250;
+  
+  // Update state when user prop changes
+  useEffect(() => {
+    setBio(user.bio || '');
+    setAvatar(user.avatar || null);
+    setIsPublic(user.isPublic !== false);
+    setHiddenAccounts(user.hiddenAccounts || []);
+  }, [user]);
+  
+  // Update isEditing when initialEditMode changes
+  useEffect(() => {
+    setIsEditing(initialEditMode);
+  }, [initialEditMode]);
   
   /**
    * Validate the form fields
@@ -70,6 +86,11 @@ function ProfileSettings({ user, onUpdate }) {
     setError('');
     setSuccess('');
     setValidation({ bio: '' });
+    
+    // Call external cancel handler if provided
+    if (onCancel) {
+      onCancel();
+    }
   };
   
   /**
@@ -146,15 +167,25 @@ function ProfileSettings({ user, onUpdate }) {
   // If not in edit mode, show profile info with edit button
   if (!isEditing) {
     return (
-      <div className="profile-settings">
+      <div className="profile-settings-view">
         <div className="settings-header">
           <h3>Profile Settings</h3>
-          <button 
-            className="btn-secondary edit-btn"
-            onClick={() => setIsEditing(true)}
-          >
-            Edit Profile
-          </button>
+          <div className="settings-actions">
+            {showCancelButton && onCancel && (
+              <button 
+                className="btn-secondary cancel-btn"
+                onClick={onCancel}
+              >
+                Back
+              </button>
+            )}
+            <button 
+              className="btn-secondary edit-btn"
+              onClick={() => setIsEditing(true)}
+            >
+              Edit Profile
+            </button>
+          </div>
         </div>
         
         {success && (
@@ -163,36 +194,16 @@ function ProfileSettings({ user, onUpdate }) {
           </div>
         )}
         
-        <div className="settings-info">
-          {/* Avatar display */}
-          <div className="settings-group">
-            <h4>Avatar</h4>
-            <div className="avatar-container">
-              {user.avatar ? (
-                <img 
-                  src={user.avatar} 
-                  alt={`${user.username}'s avatar`} 
-                  className="avatar-display"
-                />
-              ) : (
-                <div className="avatar-placeholder">
-                  <span>{user.username?.charAt(0).toUpperCase() || '?'}</span>
-                </div>
-              )}
-            </div>
-          </div>
+        <div className="settings-view-content">
+          {/* Avatar display - REMOVED */}
+          {/* Bio display - REMOVED */}
           
-          <div className="settings-group">
-            <h4>Bio</h4>
-            <p className="bio-text">{user.bio || 'No bio provided'}</p>
-          </div>
-          
-          <div className="settings-group">
+          <div className="setting-item">
             <h4>Profile Visibility</h4>
             <p>{user.isPublic !== false ? 'Public' : 'Private'}</p>
           </div>
           
-          <div className="settings-group">
+          <div className="setting-item">
             <h4>Hidden Accounts</h4>
             <p>
               {(user.hiddenAccounts || []).length === 0 
@@ -337,6 +348,9 @@ ProfileSettings.propTypes = {
     ),
   }).isRequired,
   onUpdate: PropTypes.func,
+  initialEditMode: PropTypes.bool,
+  showCancelButton: PropTypes.bool,
+  onCancel: PropTypes.func
 };
 
 export default ProfileSettings;

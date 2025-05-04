@@ -18,13 +18,14 @@ import discordIcon from '../assets/discord.svg';
  */
 function Profile() {
   const { currentUser, connectSocialAccount } = useAuth();
+  const navigate = useNavigate();
   const [socialAccounts, setSocialAccounts] = useState([]);
   const [profileData, setProfileData] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [isConnecting, setIsConnecting] = useState(false);
   const [showBlueskyForm, setShowBlueskyForm] = useState(false);
-  const [activeTab, setActiveTab] = useState('accounts'); // 'accounts' or 'settings'
+  const [activeTab, setActiveTab] = useState('accounts');
 
   /**
    * Fetch user's social accounts and profile data on component mount
@@ -49,6 +50,13 @@ function Profile() {
 
     fetchUserData();
   }, [currentUser.username]);
+
+  /**
+   * Navigate to edit profile page
+   */
+  const handleEditProfile = () => {
+    navigate('/profile/edit');
+  };
 
   /**
    * Handle connecting a Twitter account
@@ -125,14 +133,6 @@ function Profile() {
       setError(`Failed to remove social account: ${error.response?.data?.message || error.message}`);
     }
   };
-  
-  /**
-   * Handle profile data update
-   * @param {Object} updatedUser - Updated user profile data
-   */
-  const handleProfileUpdate = (updatedUser) => {
-    setProfileData(updatedUser);
-  };
 
   // Parse URL query parameters to check for error/success messages
   useEffect(() => {
@@ -166,7 +166,20 @@ function Profile() {
 
   return (
     <div className="profile-container">
-      <h2>Your Profile</h2>
+      <div className="profile-page-header"> 
+        <button 
+          className="btn-secondary edit-profile-button"
+          onClick={handleEditProfile}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+          </svg>
+          Edit Profile
+        </button>
+        <h2>Your Profile</h2>
+        <div className="header-spacer"></div>
+      </div>
       
       {error && <div className="error">{error}</div>}
       
@@ -198,6 +211,11 @@ function Profile() {
               <p>{currentUser.email}</p>
             </div>
           </div>
+        </div>
+        
+        <div className="bio-section">
+          <h3>Bio</h3>
+          <p>{profileData?.bio || 'No bio provided yet. Edit your profile to add one.'}</p>
         </div>
       </div>
       
@@ -256,7 +274,7 @@ function Profile() {
               <span>Connect Twitch</span>
             </button>
             
-            {/* Discord connect button (New) */}
+            {/* Discord connect button */}
             <button 
               className="social-btn discord-btn"
               onClick={handleConnectDiscord}
@@ -344,23 +362,24 @@ function Profile() {
               ...profileData,
               socialAccounts: socialAccounts
             }}
-            onUpdate={handleProfileUpdate}
+            showCancelButton={false}
           />
-          
-          <div className="public-profile-link">
-            <p>
-              <span className="view-public-label">View your profile as others see it:</span>
-              <Link to={`/users/${currentUser.username}`} className="public-view-link">
-                <span className="public-view-icon">👁️</span>
-                Public View
-              </Link>
-              <small className="public-view-hint">
-                See how your profile appears to other users
-              </small>
-            </p>
-          </div>
         </div>
       )}
+
+      {/* Public Profile Link - Moved here */}
+      <div className="public-profile-link">
+        <p>
+          <span className="view-public-label">View your profile as others see it:</span>
+          <Link to={`/users/${currentUser.username}`} className="public-view-link">
+            <span className="public-view-icon">👁️</span>
+            Public View
+          </Link>
+          <small className="public-view-hint">
+            See how your profile appears to other users
+          </small>
+        </p>
+      </div>
     </div>
   );
 }
