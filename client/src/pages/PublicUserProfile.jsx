@@ -206,7 +206,7 @@ function PublicUserProfile() {
       {isOwnProfile && (
         <div className="info-banner">
           <p>This is how your profile appears to other users</p>
-          <Link to="/profile" className="btn-primary btn-sm">
+          <Link to="/profile" className="btn-primary btn-sm" state={{ fromPublicProfile: true }}>
             Go to Private Profile
           </Link>
         </div>
@@ -240,11 +240,14 @@ function PublicUserProfile() {
       
       {/* Social accounts section */}
       <div className="profile-social">
-        <SocialAccountsList 
-          accounts={userData.socialAccounts || []} 
-          onRemove={null} // No remove button for public profile viewing
-          isPublicView={true}
-        />
+        {userData.socialAccounts && userData.socialAccounts.length > 0 && (
+          <div className="public-social-accounts">
+            <SocialAccountsList 
+              accounts={userData.socialAccounts} 
+              isPublicView={true}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

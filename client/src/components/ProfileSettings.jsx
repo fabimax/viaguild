@@ -2,160 +2,92 @@ import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import userService from '../services/userService';
 import AvatarUpload from './AvatarUpload';
-import VisibilitySettingsForm from './VisibilitySettingsForm';
 
 /**
- * ProfileSettings component with enhanced validation
- * For updating user profile information
+ * ProfileSettings component - Now ONLY for Bio and Avatar
+ * Used within the dedicated EditProfile page.
+ * Assumes it is always rendered in an "edit" context.
  * 
  * @param {Object} props - Component props
- * @param {Object} props.user - Current user data
+ * @param {Object} props.user - Current user data (needed for initial state)
  * @param {Function} props.onUpdate - Function to call when profile is updated
- * @param {boolean} props.initialEditMode - Whether to start in edit mode
- * @param {boolean} props.showCancelButton - Whether to show cancel button in view mode
+ * @param {boolean} props.showCancelButton - Whether to show the cancel button
  * @param {Function} props.onCancel - Function to call when cancel button is clicked
  */
-function ProfileSettings({ user, onUpdate, initialEditMode = false, showCancelButton = false, onCancel }) {
-  const [isEditing, setIsEditing] = useState(initialEditMode);
-  const [bio, setBio] = useState(user.bio || '');
-  const [avatar, setAvatar] = useState(user.avatar || null);
-  const [isPublic, setIsPublic] = useState(user.isPublic !== false); // Default to true if undefined
-  const [hiddenAccounts, setHiddenAccounts] = useState(user.hiddenAccounts || []);
+function ProfileSettings({ user, onUpdate, showCancelButton = false, onCancel }) {
+  // State only for fields managed here: bio, avatar
+  const [bio, setBio] = useState('');
+  const [avatar, setAvatar] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAvatarUploading, setIsAvatarUploading] = useState(false);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [success, setSuccess] = useState(''); // Kept for potential success message on save
   const [validation, setValidation] = useState({ bio: '' });
   
-  // Bio character limit
   const BIO_MAX_LENGTH = 250;
   
-  // Update state when user prop changes
+  // Initialize state when user prop is available
   useEffect(() => {
-    setBio(user.bio || '');
-    setAvatar(user.avatar || null);
-    setIsPublic(user.isPublic !== false);
-    setHiddenAccounts(user.hiddenAccounts || []);
+    if (user) {
+      setBio(user.bio || '');
+      setAvatar(user.avatar || null);
+    }
   }, [user]);
   
-  // Update isEditing when initialEditMode changes
-  useEffect(() => {
-    setIsEditing(initialEditMode);
-  }, [initialEditMode]);
-  
-  /**
-   * Validate the form fields
-   * @returns {boolean} - Whether form is valid
-   */
+  // Validation function remains the same
   const validateForm = () => {
     const newValidation = { bio: '' };
     let isValid = true;
-    
-    // Validate bio length
     if (bio.length > BIO_MAX_LENGTH) {
       newValidation.bio = `Bio must be ${BIO_MAX_LENGTH} characters or less`;
       isValid = false;
     }
-    
     setValidation(newValidation);
     return isValid;
   };
   
-  /**
-   * Toggle visibility of a social account
-   * @param {string} accountId - ID of the social account
-   */
-  const toggleAccountVisibility = (accountId) => {
-    setHiddenAccounts(prevHidden => {
-      if (prevHidden.includes(accountId)) {
-        return prevHidden.filter(id => id !== accountId);
-      } else {
-        return [...prevHidden, accountId];
-      }
-    });
-  };
-  
-  /**
-   * Reset form to original values
-   */
+  // Handle cancel calls the onCancel prop if provided
   const handleCancel = () => {
-    setBio(user.bio || '');
-    setAvatar(user.avatar || null);
-    setIsPublic(user.isPublic !== false);
-    setHiddenAccounts(user.hiddenAccounts || []);
-    setIsEditing(false);
-    setError('');
-    setSuccess('');
-    setValidation({ bio: '' });
-    
-    // Call external cancel handler if provided
     if (onCancel) {
       onCancel();
     }
   };
   
-  /**
-   * Handle bio input change
-   * @param {Event} e - Input change event
-   */
+  // Bio change handler remains the same
   const handleBioChange = (e) => {
     const newBio = e.target.value;
     setBio(newBio);
-    
-    // Real-time validation
     if (newBio.length > BIO_MAX_LENGTH) {
-      setValidation(prev => ({
-        ...prev,
-        bio: `Bio must be ${BIO_MAX_LENGTH} characters or less`
-      }));
+      setValidation(prev => ({ ...prev, bio: `Bio must be ${BIO_MAX_LENGTH} characters or less` }));
     } else {
-      setValidation(prev => ({
-        ...prev,
-        bio: ''
-      }));
+      setValidation(prev => ({ ...prev, bio: '' }));
     }
   };
 
-  /**
-   * Handle avatar change from the AvatarUpload component
-   * @param {string} newAvatar - New avatar data (Base64 string)
-   */
+  // Avatar change handler remains the same
   const handleAvatarChange = (newAvatar) => {
     setIsAvatarUploading(true);
     setAvatar(newAvatar);
     setIsAvatarUploading(false);
   };
   
-  /**
-   * Submit profile updates
-   */
+  // Submit handler now only sends bio and avatar
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    // Validate form
-    if (!validateForm()) {
-      return;
-    }
+    if (!validateForm()) return;
     
     setIsSubmitting(true);
     setError('');
     setSuccess('');
     
     try {
-      const updatedData = {
-        bio,
-        avatar,
-        isPublic,
-        hiddenAccounts
-      };
-      
+      const updatedData = { bio, avatar }; // Only bio and avatar
       const response = await userService.updateProfile(updatedData);
-      setSuccess('Profile updated successfully');
-      setIsEditing(false);
+      setSuccess('Profile updated successfully'); // Optional success message
       
-      // Call the parent's update function
       if (onUpdate) {
-        onUpdate(response.user);
+        // Pass the *entire* updated user object back from the API response
+        onUpdate(response.user); 
       }
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to update profile');
@@ -165,68 +97,16 @@ function ProfileSettings({ user, onUpdate, initialEditMode = false, showCancelBu
     }
   };
 
-  // If not in edit mode, show profile info with edit button
-  if (!isEditing) {
-    return (
-      <div className="profile-settings-view">
-        <div className="settings-header">
-          <h3>Profile Settings</h3>
-          <div className="settings-actions">
-            {showCancelButton && onCancel && (
-              <button 
-                className="btn-secondary cancel-btn"
-                onClick={onCancel}
-              >
-                Back
-              </button>
-            )}
-            <button 
-              className="btn-secondary edit-btn"
-              onClick={() => setIsEditing(true)}
-            >
-              Edit Profile Settings
-            </button>
-          </div>
-        </div>
-        
-        {success && (
-          <div className="success" role="alert">
-            {success}
-          </div>
-        )}
-        
-        <div className="settings-view-content">
-          {/* Avatar display - REMOVED */}
-          {/* Bio display - REMOVED */}
-          
-          <div className="setting-item">
-            <h4>Profile Visibility</h4>
-            <p>{user.isPublic !== false ? 'Public' : 'Private'}</p>
-          </div>
-          
-          <div className="setting-item">
-            <h4>Hidden Accounts</h4>
-            <p>
-              {(user.hiddenAccounts || []).length === 0 
-                ? 'No hidden accounts' 
-                : `${user.hiddenAccounts.length} account(s) hidden`}
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Edit mode
+  // Render the edit form directly
   return (
-    <div className="profile-settings">
-      <h3>Edit Profile</h3>
-      
+    <div className="profile-settings edit-mode-only"> 
       {error && (
         <div className="error" role="alert">
           {error}
         </div>
       )}
+      {/* Optional: Display success message if needed */}
+      {/* {success && <div className="success">{success}</div>} */}
       
       <form onSubmit={handleSubmit} noValidate>
         {/* Avatar upload section */}
@@ -239,6 +119,7 @@ function ProfileSettings({ user, onUpdate, initialEditMode = false, showCancelBu
           />
         </div>
         
+        {/* Bio section */}
         <div className={`form-group ${validation.bio ? 'has-error' : ''}`}>
           <label htmlFor="bio">Bio</label>
           <textarea
@@ -246,7 +127,7 @@ function ProfileSettings({ user, onUpdate, initialEditMode = false, showCancelBu
             value={bio}
             onChange={handleBioChange}
             placeholder="Tell others about yourself"
-            maxLength={BIO_MAX_LENGTH + 10} // Allow a little over for better UX
+            maxLength={BIO_MAX_LENGTH + 10} 
             rows={4}
             aria-invalid={!!validation.bio}
             aria-describedby="bio-validation bio-counter"
@@ -264,28 +145,23 @@ function ProfileSettings({ user, onUpdate, initialEditMode = false, showCancelBu
           )}
         </div>
         
-        <VisibilitySettingsForm 
-          isPublic={isPublic}
-          hiddenAccounts={hiddenAccounts}
-          socialAccounts={user.socialAccounts || []}
-          onIsPublicChange={setIsPublic}
-          onToggleAccountVisibility={toggleAccountVisibility}
-          isSubmitting={isSubmitting}
-          renderAsForm={false}
-        />
+        {/* Removed Visibility Settings */}
         
+        {/* Form actions */}
         <div className="form-actions">
-          <button 
-            type="button" 
-            className="btn-secondary"
-            onClick={handleCancel}
-          >
-            Cancel
-          </button>
+          {showCancelButton && onCancel && (
+             <button 
+               type="button" 
+               className="btn-secondary"
+               onClick={handleCancel}
+             >
+               Cancel
+             </button>
+          )}
           <button 
             type="submit"
             className="btn-primary"
-            disabled={isSubmitting || !!validation.bio}
+            disabled={isSubmitting || !!validation.bio} 
           >
             {isSubmitting ? 'Saving...' : 'Save Changes'}
           </button>
@@ -297,22 +173,12 @@ function ProfileSettings({ user, onUpdate, initialEditMode = false, showCancelBu
 
 ProfileSettings.propTypes = {
   user: PropTypes.shape({
-    id: PropTypes.string.isRequired,
-    username: PropTypes.string.isRequired,
+    // Only require fields needed for initialization
     bio: PropTypes.string,
     avatar: PropTypes.string,
-    isPublic: PropTypes.bool,
-    hiddenAccounts: PropTypes.arrayOf(PropTypes.string),
-    socialAccounts: PropTypes.arrayOf(
-      PropTypes.shape({
-        id: PropTypes.string.isRequired,
-        provider: PropTypes.string.isRequired,
-        username: PropTypes.string.isRequired,
-      })
-    ),
-  }).isRequired,
-  onUpdate: PropTypes.func,
-  initialEditMode: PropTypes.bool,
+    // Removed isPublic, hiddenAccounts, socialAccounts, etc.
+  }), // Make user potentially optional if loading handled by parent
+  onUpdate: PropTypes.func.isRequired, // Should probably be required
   showCancelButton: PropTypes.bool,
   onCancel: PropTypes.func
 };

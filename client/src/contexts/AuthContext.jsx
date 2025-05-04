@@ -113,6 +113,30 @@ export const AuthProvider = ({ children }) => {
   };
 
   /**
+   * Refresh the current user's data
+   * Can be called after profile updates to ensure data consistency
+   * @returns {Promise<Object|null>} Updated user data or null if error
+   */
+  const refreshUserData = async () => {
+    if (!token) {
+      return null;
+    }
+
+    try {
+      // Add cache-busting parameter
+      const response = await api.get('/auth/me', { 
+        params: { _: Date.now() } 
+      });
+      const userData = response.data.user;
+      setCurrentUser(userData);
+      return userData;
+    } catch (error) {
+      console.error('Error refreshing user data:', error);
+      return null;
+    }
+  };
+
+  /**
    * Connect a social account
    * Redirects to the social provider authorization page
    * Includes JWT token in the URL for authentication
@@ -143,6 +167,7 @@ export const AuthProvider = ({ children }) => {
     login,
     logout,
     connectSocialAccount,
+    refreshUserData
   };
 
   return (

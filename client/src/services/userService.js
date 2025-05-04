@@ -59,12 +59,10 @@ const userService = {
     try {
       const api = this.getAxios();
       
-      // If noCache is true, add a timestamp parameter to bypass browser cache
-      const url = noCache 
-        ? `users/${username}?_=${Date.now()}` 
-        : `users/${username}`;
+      // Always add a cache-busting parameter when requested
+      const params = noCache ? { _: Date.now() } : {};
       
-      const response = await api.get(url);
+      const response = await api.get(`users/${username}`, { params });
       console.log('[userService] Get profile response:', response.status, response.data ? 'Data received' : 'No data');
       
       // Validate the response has the expected structure
