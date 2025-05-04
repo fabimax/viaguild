@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import SocialAccountsList from '../components/SocialAccountsList';
-import ProfileSettings from '../components/ProfileSettings';
+import VisibilitySettingsForm from '../components/VisibilitySettingsForm';
 import socialAccountService from '../services/socialAccountService';
 import userService from '../services/userService';
 import '../styles/social.css';
@@ -26,6 +26,9 @@ function Profile() {
   const [isConnecting, setIsConnecting] = useState(false);
   const [showBlueskyForm, setShowBlueskyForm] = useState(false);
   const [activeTab, setActiveTab] = useState('accounts');
+  const [isEditingVisibility, setIsEditingVisibility] = useState(false);
+  const [isSavingVisibility, setIsSavingVisibility] = useState(false);
+  const [visibilityError, setVisibilityError] = useState('');
 
   /**
    * Fetch user's social accounts and profile data on component mount
@@ -43,8 +46,14 @@ function Profile() {
         
         setLoading(false);
       } catch (error) {
-        setError('Failed to load user data');
+        setError('Failed to load profile data');
         setLoading(false);
+        try {
+           const accounts = await socialAccountService.getSocialAccounts();
+           setSocialAccounts(accounts);
+        } catch (socialError) {
+            setError('Failed to load profile and social account data');
+        }
       }
     };
 
@@ -60,7 +69,6 @@ function Profile() {
 
   /**
    * Handle connecting a Twitter account
-   * Uses the OAuth authentication flow via AuthContext
    */
   const handleConnectTwitter = () => {
     try {
@@ -73,7 +81,6 @@ function Profile() {
   
   /**
    * Handle connecting a Twitch account
-   * Uses the OAuth authentication flow via AuthContext
    */
   const handleConnectTwitch = () => {
     try {
@@ -86,7 +93,6 @@ function Profile() {
 
   /**
    * Handle connecting a Discord account
-   * Uses the OAuth authentication flow via AuthContext
    */
   const handleConnectDiscord = () => {
     try {
@@ -99,7 +105,6 @@ function Profile() {
 
   /**
    * Handle connecting a Bluesky account with app password
-   * @param {Object} credentials - Object containing identifier and appPassword
    */
   const handleConnectBluesky = async (credentials) => {
     try {
@@ -108,7 +113,6 @@ function Profile() {
       
       const response = await socialAccountService.connectBlueskyAccount(credentials);
       
-      // Add the new account to the list
       setSocialAccounts([...socialAccounts, response.socialAccount]);
       setShowBlueskyForm(false);
     } catch (error) {
@@ -120,14 +124,11 @@ function Profile() {
 
   /**
    * Handle removing a social account
-   * @param {string} id - ID of the social account to remove
    */
   const handleRemoveAccount = async (id) => {
     try {
       setError('');
       await socialAccountService.removeSocialAccount(id);
-      
-      // Update the UI after successful removal
       setSocialAccounts(socialAccounts.filter(account => account.id !== id));
     } catch (error) {
       setError(`Failed to remove social account: ${error.response?.data?.message || error.message}`);
@@ -142,10 +143,8 @@ function Profile() {
     
     if (errorMsg) {
       setError(decodeURIComponent(errorMsg));
-      // Clean URL without refreshing
       window.history.replaceState({}, document.title, window.location.pathname);
     } else if (successMsg) {
-      // If success message, refresh social accounts
       const fetchAccounts = async () => {
         try {
           const accounts = await socialAccountService.getSocialAccounts();
@@ -155,14 +154,90 @@ function Profile() {
         }
       };
       fetchAccounts();
-      // Clean URL without refreshing
       window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, []);
 
+  /** 
+   * Handlers for the inline visibility settings form
+   */
+  const handleVisibilitySave = async (settings) => {
+    setIsSavingVisibility(true);
+    setVisibilityError('');
+    try {
+      const updatedData = { 
+        isPublic: settings.isPublic, 
+        hiddenAccounts: settings.hiddenAccounts 
+      };
+      const response = await userService.updateProfile(updatedData);
+      setProfileData(prevData => ({ ...prevData, ...response.user })); 
+      setIsEditingVisibility(false);
+    } catch (err) {
+      setVisibilityError(err.response?.data?.message || 'Failed to update visibility settings');
+      console.error('Visibility update error:', err);
+    } finally {
+      setIsSavingVisibility(false);
+    }
+  };
+
+  const handleVisibilityCancel = () => {
+    setIsEditingVisibility(false);
+    setVisibilityError('');
+  };
+
+  const handleIsPublicChange = (newIsPublic) => {
+    setProfileData(prevData => ({
+      ...prevData,
+      isPublic: newIsPublic
+    }));
+  };
+
+  const handleToggleAccountVisibility = (accountId) => {
+    setProfileData(prevData => {
+      const currentHidden = prevData.hiddenAccounts || [];
+      let newHidden;
+      if (currentHidden.includes(accountId)) {
+        newHidden = currentHidden.filter(id => id !== accountId);
+      } else {
+        newHidden = [...currentHidden, accountId];
+      }
+      return { ...prevData, hiddenAccounts: newHidden };
+    });
+  };
+
   if (loading) {
     return <div className="loading">Loading profile...</div>;
   }
+
+  const VisibilitySettingsView = () => (
+    <div className="profile-settings-view"> 
+      <div className="settings-header">
+        <h3>Profile Settings</h3>
+        <div className="settings-actions">
+          <button 
+            className="btn-secondary edit-btn"
+            onClick={() => setIsEditingVisibility(true)}
+          >
+            Edit Profile Settings
+          </button>
+        </div>
+      </div>
+      <div className="settings-view-content">
+        <div className="setting-item">
+          <h4>Profile Visibility</h4>
+          <p>{profileData?.isPublic !== false ? 'Public' : 'Private'}</p>
+        </div>
+        <div className="setting-item">
+          <h4>Hidden Accounts</h4>
+          <p>
+            {(profileData?.hiddenAccounts || []).length === 0 
+              ? 'No hidden accounts' 
+              : `${profileData.hiddenAccounts.length} account(s) hidden`}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div className="profile-container">
@@ -357,13 +432,22 @@ function Profile() {
       {/* Profile settings tab */}
       {activeTab === 'settings' && profileData && (
         <div className="settings-section">
-          <ProfileSettings 
-            user={{
-              ...profileData,
-              socialAccounts: socialAccounts
-            }}
-            showCancelButton={false}
-          />
+          {visibilityError && <div className="error">{visibilityError}</div>}
+          
+          {!isEditingVisibility ? (
+            <VisibilitySettingsView />
+          ) : (
+            <VisibilitySettingsForm 
+              isPublic={profileData.isPublic !== false}
+              hiddenAccounts={profileData.hiddenAccounts || []}
+              socialAccounts={socialAccounts}
+              onIsPublicChange={handleIsPublicChange}
+              onToggleAccountVisibility={handleToggleAccountVisibility}
+              isSubmitting={isSavingVisibility}
+              onSave={handleVisibilitySave}
+              onCancel={handleVisibilityCancel}
+            />
+          )}
         </div>
       )}
 

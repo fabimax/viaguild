@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import userService from '../services/userService';
 import AvatarUpload from './AvatarUpload';
+import VisibilitySettingsForm from './VisibilitySettingsForm';
 
 /**
  * ProfileSettings component with enhanced validation
@@ -183,7 +184,7 @@ function ProfileSettings({ user, onUpdate, initialEditMode = false, showCancelBu
               className="btn-secondary edit-btn"
               onClick={() => setIsEditing(true)}
             >
-              Edit Profile
+              Edit Profile Settings
             </button>
           </div>
         </div>
@@ -263,54 +264,14 @@ function ProfileSettings({ user, onUpdate, initialEditMode = false, showCancelBu
           )}
         </div>
         
-        <div className="form-group">
-          <label className="checkbox-label public-toggle">
-            <span>Make my profile public</span>
-            <input
-              type="checkbox"
-              checked={isPublic}
-              onChange={(e) => setIsPublic(e.target.checked)}
-              aria-describedby="visibility-help"
-            />
-          </label>
-          <p id="visibility-help" className="form-help">
-            When disabled, your profile will not be visible to other users
-          </p>
-        </div>
-        
-        <div className="form-group">
-          <label>Account Visibility</label>
-          <p className="form-help">
-            Choose which social accounts are visible on your public profile
-          </p>
-          
-          <div className="account-visibility-list">
-            {user.socialAccounts.length === 0 ? (
-              <p>No social accounts connected yet</p>
-            ) : (
-              <ul className="visibility-items">
-                {user.socialAccounts.map(account => (
-                  <li key={account.id} className="visibility-item">
-                    <label className="checkbox-label account-toggle">
-                      <div>
-                        <span className="provider-name">
-                          {account.provider.charAt(0).toUpperCase() + account.provider.slice(1)}
-                        </span>
-                        <span className="account-name">@{account.username}</span>
-                      </div>
-                      <input
-                        type="checkbox"
-                        checked={!hiddenAccounts.includes(account.id)}
-                        onChange={() => toggleAccountVisibility(account.id)}
-                        aria-label={`Show ${account.provider} account @${account.username} on public profile`}
-                      />
-                    </label>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </div>
+        <VisibilitySettingsForm 
+          isPublic={isPublic}
+          hiddenAccounts={hiddenAccounts}
+          socialAccounts={user.socialAccounts || []}
+          onIsPublicChange={setIsPublic}
+          onToggleAccountVisibility={toggleAccountVisibility}
+          isSubmitting={isSubmitting}
+        />
         
         <div className="form-actions">
           <button 
