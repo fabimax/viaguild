@@ -4,6 +4,7 @@ import PropTypes from 'prop-types';
 /**
  * VisibilitySettingsForm Component
  * Form specifically for editing profile visibility and hidden accounts.
+ * Can render as a full form or just the fields.
  */
 function VisibilitySettingsForm({ 
   isPublic,
@@ -13,7 +14,8 @@ function VisibilitySettingsForm({
   onToggleAccountVisibility,
   isSubmitting, 
   onSave, 
-  onCancel
+  onCancel,
+  renderAsForm = true
 }) {
 
   const handleInternalSave = (e) => {
@@ -23,9 +25,10 @@ function VisibilitySettingsForm({
     }
   };
 
-  return (
-    <form onSubmit={handleInternalSave} className="visibility-settings-form">
-      <h4>Edit Visibility Settings</h4>
+  // Content of the form (fields)
+  const formContent = (
+    <>
+      {renderAsForm && <h4>Edit Visibility Settings</h4>}
 
       <div className="form-group">
         <label className="checkbox-label public-toggle">
@@ -76,25 +79,38 @@ function VisibilitySettingsForm({
         </div>
       </div>
 
-      <div className="form-actions">
-        {onCancel && (
+      {renderAsForm && (
+        <div className="form-actions">
+          {onCancel && (
+            <button 
+              type="button" 
+              className="btn-secondary"
+              onClick={onCancel}
+            >
+              Cancel
+            </button>
+          )}
           <button 
-            type="button" 
-            className="btn-secondary"
-            onClick={onCancel}
+            type="submit"
+            className="btn-primary"
+            disabled={isSubmitting}
           >
-            Cancel
+            {isSubmitting ? 'Saving...' : 'Save Settings'}
           </button>
-        )}
-        <button 
-          type="submit"
-          className="btn-primary"
-          disabled={isSubmitting}
-        >
-          {isSubmitting ? 'Saving...' : 'Save Settings'}
-        </button>
-      </div>
+        </div>
+      )}
+    </>
+  );
+
+  // Conditionally wrap content in a form tag
+  return renderAsForm ? (
+    <form onSubmit={handleInternalSave} className="visibility-settings-form">
+      {formContent}
     </form>
+  ) : (
+    <div className="visibility-settings-fields">
+      {formContent}
+    </div>
   );
 }
 
@@ -113,6 +129,7 @@ VisibilitySettingsForm.propTypes = {
   isSubmitting: PropTypes.bool,
   onSave: PropTypes.func,
   onCancel: PropTypes.func,
+  renderAsForm: PropTypes.bool,
 };
 
 export default VisibilitySettingsForm; 

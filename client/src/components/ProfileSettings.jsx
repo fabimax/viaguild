@@ -271,6 +271,7 @@ function ProfileSettings({ user, onUpdate, initialEditMode = false, showCancelBu
           onIsPublicChange={setIsPublic}
           onToggleAccountVisibility={toggleAccountVisibility}
           isSubmitting={isSubmitting}
+          renderAsForm={false}
         />
         
         <div className="form-actions">
