@@ -264,14 +264,14 @@ function ProfileSettings({ user, onUpdate, initialEditMode = false, showCancelBu
         </div>
         
         <div className="form-group">
-          <label className="checkbox-label">
+          <label className="checkbox-label public-toggle">
+            <span>Make my profile public</span>
             <input
               type="checkbox"
               checked={isPublic}
               onChange={(e) => setIsPublic(e.target.checked)}
               aria-describedby="visibility-help"
             />
-            Make my profile public
           </label>
           <p id="visibility-help" className="form-help">
             When disabled, your profile will not be visible to other users
@@ -291,17 +291,19 @@ function ProfileSettings({ user, onUpdate, initialEditMode = false, showCancelBu
               <ul className="visibility-items">
                 {user.socialAccounts.map(account => (
                   <li key={account.id} className="visibility-item">
-                    <label className="checkbox-label">
+                    <label className="checkbox-label account-toggle">
+                      <div>
+                        <span className="provider-name">
+                          {account.provider.charAt(0).toUpperCase() + account.provider.slice(1)}
+                        </span>
+                        <span className="account-name">@{account.username}</span>
+                      </div>
                       <input
                         type="checkbox"
                         checked={!hiddenAccounts.includes(account.id)}
                         onChange={() => toggleAccountVisibility(account.id)}
                         aria-label={`Show ${account.provider} account @${account.username} on public profile`}
                       />
-                      <span className="provider-name">
-                        {account.provider.charAt(0).toUpperCase() + account.provider.slice(1)}
-                      </span>
-                      <span className="account-name">@{account.username}</span>
                     </label>
                   </li>
                 ))}

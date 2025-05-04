@@ -329,9 +329,40 @@
   .checkbox-label {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 1rem;
     margin-bottom: 0.5rem;
     cursor: pointer;
+    padding: 0.5rem 0;
+    width: 100%;
+  }
+  
+  .checkbox-label > span, 
+  .checkbox-label > div {
+    flex: 1;
+    text-align: left;
+    min-width: 0;
+  }
+  
+  .checkbox-label input[type="checkbox"] {
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+  
+  .account-toggle div {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .account-toggle .provider-name {
+    font-weight: 500;
+    margin-right: 0;
+  }
+  
+  .account-toggle .account-name {
+    color: var(--secondary-color);
+    font-size: 0.85rem;
+    margin-top: 0.1rem;
   }
   
   .form-help {
@@ -531,10 +562,13 @@
   align-items: center;
   justify-content: center;
   border: none;
+  padding: 0;
+  box-sizing: border-box;
   cursor: pointer;
   font-size: 14px;
   transform: translate(30%, -30%);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  line-height: 1;
 }
 
 .avatar-controls {
@@ -653,6 +687,24 @@
   color: var(--primary-color);
   margin: 0;
   grid-column: 2;
+}
+
+/* Target the text container within the label to allow it to grow */
+.checkbox-label > span, 
+.checkbox-label > div {
+  flex: 1; 
+  text-align: left; 
+  min-width: 0; 
+}
+
+/* Force "Make profile public" text onto one line */
+.public-toggle > span {
+  white-space: nowrap;
+}
+
+.checkbox-label input[type="checkbox"] {
+  margin-left: auto;
+  flex-shrink: 0;
 }
 
 
