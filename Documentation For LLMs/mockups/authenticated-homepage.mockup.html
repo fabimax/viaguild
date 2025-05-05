@@ -1,3 +1,64 @@
+<!--
+Mockup: Authenticated Homepage
+
+Purpose:
+This mockup represents the main page a user sees after logging into the ViaGuild platform. It acts as a personalized dashboard, providing access to the user's guilds, profile, badges/trophies, notifications, and discovery features.
+
+Structure:
+- Header (Sticky):
+    - Logo: "ViaGuild" branding.
+    - Search Bar: For searching users or guilds (hidden on smaller screens).
+    - User Menu:
+        - Notifications Icon: Bell icon with a badge indicating the number of unread notifications (e.g., "3").
+        - User Avatar: Circular element displaying user initials (e.g., "JS"). Clicking likely opens a dropdown menu (dropdown itself is not detailed in this mockup but implied by `.user-dropdown` CSS).
+- Main Content Area (Centered Container):
+    - Welcome Section: Personalized greeting (e.g., "Welcome back, Jane!").
+    - "Your Guilds" Section:
+        - Header: Title "Your Guilds", "Create Guild" button (with plus icon), "View All" link.
+        - Guild Carousel (`#guild-carousel`): Horizontally scrollable list of guilds the user is part of. Includes carousel controls (previous/next buttons).
+            - Guild Card: Represents a single guild. Contains:
+                - Guild Banner: Colored background (can vary, e.g., primary, gaming, art, tech) with an optional "Primary" badge.
+                - Guild Avatar: Circular avatar (e.g., "D", "G") overlapping the banner.
+                - Guild Content: Guild Name, Member Count, User's Role (Owner, Member, Admin).
+            - Create Guild Card: A special card with a "+" icon prompting users to create a new guild.
+    - Profile Links: Centered buttons linking to "View My Profile" and "Edit Profile", each with an appropriate icon.
+    - Badge Section (Two Columns on wider screens, single on narrow):
+        - Badges Received: Shows recently received badges. Each badge includes:
+            - Visual Representation: Styled badge (e.g., circle, star, heart) with an image and colored border (gold, silver, bronze).
+            - Giver Indicator: Small avatar showing who gave the badge (e.g., "T", "G").
+        - Available Badges to Give: Shows counts of badges the user can award (Gold, Silver, Bronze).
+    - Trophy Case Section:
+        - Header: Title "Trophy Case", "Edit Display" button (with edit icon).
+        - Trophy Grid: Displays selected badges/trophies earned by the user. Each entry includes:
+            - Visual Representation: Larger, styled badge (circle, star, heart, hexagon) with image and colored border.
+            - Giver Indicator.
+            - Trophy Name (e.g., "Supreme Coder", "Gem Finder").
+        - Edit Interaction: Clicking "Edit Display" triggers a placeholder alert, indicating functionality to customize which trophies are shown.
+    - Notifications Panel:
+        - Header: Title "Notifications".
+        - Notification List: Displays recent notifications. Each item includes:
+            - Icon: Represents the notification type (e.g., group invite, badge received, new member).
+            - Content: Text describing the event (e.g., Guild invite, badge details, join confirmation).
+            - Timestamp: How long ago the notification occurred (e.g., "2 hours ago", "Yesterday").
+            - Actions (Conditional): Buttons like "Accept"/"Decline" for invites.
+- Footer: (Not explicitly defined in the HTML body, but structure implies its potential existence).
+- JavaScript:
+    - Implements the guild carousel scrolling functionality with previous/next buttons.
+    - Includes placeholder logic for the "Edit Display" button in the trophy case.
+
+Styling:
+- Uses CSS variables (`:root`) for a consistent color scheme (primary purple, grays, gold, silver, bronze, etc.).
+- Employs modern CSS (Flexbox, Grid) for layout.
+- Defines styles for various components: cards, buttons, badges (using `clip-path` and `mask-image` for shapes like star, heart, hexagon), carousels, notifications.
+- Includes basic responsiveness using media queries (`@media screen and (max-width: 768px)`) to adjust layout (e.g., badge section columns, hiding search bar).
+- Provides hover effects for interactive elements.
+
+Interactivity (Simulated/Implemented):
+- Guild carousel scrolls left/right using buttons.
+- "Edit Display" button in the trophy case shows an alert.
+- Links navigate to intended locations (e.g., `/profile`, `/guilds/create`).
+- Notification action buttons (Accept/Decline) are present but lack backend logic in the mockup.
+-->
 <!DOCTYPE html>
 <html lang="en">
 <head>

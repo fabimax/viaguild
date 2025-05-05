@@ -1,0 +1,1417 @@
+<!--
+Mockup: Guild Management - Invitations
+
+Purpose:
+This mockup represents the guild management interface, specifically focusing on the "Invitations" section. It allows guild owners or admins to manage how new members can join the guild, either through direct invites, invite links, or join requests.
+
+Structure:
+- Header (Sticky): Same as the authenticated homepage (Logo, Search Bar, User Menu with Notifications and Avatar).
+- Main Content Area (Centered Container):
+    - Page Header:
+        - Breadcrumb Navigation: Shows the path (e.g., Dashboard > Guilds > Design Masters).
+        - Page Title: Indicates the guild being managed (e.g., "Design Masters Management").
+    - Management Grid (Two Columns on wide screens, stacked on narrow):
+        - Sidebar (Left Column):
+            - Title: "Guild Management".
+            - Menu: Vertical list of links to different management sections (Overview, Members, Invitations, Badges, Settings), with the current section ("Invitations") marked as active. Each link has an associated icon.
+        - Content Area (Right Column): Contains cards for different invitation-related tasks.
+            - Invite Management Card:
+                - Title: "Invite Management".
+                - Pill Selector (Tabs): Allows switching between "Direct Invites" and "Invite Link" forms.
+                - Direct Invites Form (`#handle-invite-form`):
+                    - Fields: Username/Email input, Platform dropdown (ViaGuild, Email, Twitter, etc.), Assign Role dropdown (Member, Admin).
+                    - Action: "Send Invitation" button.
+                - Invite Link Form (`#link-invite-form`, initially hidden):
+                    - Fields: Expiration dropdown (30 mins to Never), Max Uses dropdown (1 to Unlimited), Assign Role dropdown.
+                    - Action: "Generate Invite Link" button.
+            - Pending Invitations Card:
+                - Title: "Pending Invitations".
+                - Pill Selector (Tabs): Allows switching between viewing "Direct Invites" and "Invite Links".
+                - Direct Invites Tab (`#direct-invites-tab`):
+                    - Table: Lists pending direct invites with columns for Username/Email, Platform (styled badge), Invited By, Date, and Actions (Revoke button).
+                - Invite Links Tab (`#invite-links-tab`, initially hidden):
+                    - Table: Lists generated invite links with columns for Link (copyable input field), Created By, Expires, Uses (e.g., 8/10), and Actions (Revoke button).
+            - Join Requests Card:
+                - Header: Title "Join Requests", Toggle Switch to enable/disable join requests for the guild.
+                - Content Area (`#join-requests-content`):
+                    - Table: Lists users who have requested to join, showing Username (with avatar), Requested On date, and Actions (Approve/Deny buttons).
+                - Empty State (`#join-requests-empty`, shown if toggle is off or no requests): Displays a message indicating no pending requests.
+- Modal (`#copy-success-modal`, initially hidden):
+    - Purpose: Confirms that an invite link has been copied to the clipboard.
+    - Structure: Modal header with title and close button, body with confirmation message, footer with "Got it" button.
+- JavaScript:
+    - Handles toggling visibility between "Direct Invite" and "Invite Link" forms based on pill selection.
+    - Handles toggling visibility between "Direct Invites" and "Invite Links" tables in the pending section.
+    - Implements the "Copy to clipboard" functionality for invite links and shows the success modal.
+    - Manages the visibility of the join requests table/empty state based on the toggle switch.
+    - Includes placeholder logic for form submissions (showing alerts).
+    - Includes placeholder logic for table actions (Revoke, Approve, Deny) by removing table rows after confirmation.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ViaGuild - Guild Management</title>
+    <style>
+        :root {
+            --primary: #4f46e5;
+            --primary-light: #818cf8;
+            --secondary: #64748b;
+            --dark: #1e293b;
+            --light: #f8fafc;
+            --light-gray: #e2e8f0;
+            --gold: #f59e0b;
+            --silver: #94a3b8;
+            --bronze: #b45309;
+            --danger: #ef4444;
+            --success: #10b981;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+        }
+        
+        body {
+            background-color: #f8fafc;
+            color: var(--dark);
+        }
+        
+        header {
+            background-color: white;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            padding: 1rem;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .logo {
+            font-weight: 700;
+            font-size: 1.5rem;
+            color: var(--primary);
+        }
+        
+        .search-bar {
+            background-color: var(--light-gray);
+            border-radius: 9999px;
+            padding: 0.5rem 1rem;
+            display: flex;
+            align-items: center;
+            width: 400px;
+        }
+        
+        .search-bar input {
+            background: transparent;
+            border: none;
+            outline: none;
+            width: 100%;
+            margin-left: 0.5rem;
+        }
+        
+        .user-menu {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        
+        .notifications {
+            position: relative;
+        }
+        
+        .notification-badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background-color: var(--danger);
+            color: white;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            width: 18px;
+            height: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 9999px;
+            background-color: var(--primary-light);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            position: relative;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem 1rem;
+        }
+        
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+        
+        .page-title {
+            font-size: 1.875rem;
+            font-weight: 700;
+        }
+        
+        .breadcrumb {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--secondary);
+            font-size: 0.875rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .breadcrumb a {
+            color: var(--primary);
+            text-decoration: none;
+        }
+        
+        .breadcrumb svg {
+            width: 16px;
+            height: 16px;
+        }
+        
+        .management-grid {
+            display: grid;
+            grid-template-columns: 250px 1fr;
+            gap: 2rem;
+        }
+        
+        .sidebar {
+            background-color: white;
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            height: fit-content;
+        }
+        
+        .sidebar-title {
+            font-weight: 600;
+            font-size: 1rem;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--light-gray);
+        }
+        
+        .sidebar-menu {
+            list-style: none;
+        }
+        
+        .sidebar-menu-item {
+            margin-bottom: 0.5rem;
+        }
+        
+        .sidebar-menu-link {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem;
+            border-radius: 0.375rem;
+            color: var(--dark);
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+        
+        .sidebar-menu-link.active {
+            background-color: var(--primary);
+            color: white;
+        }
+        
+        .sidebar-menu-link:hover:not(.active) {
+            background-color: var(--light-gray);
+        }
+        
+        .sidebar-menu-link svg {
+            width: 18px;
+            height: 18px;
+        }
+        
+        .content {
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+        
+        .card {
+            background-color: white;
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+        
+        .card-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+        
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+        
+        .form-label {
+            display: block;
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+        }
+        
+        .form-input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border: 1px solid var(--light-gray);
+            border-radius: 0.375rem;
+            font-size: 1rem;
+            transition: border-color 0.2s;
+        }
+        
+        .form-input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.1);
+        }
+        
+        .form-select {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border: 1px solid var(--light-gray);
+            border-radius: 0.375rem;
+            font-size: 1rem;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2364748b'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 1rem center;
+            background-size: 1rem;
+        }
+        
+        .form-select:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.1);
+        }
+        
+        .form-row {
+            display: flex;
+            gap: 1rem;
+        }
+        
+        .form-row > * {
+            flex: 1;
+        }
+        
+        .form-hint {
+            font-size: 0.875rem;
+            color: var(--secondary);
+            margin-top: 0.5rem;
+        }
+        
+        .button {
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.375rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            border: none;
+        }
+        
+        .button-primary {
+            background-color: var(--primary);
+            color: white;
+        }
+        
+        .button-primary:hover {
+            background-color: var(--primary-light);
+            transform: translateY(-2px);
+        }
+        
+        .button-secondary {
+            background-color: var(--light-gray);
+            color: var(--dark);
+        }
+        
+        .button-secondary:hover {
+            background-color: #cbd5e1;
+            transform: translateY(-2px);
+        }
+        
+        .button-danger {
+            background-color: var(--danger);
+            color: white;
+        }
+        
+        .button-danger:hover {
+            background-color: #f87171;
+            transform: translateY(-2px);
+        }
+        
+        .button-success {
+            background-color: var(--success);
+            color: white;
+        }
+        
+        .button-success:hover {
+            background-color: #34d399;
+            transform: translateY(-2px);
+        }
+        
+        .button-small {
+            padding: 0.5rem 1rem;
+            font-size: 0.875rem;
+        }
+        
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .table th {
+            text-align: left;
+            padding: 1rem;
+            font-weight: 500;
+            color: var(--secondary);
+            border-bottom: 1px solid var(--light-gray);
+        }
+        
+        .table td {
+            padding: 1rem;
+            border-bottom: 1px solid var(--light-gray);
+        }
+        
+        .table tr:last-child td {
+            border-bottom: none;
+        }
+        
+        .table-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+        
+        .icon-button {
+            width: 36px;
+            height: 36px;
+            border-radius: 9999px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: var(--light-gray);
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .icon-button:hover {
+            background-color: #cbd5e1;
+            transform: translateY(-2px);
+        }
+        
+        .icon-button-danger {
+            background-color: #fee2e2;
+            color: var(--danger);
+        }
+        
+        .icon-button-danger:hover {
+            background-color: #fecaca;
+        }
+        
+        .icon-button-success {
+            background-color: #d1fae5;
+            color: var(--success);
+        }
+        
+        .icon-button-success:hover {
+            background-color: #a7f3d0;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        
+        .badge-primary {
+            background-color: #ddd6fe;
+            color: #5b21b6;
+        }
+        
+        .badge-success {
+            background-color: #d1fae5;
+            color: #065f46;
+        }
+        
+        .badge-warning {
+            background-color: #fef3c7;
+            color: #92400e;
+        }
+        
+        .badge-danger {
+            background-color: #fee2e2;
+            color: #b91c1c;
+        }
+        
+        .switch-container {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 48px;
+            height: 24px;
+        }
+        
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: var(--light-gray);
+            transition: .4s;
+            border-radius: 24px;
+        }
+        
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        
+        input:checked + .slider {
+            background-color: var(--success);
+        }
+        
+        input:focus + .slider {
+            box-shadow: 0 0 1px var(--success);
+        }
+        
+        input:checked + .slider:before {
+            transform: translateX(24px);
+        }
+        
+        .copyable-link {
+            display: flex;
+            align-items: center;
+            background-color: var(--light);
+            border: 1px solid var(--light-gray);
+            border-radius: 0.375rem;
+            padding: 0.5rem 0.75rem;
+            width: 100%;
+        }
+        
+        .copyable-link input {
+            background: transparent;
+            border: none;
+            outline: none;
+            width: 100%;
+            font-size: 0.875rem;
+        }
+        
+        .copy-button {
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.25rem;
+            border-radius: 0.25rem;
+            margin-left: 0.5rem;
+            transition: all 0.2s;
+        }
+        
+        .copy-button:hover {
+            background-color: var(--light-gray);
+        }
+        
+        .tooltip {
+            position: relative;
+            display: inline-block;
+        }
+        
+        .tooltip .tooltip-text {
+            visibility: hidden;
+            width: 140px;
+            background-color: var(--dark);
+            color: #fff;
+            text-align: center;
+            border-radius: 0.25rem;
+            padding: 0.5rem;
+            position: absolute;
+            z-index: 1;
+            bottom: 125%;
+            left: 50%;
+            transform: translateX(-50%);
+            opacity: 0;
+            transition: opacity 0.3s;
+            font-size: 0.75rem;
+        }
+        
+        .tooltip .tooltip-text::after {
+            content: "";
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -5px;
+            border-width: 5px;
+            border-style: solid;
+            border-color: var(--dark) transparent transparent transparent;
+        }
+        
+        .tooltip:hover .tooltip-text {
+            visibility: visible;
+            opacity: 1;
+        }
+        
+        .pill-selector {
+            display: flex;
+            border: 1px solid var(--light-gray);
+            border-radius: 0.5rem;
+            overflow: hidden;
+        }
+        
+        .pill-option {
+            padding: 0.75rem 1rem;
+            flex: 1;
+            text-align: center;
+            background-color: white;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: 500;
+        }
+        
+        .pill-option.selected {
+            background-color: var(--primary);
+            color: white;
+        }
+        
+        .pill-option:not(.selected):hover {
+            background-color: var(--light-gray);
+        }
+        
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 3rem 0;
+            color: var(--secondary);
+        }
+        
+        .empty-state svg {
+            width: 48px;
+            height: 48px;
+            margin-bottom: 1rem;
+            stroke: var(--secondary);
+        }
+        
+        .empty-state-title {
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+        
+        .empty-state-message {
+            max-width: 400px;
+            margin-bottom: 1.5rem;
+        }
+        
+        .modal-backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s, visibility 0.3s;
+        }
+        
+        .modal-backdrop.active {
+            opacity: 1;
+            visibility: visible;
+        }
+        
+        .modal {
+            background-color: white;
+            border-radius: 0.5rem;
+            width: 100%;
+            max-width: 600px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transform: translateY(20px);
+            transition: transform 0.3s;
+        }
+        
+        .modal-backdrop.active .modal {
+            transform: translateY(0);
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--light-gray);
+        }
+        
+        .modal-title {
+            font-weight: 600;
+            font-size: 1.25rem;
+        }
+        
+        .modal-close {
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            border-radius: 9999px;
+            transition: background-color 0.2s;
+        }
+        
+        .modal-close:hover {
+            background-color: var(--light-gray);
+        }
+        
+        .modal-body {
+            padding: 1.5rem;
+        }
+        
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 1rem;
+            padding: 1.5rem;
+            border-top: 1px solid var(--light-gray);
+        }
+        
+        @media screen and (max-width: 768px) {
+            .management-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .sidebar {
+                margin-bottom: 2rem;
+            }
+            
+            .form-row {
+                flex-direction: column;
+                gap: 1.5rem;
+            }
+            
+            .search-bar {
+                display: none;
+            }
+        }
+        
+        /* Hide certain table columns on mobile */
+        @media screen and (max-width: 640px) {
+            .table th:nth-child(3),
+            .table td:nth-child(3) {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="logo">ViaGuild</div>
+        <div class="search-bar">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input type="text" placeholder="Search users or guilds...">
+        </div>
+        <div class="user-menu">
+            <div class="notifications">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                    <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                </svg>
+                <div class="notification-badge">3</div>
+            </div>
+            <div class="avatar">JS</div>
+        </div>
+    </header>
+    
+    <div class="container">
+        <div class="page-header">
+            <div>
+                <div class="breadcrumb">
+                    <a href="/dashboard">Dashboard</a>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
+                    <a href="/guilds">Guilds</a>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
+                    <span>Design Masters</span>
+                </div>
+                <h1 class="page-title">Design Masters Management</h1>
+            </div>
+        </div>
+        
+        <div class="management-grid">
+            <div class="sidebar">
+                <h2 class="sidebar-title">Guild Management</h2>
+                <ul class="sidebar-menu">
+                    <li class="sidebar-menu-item">
+                        <a href="#" class="sidebar-menu-link">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                                <line x1="3" y1="9" x2="21" y2="9"></line>
+                                <line x1="9" y1="21" x2="9" y2="9"></line>
+                            </svg>
+                            Overview
+                        </a>
+                    </li>
+                    <li class="sidebar-menu-item">
+                        <a href="#" class="sidebar-menu-link">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                                <circle cx="9" cy="7" r="4"></circle>
+                                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                            </svg>
+                            Members
+                        </a>
+                    </li>
+                    <li class="sidebar-menu-item">
+                        <a href="#" class="sidebar-menu-link active">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path>
+                                <line x1="4" y1="22" x2="4" y2="15"></line>
+                            </svg>
+                            Invitations
+                        </a>
+                    </li>
+                    <li class="sidebar-menu-item">
+                        <a href="#" class="sidebar-menu-link">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                            </svg>
+                            Badges
+                        </a>
+                    </li>
+                    <li class="sidebar-menu-item">
+                        <a href="#" class="sidebar-menu-link">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="3"></circle>
+                                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                            </svg>
+                            Settings
+                        </a>
+                    </li>
+                </ul>
+            </div>
+            
+            <div class="content">
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">Invite Management</h2>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Invitation Type</label>
+                        <div class="pill-selector">
+                            <div class="pill-option selected" data-target="handle-invite">Direct Invites</div>
+                            <div class="pill-option" data-target="link-invite">Invite Link</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Handle Invite Form -->
+                    <div id="handle-invite-form">
+                        <form>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label class="form-label" for="invite-username">Username/Email</label>
+                                    <input type="text" id="invite-username" class="form-input" placeholder="Enter username or email">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label" for="invite-platform">Platform</label>
+                                    <select id="invite-platform" class="form-select">
+                                        <option value="viaguild">ViaGuild</option>
+                                        <option value="email">Email</option>
+                                        <option value="twitter">Twitter</option>
+                                        <option value="bluesky">Bluesky</option>
+                                        <option value="twitch">Twitch</option>
+                                        <option value="discord">Discord</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" for="invite-role">Assign Role</label>
+                                <select id="invite-role" class="form-select">
+                                    <option value="member">Member</option>
+                                    <option value="admin">Admin</option>
+                                </select>
+                                <div class="form-hint">Owner roles can only be transferred from the Settings page.</div>
+                            </div>
+                            <div class="form-group">
+                                <button type="submit" class="button button-primary">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                                        <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                                    </svg>
+                                    Send Invitation
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                    
+                    <!-- Link Invite Form -->
+                    <div id="link-invite-form" style="display: none;">
+                        <form>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label class="form-label" for="invite-expiration">Expiration</label>
+                                    <select id="invite-expiration" class="form-select">
+                                        <option value="30min">30 minutes</option>
+                                        <option value="1hour">1 hour</option>
+                                        <option value="6hours">6 hours</option>
+                                        <option value="12hours">12 hours</option>
+                                        <option value="24hours">24 hours</option>
+                                        <option value="1week" selected>1 week</option>
+                                        <option value="30days">30 days</option>
+                                        <option value="never">Never expires</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label" for="invite-uses">Max Uses</label>
+                                    <select id="invite-uses" class="form-select">
+                                        <option value="1" selected>1 use only</option>
+                                        <option value="5">5 uses</option>
+                                        <option value="10">10 uses</option>
+                                        <option value="25">25 uses</option>
+                                        <option value="50">50 uses</option>
+                                        <option value="100">100 uses</option>
+                                        <option value="unlimited">Unlimited</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" for="invite-role">Assign Role</label>
+                                <select id="invite-role" class="form-select">
+                                    <option value="member">Member</option>
+                                    <option value="admin">Admin</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <button type="submit" class="button button-primary">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                                        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                                    </svg>
+                                    Generate Invite Link
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">Pending Invitations</h2>
+                    </div>
+                    
+                    <div class="form-group" style="margin-bottom: 1rem;">
+                        <div class="pill-selector">
+                            <div class="pill-option pending-tab selected" data-target="direct-invites-tab">Direct Invites</div>
+                            <div class="pill-option pending-tab" data-target="invite-links-tab">Invite Links</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Direct Invites Tab -->
+                    <div id="direct-invites-tab">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Username/Email</th>
+                                    <th>Platform</th>
+                                    <th>Invited By</th>
+                                    <th>Date</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>@sarah_design</td>
+                                    <td>
+                                        <div class="badge badge-primary">Twitter</div>
+                                    </td>
+                                    <td>Jane Smith</td>
+                                    <td>May 2, 2025</td>
+                                    <td>
+                                        <div class="table-actions">
+                                            <button class="icon-button icon-button-danger" title="Revoke Invitation">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>miketech@example.com</td>
+                                    <td>
+                                        <div class="badge badge-primary">Email</div>
+                                    </td>
+                                    <td>Alex Johnson</td>
+                                    <td>May 1, 2025</td>
+                                    <td>
+                                        <div class="table-actions">
+                                            <button class="icon-button icon-button-danger" title="Revoke Invitation">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>creative.designs</td>
+                                    <td>
+                                        <div class="badge badge-primary">Bluesky</div>
+                                    </td>
+                                    <td>Jane Smith</td>
+                                    <td>April 29, 2025</td>
+                                    <td>
+                                        <div class="table-actions">
+                                            <button class="icon-button icon-button-danger" title="Revoke Invitation">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>designPro#1234</td>
+                                    <td>
+                                        <div class="badge badge-primary">Discord</div>
+                                    </td>
+                                    <td>Alex Johnson</td>
+                                    <td>April 28, 2025</td>
+                                    <td>
+                                        <div class="table-actions">
+                                            <button class="icon-button icon-button-danger" title="Revoke Invitation">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- Invite Links Tab -->
+                    <div id="invite-links-tab" style="display: none;">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Link</th>
+                                    <th>Created By</th>
+                                    <th>Expires</th>
+                                    <th>Uses</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>
+                                        <div class="copyable-link">
+                                            <input type="text" value="https://viaguild.com/join/dm-uKPnSxvL" readonly>
+                                            <button class="copy-button" title="Copy to clipboard">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </td>
+                                    <td>Jane Smith</td>
+                                    <td>Never</td>
+                                    <td>8/10</td>
+                                    <td>
+                                        <div class="table-actions">
+                                            <button class="icon-button icon-button-danger" title="Revoke Link">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>
+                                        <div class="copyable-link">
+                                            <input type="text" value="https://viaguild.com/join/dm-JhLmq2sT" readonly>
+                                            <button class="copy-button" title="Copy to clipboard">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </td>
+                                    <td>Alex Johnson</td>
+                                    <td>May 9, 2025</td>
+                                    <td>0/1</td>
+                                    <td>
+                                        <div class="table-actions">
+                                            <button class="icon-button icon-button-danger" title="Revoke Link">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>
+                                        <div class="copyable-link">
+                                            <input type="text" value="https://viaguild.com/join/dm-R7mP3qDv" readonly>
+                                            <button class="copy-button" title="Copy to clipboard">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </td>
+                                    <td>Sarah Thompson</td>
+                                    <td>May 4, 2025</td>
+                                    <td>2/5</td>
+                                    <td>
+                                        <div class="table-actions">
+                                            <button class="icon-button icon-button-danger" title="Revoke Link">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">Join Requests</h2>
+                        <div class="switch-container">
+                            <span>Allow Join Requests</span>
+                            <label class="switch">
+                                <input type="checkbox" checked id="join-requests-toggle">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div id="join-requests-content">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Username</th>
+                                    <th>Requested On</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>
+                                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                            <div class="avatar" style="width: 32px; height: 32px; font-size: 0.875rem;">RJ</div>
+                                            <span>Robert Johnson</span>
+                                        </div>
+                                    </td>
+                                    <td>May 3, 2025</td>
+                                    <td>
+                                        <div class="table-actions">
+                                            <button class="icon-button icon-button-success" title="Approve Request">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                    <polyline points="20 6 9 17 4 12"></polyline>
+                                                </svg>
+                                            </button>
+                                            <button class="icon-button icon-button-danger" title="Deny Request">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>
+                                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                            <div class="avatar" style="width: 32px; height: 32px; font-size: 0.875rem;">CL</div>
+                                            <span>Christina Lee</span>
+                                        </div>
+                                    </td>
+                                    <td>May 2, 2025</td>
+                                    <td>
+                                        <div class="table-actions">
+                                            <button class="icon-button icon-button-success" title="Approve Request">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                    <polyline points="20 6 9 17 4 12"></polyline>
+                                                </svg>
+                                            </button>
+                                            <button class="icon-button icon-button-danger" title="Deny Request">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div id="join-requests-empty" style="display: none;">
+                        <div class="empty-state">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                                <circle cx="8.5" cy="7" r="4"></circle>
+                                <line x1="20" y1="8" x2="20" y2="14"></line>
+                                <line x1="23" y1="11" x2="17" y2="11"></line>
+                            </svg>
+                            <h3 class="empty-state-title">No Join Requests</h3>
+                            <p class="empty-state-message">There are no pending join requests at the moment. When someone requests to join your guild, they'll appear here.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Copy Link Success Modal -->
+    <div class="modal-backdrop" id="copy-success-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title">Link Copied</h3>
+                <button class="modal-close" id="close-copy-modal">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p>The invite link has been copied to your clipboard. You can now share it with anyone you want to invite to the guild.</p>
+            </div>
+            <div class="modal-footer">
+                <button class="button button-primary" id="confirm-copy-modal">Got it</button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Toggle between invitation forms in the first section
+        const inviteTypeOptions = document.querySelectorAll('.card:nth-child(1) .pill-option');
+        const handleInviteForm = document.getElementById('handle-invite-form');
+        const linkInviteForm = document.getElementById('link-invite-form');
+        
+        // Toggle between tabs in the pending invitations section
+        const pendingInvitationTabs = document.querySelectorAll('.pending-tab');
+        const directInvitesTab = document.getElementById('direct-invites-tab');
+        const inviteLinksTab = document.getElementById('invite-links-tab');
+        
+        // Handle invite type toggling in the first section
+        inviteTypeOptions.forEach(option => {
+            option.addEventListener('click', () => {
+                // Reset only the options in this group
+                inviteTypeOptions.forEach(opt => opt.classList.remove('selected'));
+                
+                // Select the clicked option
+                option.classList.add('selected');
+                
+                // Show the appropriate form
+                const target = option.dataset.target;
+                if (target === 'handle-invite') {
+                    handleInviteForm.style.display = 'block';
+                    linkInviteForm.style.display = 'none';
+                } else if (target === 'link-invite') {
+                    handleInviteForm.style.display = 'none';
+                    linkInviteForm.style.display = 'block';
+                }
+            });
+        });
+        
+        // Handle pending invitations tab toggling
+        pendingInvitationTabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                // Reset only the tabs in this group
+                pendingInvitationTabs.forEach(t => t.classList.remove('selected'));
+                
+                // Select the clicked tab
+                tab.classList.add('selected');
+                
+                // Show the appropriate content
+                const target = tab.dataset.target;
+                if (target === 'direct-invites-tab') {
+                    directInvitesTab.style.display = 'block';
+                    inviteLinksTab.style.display = 'none';
+                } else if (target === 'invite-links-tab') {
+                    directInvitesTab.style.display = 'none';
+                    inviteLinksTab.style.display = 'block';
+                }
+            });
+        });
+        
+        // Copy to clipboard functionality
+        const copyButtons = document.querySelectorAll('.copy-button');
+        const copySuccessModal = document.getElementById('copy-success-modal');
+        const closeCopyModalButton = document.getElementById('close-copy-modal');
+        const confirmCopyModalButton = document.getElementById('confirm-copy-modal');
+        
+        copyButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                const input = button.previousElementSibling;
+                input.select();
+                document.execCommand('copy');
+                
+                // Show success modal
+                copySuccessModal.classList.add('active');
+            });
+        });
+        
+        // Close modal buttons
+        [closeCopyModalButton, confirmCopyModalButton].forEach(button => {
+            button.addEventListener('click', () => {
+                copySuccessModal.classList.remove('active');
+            });
+        });
+        
+        // Join requests toggle
+        const joinRequestsToggle = document.getElementById('join-requests-toggle');
+        const joinRequestsContent = document.getElementById('join-requests-content');
+        const joinRequestsEmpty = document.getElementById('join-requests-empty');
+        
+        joinRequestsToggle.addEventListener('change', () => {
+            if (joinRequestsToggle.checked) {
+                joinRequestsContent.style.display = 'block';
+                joinRequestsEmpty.style.display = 'none';
+            } else {
+                joinRequestsContent.style.display = 'none';
+                joinRequestsEmpty.style.display = 'block';
+            }
+        });
+        
+        // Form submissions
+        const handleInviteFormElement = handleInviteForm.querySelector('form');
+        const linkInviteFormElement = linkInviteForm.querySelector('form');
+        
+        handleInviteFormElement.addEventListener('submit', (e) => {
+            e.preventDefault();
+            
+            // In a real application, this would send the invitation
+            // For this mockup, we'll just show a success alert
+            alert('Invitation sent successfully!');
+        });
+        
+        linkInviteFormElement.addEventListener('submit', (e) => {
+            e.preventDefault();
+            
+            // In a real application, this would generate the invite link
+            // For this mockup, we'll just show a success alert
+            alert('Invite link generated successfully!');
+        });
+        
+        // Example actions for handling the table actions
+        const revokeButtons = document.querySelectorAll('.icon-button-danger');
+        revokeButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                if (confirm('Are you sure you want to revoke this invitation?')) {
+                    // Find the parent row
+                    const row = button.closest('tr');
+                    
+                    // In a real app, this would call an API to revoke the invitation
+                    // For this mockup, we'll just remove the row
+                    row.remove();
+                }
+            });
+        });
+        
+        const approveButtons = document.querySelectorAll('.icon-button-success');
+        approveButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                // Find the parent row
+                const row = button.closest('tr');
+                
+                // In a real app, this would call an API to approve the request
+                // For this mockup, we'll just remove the row
+                row.remove();
+                
+                alert('Join request approved!');
+            });
+        });
+    </script>
+</body>
+</html>

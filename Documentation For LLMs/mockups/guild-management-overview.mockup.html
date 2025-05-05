@@ -1,0 +1,1333 @@
+<!--
+Mockup: Guild Management - Overview
+
+Purpose:
+This mockup represents the "Overview" tab within the guild management interface for a specific guild (e.g., "Design Masters"). It provides a high-level summary of the guild's profile, key information, relationships, members, trophies, and contacts, serving as the landing page for guild administrators.
+
+Structure:
+- Header (Sticky): Standard ViaGuild header (Logo, Search Bar, User Menu).
+- Main Content Area (Centered Container):
+    - Page Header:
+        - Breadcrumb Navigation: Path (e.g., Dashboard > Guilds > Design Masters).
+        - Page Title: "Design Masters Management".
+    - Management Grid (Two Columns on wide screens, stacked on narrow):
+        - Sidebar (Left Column):
+            - Title: "Guild Management".
+            - Menu: Vertical navigation for management sections (Overview, Members, Invitations, Badges, Settings), with "Overview" marked as active.
+        - Content Area (Right Column): Contains cards summarizing different aspects of the guild.
+            - Guild Profile Information Card:
+                - Header: Large guild avatar, Guild Name, Metadata (member count, creation date), Action Buttons ("Edit Guild", "Create Badge").
+                - Description: Detailed text describing the guild's purpose and activities.
+                - Guild Relationships: Grid displaying related guilds (Partners, Parent, Child, Cluster, Rival) with their avatars, names, and relationship type badges.
+            - Members Card (Collapsible):
+                - Header: Title "Members", total count tag, "View All Members" button, expand/collapse arrow.
+                - Content (Expanded by default): Preview table showing the first few members (Owner, Admins, Members) with their avatars, names, and roles (styled badges).
+            - Trophy Case Card (Collapsible):
+                - Header: Title "Trophy Case", showcased count tag, "Edit Showcase" button, expand/collapse arrow.
+                - Content (Expanded by default): Grid displaying a selection of the guild's most prominent badges/trophies, including their visual representation (styled shape, border, image), name, and received count.
+            - Guild Contacts Card:
+                - Header: Title "Guild Contacts", "Edit Contacts" button.
+                - Content: Grid displaying contact points (e.g., Discord, Twitter, Website) with icons, labels, and clickable links/values.
+- JavaScript:
+    - Implements the collapsible functionality for the "Members" and "Trophy Case" sections, allowing users to expand/collapse them.
+    - Sets the Members and Trophy Case sections to be expanded by default.
+
+Styling:
+- Consistent theme with other mockups (CSS variables, colors, fonts).
+- Uses standard components: Cards, Buttons, Tables, Badges (for roles and relationship types), Avatars (large and small), Grids (for relationships, trophies, contacts).
+- Defines specific styles for different badge shapes (circle, star, heart, hexagon) using masks and clip-paths.
+- Includes styles for different relationship types (Partner, Parent, Child, Cluster, Rival) using colored badges.
+- Implements responsive design: adjusts grid layouts (main management grid, relationships, trophies, contacts) and hides the search bar on smaller screens.
+
+Interactivity (Simulated/Implemented):
+- Sidebar navigation links (static).
+- Action buttons ("Edit Guild", "Create Badge", "View All Members", "Edit Showcase", "Edit Contacts") are present but likely lead to other pages/modals (not implemented here).
+- Members and Trophy Case sections are collapsible/expandable.
+- Contact links are present.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ViaGuild - Guild Overview</title>
+    <style>
+        :root {
+            --primary: #4f46e5;
+            --primary-light: #818cf8;
+            --secondary: #64748b;
+            --dark: #1e293b;
+            --light: #f8fafc;
+            --light-gray: #e2e8f0;
+            --gold: #f59e0b;
+            --silver: #94a3b8;
+            --bronze: #b45309;
+            --danger: #ef4444;
+            --success: #10b981;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+        }
+        
+        body {
+            background-color: #f8fafc;
+            color: var(--dark);
+        }
+        
+        header {
+            background-color: white;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            padding: 1rem;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .logo {
+            font-weight: 700;
+            font-size: 1.5rem;
+            color: var(--primary);
+        }
+        
+        .search-bar {
+            background-color: var(--light-gray);
+            border-radius: 9999px;
+            padding: 0.5rem 1rem;
+            display: flex;
+            align-items: center;
+            width: 400px;
+        }
+        
+        .search-bar input {
+            background: transparent;
+            border: none;
+            outline: none;
+            width: 100%;
+            margin-left: 0.5rem;
+        }
+        
+        .user-menu {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        
+        .notifications {
+            position: relative;
+        }
+        
+        .notification-badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background-color: var(--danger);
+            color: white;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            width: 18px;
+            height: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 9999px;
+            background-color: var(--primary-light);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            position: relative;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem 1rem;
+        }
+        
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+        
+        .page-title {
+            font-size: 1.875rem;
+            font-weight: 700;
+        }
+        
+        .breadcrumb {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--secondary);
+            font-size: 0.875rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .breadcrumb a {
+            color: var(--primary);
+            text-decoration: none;
+        }
+        
+        .breadcrumb svg {
+            width: 16px;
+            height: 16px;
+        }
+        
+        .management-grid {
+            display: grid;
+            grid-template-columns: 250px 1fr;
+            gap: 2rem;
+        }
+        
+        .sidebar {
+            background-color: white;
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            height: fit-content;
+        }
+        
+        .sidebar-title {
+            font-weight: 600;
+            font-size: 1rem;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--light-gray);
+        }
+        
+        .sidebar-menu {
+            list-style: none;
+        }
+        
+        .sidebar-menu-item {
+            margin-bottom: 0.5rem;
+        }
+        
+        .sidebar-menu-link {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem;
+            border-radius: 0.375rem;
+            color: var(--dark);
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+        
+        .sidebar-menu-link.active {
+            background-color: var(--primary);
+            color: white;
+        }
+        
+        .sidebar-menu-link:hover:not(.active) {
+            background-color: var(--light-gray);
+        }
+        
+        .sidebar-menu-link svg {
+            width: 18px;
+            height: 18px;
+        }
+        
+        .content {
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+        
+        .card {
+            background-color: white;
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+        
+        .card-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+        
+        .button {
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.375rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            border: none;
+        }
+        
+        .button-primary {
+            background-color: var(--primary);
+            color: white;
+        }
+        
+        .button-primary:hover {
+            background-color: var(--primary-light);
+            transform: translateY(-2px);
+        }
+        
+        .button-secondary {
+            background-color: var(--light-gray);
+            color: var(--dark);
+        }
+        
+        .button-secondary:hover {
+            background-color: #cbd5e1;
+            transform: translateY(-2px);
+        }
+        
+        .button-small {
+            padding: 0.5rem 1rem;
+            font-size: 0.875rem;
+        }
+        
+        .guild-profile-header {
+            display: flex;
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .guild-avatar-large {
+            width: 120px;
+            height: 120px;
+            border-radius: 9999px;
+            background-color: var(--primary-light);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 700;
+            font-size: 3rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            flex-shrink: 0;
+        }
+        
+        .guild-info {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        
+        .guild-name {
+            font-size: 1.875rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+        
+        .guild-meta {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 0.75rem;
+            color: var(--secondary);
+        }
+        
+        .guild-meta-item {
+            display: flex;
+            align-items: center;
+            gap: 0.375rem;
+        }
+        
+        .guild-actions {
+            display: flex;
+            gap: 0.75rem;
+            margin-top: 0.5rem;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        
+        .badge-primary {
+            background-color: #ddd6fe;
+            color: #5b21b6;
+        }
+        
+        .badge-success {
+            background-color: #d1fae5;
+            color: #065f46;
+        }
+        
+        .contact-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        
+        .contact-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            background-color: var(--light);
+            padding: 0.75rem;
+            border-radius: 0.375rem;
+        }
+        
+        .contact-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 9999px;
+            background-color: var(--light-gray);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        
+        .contact-discord {
+            background-color: #5865F2;
+            color: white;
+        }
+        
+        .contact-twitter {
+            background-color: #1DA1F2;
+            color: white;
+        }
+        
+        .contact-website {
+            background-color: var(--primary);
+            color: white;
+        }
+        
+        .contact-details {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .contact-label {
+            font-size: 0.75rem;
+            color: var(--secondary);
+        }
+        
+        .contact-value {
+            font-weight: 500;
+        }
+        
+        .contact-value a {
+            color: var(--dark);
+            text-decoration: none;
+        }
+        
+        .contact-value a:hover {
+            color: var(--primary);
+            text-decoration: underline;
+        }
+        
+        .collapsible-section {
+            margin-top: 1.5rem;
+        }
+        
+        .collapsible-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 0;
+            border-bottom: 1px solid var(--light-gray);
+            cursor: pointer;
+        }
+        
+        .collapsible-title {
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .collapsible-content {
+            display: none;
+            padding: 1.5rem 0;
+            overflow: hidden;
+        }
+        
+        .collapsible-content.expanded {
+            display: block;
+        }
+        
+        .trophy-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 1.5rem;
+        }
+        
+        .trophy-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+        
+        .trophy-badge {
+            position: relative;
+            width: 80px;
+            height: 80px;
+            margin: 0 auto;
+        }
+        
+        .badge-circle-border {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-color: var(--gold);
+            border-radius: 50%;
+        }
+        
+        .badge-circle-inner {
+            position: absolute;
+            width: calc(100% - 8px);
+            height: calc(100% - 8px);
+            top: 4px;
+            left: 4px;
+            background-color: white;
+            border-radius: 50%;
+            overflow: hidden;
+        }
+        
+        .badge-star-border {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-color: var(--silver);
+            -webkit-mask-size: 100% 100%;
+            mask-size: 100% 100%;
+            -webkit-mask-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M50,0 L63,38 L100,38 L69,59 L82,95 L50,73 L18,95 L31,59 L0,38 L37,38 Z' /%3E%3C/svg%3E");
+            mask-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M50,0 L63,38 L100,38 L69,59 L82,95 L50,73 L18,95 L31,59 L0,38 L37,38 Z' /%3E%3C/svg%3E");
+        }
+        
+        .badge-star-inner {
+            position: absolute;
+            width: calc(100% - 8px);
+            height: calc(100% - 8px);
+            top: 4px;
+            left: 4px;
+            background-color: white;
+            -webkit-mask-size: 100% 100%;
+            mask-size: 100% 100%;
+            -webkit-mask-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M50,0 L63,38 L100,38 L69,59 L82,95 L50,73 L18,95 L31,59 L0,38 L37,38 Z' /%3E%3C/svg%3E");
+            mask-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M50,0 L63,38 L100,38 L69,59 L82,95 L50,73 L18,95 L31,59 L0,38 L37,38 Z' /%3E%3C/svg%3E");
+            overflow: hidden;
+        }
+        
+        .badge-heart-border {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-color: var(--bronze);
+            -webkit-mask-size: 100% 100%;
+            mask-size: 100% 100%;
+            -webkit-mask-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M50,90 C45,85 20,65 10,45 C0,25 10,5 30,5 C40,5 45,10 50,15 C55,10 60,5 70,5 C90,5 100,25 90,45 C80,65 55,85 50,90 Z' /%3E%3C/svg%3E");
+            mask-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M50,90 C45,85 20,65 10,45 C0,25 10,5 30,5 C40,5 45,10 50,15 C55,10 60,5 70,5 C90,5 100,25 90,45 C80,65 55,85 50,90 Z' /%3E%3C/svg%3E");
+        }
+        
+        .badge-heart-inner {
+            position: absolute;
+            width: calc(100% - 8px);
+            height: calc(100% - 8px);
+            top: 4px;
+            left: 4px;
+            background-color: white;
+            -webkit-mask-size: 100% 100%;
+            mask-size: 100% 100%;
+            -webkit-mask-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M50,90 C45,85 20,65 10,45 C0,25 10,5 30,5 C40,5 45,10 50,15 C55,10 60,5 70,5 C90,5 100,25 90,45 C80,65 55,85 50,90 Z' /%3E%3C/svg%3E");
+            mask-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M50,90 C45,85 20,65 10,45 C0,25 10,5 30,5 C40,5 45,10 50,15 C55,10 60,5 70,5 C90,5 100,25 90,45 C80,65 55,85 50,90 Z' /%3E%3C/svg%3E");
+            overflow: hidden;
+        }
+        
+        .badge-hexagon-border {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-color: #14b8a6;
+            clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+        }
+        
+        .badge-hexagon-inner {
+            position: absolute;
+            width: calc(100% - 8px);
+            height: calc(100% - 8px);
+            top: 4px;
+            left: 4px;
+            background-color: white;
+            clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+            overflow: hidden;
+        }
+        
+        .badge-giver {
+            position: absolute;
+            bottom: -5px;
+            right: -5px;
+            width: 20px;
+            height: 20px;
+            border-radius: 9999px;
+            background-color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            z-index: 10;
+        }
+        
+        .trophy-title {
+            font-weight: 500;
+            margin-top: 0.5rem;
+            font-size: 0.875rem;
+        }
+        
+        .trophy-count {
+            font-size: 0.75rem;
+            color: var(--secondary);
+        }
+        
+        .members-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .members-table th {
+            text-align: left;
+            padding: 1rem;
+            font-weight: 500;
+            color: var(--secondary);
+            border-bottom: 1px solid var(--light-gray);
+        }
+        
+        .members-table td {
+            padding: 1rem;
+            border-bottom: 1px solid var(--light-gray);
+        }
+        
+        .members-table tr:last-child td {
+            border-bottom: none;
+        }
+        
+        .table-user {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        
+        .member-role {
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+        
+        .role-owner {
+            color: var(--gold);
+        }
+        
+        .role-admin {
+            color: var(--primary);
+        }
+        
+        .role-member {
+            color: var(--secondary);
+        }
+        
+        .relationship-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1.5rem;
+            margin-top: 1.5rem;
+        }
+        
+        .relationship-card {
+            border: 1px solid var(--light-gray);
+            border-radius: 0.375rem;
+            padding: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            transition: all 0.2s;
+        }
+        
+        .relationship-card:hover {
+            border-color: var(--primary-light);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            transform: translateY(-2px);
+        }
+        
+        .small-guild-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 9999px;
+            background-color: var(--primary-light);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            font-size: 0.875rem;
+            flex-shrink: 0;
+        }
+        
+        .relationship-type {
+            margin-top: 0.25rem;
+            display: inline-block;
+            font-size: 0.75rem;
+            background-color: var(--light-gray);
+            padding: 0.25rem 0.5rem;
+            border-radius: 9999px;
+            font-weight: 500;
+        }
+        
+        .relationship-cluster {
+            background-color: #dbeafe;
+            color: #1e40af;
+        }
+        
+        .relationship-parent {
+            background-color: #d1fae5;
+            color: #065f46;
+        }
+        
+        .relationship-child {
+            background-color: #fef3c7;
+            color: #92400e;
+        }
+        
+        .relationship-rival {
+            background-color: #fee2e2;
+            color: #b91c1c;
+        }
+        
+        .relationship-partner {
+            background-color: #e0e7ff;
+            color: #4338ca;
+        }
+
+        .section-tag {
+            display: inline-flex;
+            align-items: center;
+            background-color: var(--light-gray);
+            color: var(--secondary);
+            font-size: 0.75rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 9999px;
+            margin-left: 0.5rem;
+        }
+        
+        @media screen and (max-width: 1024px) {
+            .trophy-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+            
+            .relationship-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .contact-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        
+        @media screen and (max-width: 768px) {
+            .management-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .sidebar {
+                margin-bottom: 2rem;
+            }
+            
+            .guild-profile-header {
+                flex-direction: column;
+                align-items: center;
+                text-align: center;
+            }
+            
+            .guild-actions {
+                justify-content: center;
+            }
+            
+            .guild-meta {
+                justify-content: center;
+                flex-wrap: wrap;
+            }
+            
+            .trophy-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .relationship-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .contact-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .search-bar {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="logo">ViaGuild</div>
+        <div class="search-bar">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input type="text" placeholder="Search users or guilds...">
+        </div>
+        <div class="user-menu">
+            <div class="notifications">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                    <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                </svg>
+                <div class="notification-badge">3</div>
+            </div>
+            <div class="avatar">JS</div>
+        </div>
+    </header>
+    
+    <div class="container">
+        <div class="page-header">
+            <div>
+                <div class="breadcrumb">
+                    <a href="/dashboard">Dashboard</a>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
+                    <a href="/guilds">Guilds</a>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
+                    <span>Design Masters</span>
+                </div>
+                <h1 class="page-title">Design Masters Management</h1>
+            </div>
+        </div>
+        
+        <div class="management-grid">
+            <div class="sidebar">
+                <h2 class="sidebar-title">Guild Management</h2>
+                <ul class="sidebar-menu">
+                    <li class="sidebar-menu-item">
+                        <a href="#" class="sidebar-menu-link active">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                                <line x1="3" y1="9" x2="21" y2="9"></line>
+                                <line x1="9" y1="21" x2="9" y2="9"></line>
+                            </svg>
+                            Overview
+                        </a>
+                    </li>
+                    <li class="sidebar-menu-item">
+                        <a href="#" class="sidebar-menu-link">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                                <circle cx="9" cy="7" r="4"></circle>
+                                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                            </svg>
+                            Members
+                        </a>
+                    </li>
+                    <li class="sidebar-menu-item">
+                        <a href="#" class="sidebar-menu-link">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path>
+                                <line x1="4" y1="22" x2="4" y2="15"></line>
+                            </svg>
+                            Invitations
+                        </a>
+                    </li>
+                    <li class="sidebar-menu-item">
+                        <a href="#" class="sidebar-menu-link">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                            </svg>
+                            Badges
+                        </a>
+                    </li>
+                    <li class="sidebar-menu-item">
+                        <a href="#" class="sidebar-menu-link">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="3"></circle>
+                                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                            </svg>
+                            Settings
+                        </a>
+                    </li>
+                </ul>
+            </div>
+            
+            <div class="content">
+                <!-- Guild Profile Information Card -->
+                <div class="card">
+                    <div class="guild-profile-header">
+                        <div class="guild-avatar-large">D</div>
+                        <div class="guild-info">
+                            <h2 class="guild-name">Design Masters</h2>
+                            <div class="guild-meta">
+                                <div class="guild-meta-item">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                                        <circle cx="9" cy="7" r="4"></circle>
+                                        <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                                        <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                                    </svg>
+                                    125 members
+                                </div>
+                                <div class="guild-meta-item">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                        <line x1="16" y1="2" x2="16" y2="6"></line>
+                                        <line x1="8" y1="2" x2="8" y2="6"></line>
+                                        <line x1="3" y1="10" x2="21" y2="10"></line>
+                                    </svg>
+                                    Created Jan 15, 2025
+                                </div>
+                            </div>
+                            <div class="guild-actions">
+                                <button class="button button-secondary button-small">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                    </svg>
+                                    Edit Guild
+                                </button>
+                                <button class="button button-primary button-small">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                                        <line x1="8" y1="12" x2="16" y2="12"></line>
+                                        <line x1="12" y1="16" x2="12" y2="8"></line>
+                                    </svg>
+                                    Create Badge
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="guild-description">
+                        <p>Design Masters is a collaborative community for designers of all disciplines. We focus on sharing knowledge, critique, and growth opportunities for UI/UX designers, graphic artists, illustrators, and more. Our members range from beginners looking to learn to seasoned professionals willing to mentor and share their expertise.</p>
+                        <p style="margin-top: 0.75rem;">We regularly organize challenges, portfolio reviews, and skill-sharing sessions to help our members improve their craft and stay up-to-date with industry trends.</p>
+                    </div>
+                    
+                    <!-- Guild Relationships -->
+                    <h3 style="margin-top: 1.5rem; margin-bottom: 0.75rem;">Guild Relationships</h3>
+                    <div class="relationship-grid">
+                        <!-- Relationship 1 -->
+                        <div class="relationship-card">
+                            <div class="small-guild-avatar" style="background-color: #8b5cf6;">UI</div>
+                            <div>
+                                <h3 style="font-size: 0.95rem;">UI Innovators</h3>
+                                <div class="relationship-type relationship-partner">Partner</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Relationship 2 -->
+                        <div class="relationship-card">
+                            <div class="small-guild-avatar" style="background-color: #ec4899;">CP</div>
+                            <div>
+                                <h3 style="font-size: 0.95rem;">Creative Pros</h3>
+                                <div class="relationship-type relationship-parent">Parent</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Relationship 3 -->
+                        <div class="relationship-card">
+                            <div class="small-guild-avatar" style="background-color: #0ea5e9;">DT</div>
+                            <div>
+                                <h3 style="font-size: 0.95rem;">Design Thinking</h3>
+                                <div class="relationship-type relationship-child">Child</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Relationship 4 -->
+                        <div class="relationship-card">
+                            <div class="small-guild-avatar" style="background-color: #f97316;">FA</div>
+                            <div>
+                                <h3 style="font-size: 0.95rem;">Frontend Artists</h3>
+                                <div class="relationship-type relationship-cluster">Cluster</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Relationship 5 -->
+                        <div class="relationship-card">
+                            <div class="small-guild-avatar" style="background-color: #f43f5e;">UX</div>
+                            <div>
+                                <h3 style="font-size: 0.95rem;">UX Research Lab</h3>
+                                <div class="relationship-type relationship-rival">Rival</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Relationship 6 -->
+                        <div class="relationship-card">
+                            <div class="small-guild-avatar" style="background-color: #14b8a6;">IC</div>
+                            <div>
+                                <h3 style="font-size: 0.95rem;">Illustration Club</h3>
+                                <div class="relationship-type relationship-cluster">Cluster</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Relationship 7 -->
+                        <div class="relationship-card">
+                            <div class="small-guild-avatar" style="background-color: #eab308;">ID</div>
+                            <div>
+                                <h3 style="font-size: 0.95rem;">Icon Designers</h3>
+                                <div class="relationship-type relationship-child">Child</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Relationship 8 -->
+                        <div class="relationship-card">
+                            <div class="small-guild-avatar" style="background-color: #a855f7;">TU</div>
+                            <div>
+                                <h3 style="font-size: 0.95rem;">Typography Union</h3>
+                                <div class="relationship-type relationship-partner">Partner</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Members Section -->
+                <div class="card">
+                    <div class="collapsible-section">
+                        <div class="collapsible-header" id="members-header">
+                            <div class="collapsible-title">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="9 18 15 12 9 6"></polyline>
+                                </svg>
+                                Members
+                                <span class="section-tag">125 total</span>
+                            </div>
+                            <button class="button button-secondary button-small">View All Members</button>
+                        </div>
+                        
+                        <div class="collapsible-content" id="members-content">
+                            <table class="members-table">
+                                <thead>
+                                    <tr>
+                                        <th>Member</th>
+                                        <th>Role</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>
+                                            <div class="table-user">
+                                                <div class="avatar" style="background-color: var(--primary);">JS</div>
+                                                <div>Jane Smith</div>
+                                            </div>
+                                        </td>
+                                        <td><div class="member-role role-owner">Owner</div></td>
+                                    </tr>
+                                    <tr>
+                                        <td>
+                                            <div class="table-user">
+                                                <div class="avatar" style="background-color: #8b5cf6;">AJ</div>
+                                                <div>Alex Johnson</div>
+                                            </div>
+                                        </td>
+                                        <td><div class="member-role role-admin">Admin</div></td>
+                                    </tr>
+                                    <tr>
+                                        <td>
+                                            <div class="table-user">
+                                                <div class="avatar" style="background-color: #ec4899;">ST</div>
+                                                <div>Sarah Thompson</div>
+                                            </div>
+                                        </td>
+                                        <td><div class="member-role role-admin">Admin</div></td>
+                                    </tr>
+                                    <tr>
+                                        <td>
+                                            <div class="table-user">
+                                                <div class="avatar" style="background-color: #0ea5e9;">MP</div>
+                                                <div>Michael Parker</div>
+                                            </div>
+                                        </td>
+                                        <td><div class="member-role role-member">Member</div></td>
+                                    </tr>
+                                    <tr>
+                                        <td>
+                                            <div class="table-user">
+                                                <div class="avatar" style="background-color: #f97316;">EL</div>
+                                                <div>Emma Lewis</div>
+                                            </div>
+                                        </td>
+                                        <td><div class="member-role role-member">Member</div></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Trophy Case Section -->
+                <div class="card">
+                    <div class="collapsible-section">
+                        <div class="collapsible-header" id="trophy-header">
+                            <div class="collapsible-title">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="9 18 15 12 9 6"></polyline>
+                                </svg>
+                                Trophy Case
+                                <span class="section-tag">15 Showcased</span>
+                            </div>
+                            <button class="button button-secondary button-small">Edit Showcase</button>
+                        </div>
+                        
+                        <div class="collapsible-content" id="trophy-content">
+                            <div class="trophy-grid">
+                                <!-- Trophy Item 1 -->
+                                <div class="trophy-item">
+                                    <div class="trophy-badge">
+                                        <div class="badge-circle-border"></div>
+                                        <div class="badge-circle-inner">
+                                            <img src="/api/placeholder/80/80" alt="Design Excellence badge">
+                                        </div>
+                                    </div>
+                                    <h3 class="trophy-title">Design Excellence</h3>
+                                    <div class="trophy-count">42 received</div>
+                                </div>
+                                
+                                <!-- Trophy Item 2 -->
+                                <div class="trophy-item">
+                                    <div class="trophy-badge">
+                                        <div class="badge-star-border"></div>
+                                        <div class="badge-star-inner">
+                                            <img src="/api/placeholder/80/80" alt="Mentor's Star badge">
+                                        </div>
+                                    </div>
+                                    <h3 class="trophy-title">Mentor's Star</h3>
+                                    <div class="trophy-count">27 received</div>
+                                </div>
+                                
+                                <!-- Trophy Item 3 -->
+                                <div class="trophy-item">
+                                    <div class="trophy-badge">
+                                        <div class="badge-heart-border"></div>
+                                        <div class="badge-heart-inner">
+                                            <img src="/api/placeholder/80/80" alt="Community Contributor badge">
+                                        </div>
+                                    </div>
+                                    <h3 class="trophy-title">Community Contributor</h3>
+                                    <div class="trophy-count">35 received</div>
+                                </div>
+                                
+                                <!-- Trophy Item 4 -->
+                                <div class="trophy-item">
+                                    <div class="trophy-badge">
+                                        <div class="badge-hexagon-border"></div>
+                                        <div class="badge-hexagon-inner">
+                                            <img src="/api/placeholder/80/80" alt="Innovative Concept badge">
+                                        </div>
+                                    </div>
+                                    <h3 class="trophy-title">Innovative Concept</h3>
+                                    <div class="trophy-count">19 received</div>
+                                </div>
+                                
+                                <!-- Trophy Item 5 -->
+                                <div class="trophy-item">
+                                    <div class="trophy-badge">
+                                        <div class="badge-circle-border" style="background-color: #8b5cf6;"></div>
+                                        <div class="badge-circle-inner">
+                                            <img src="/api/placeholder/80/80" alt="Challenge Winner badge">
+                                        </div>
+                                    </div>
+                                    <h3 class="trophy-title">Challenge Winner</h3>
+                                    <div class="trophy-count">23 received</div>
+                                </div>
+                                
+                                <!-- More Trophy Items -->
+                                <div class="trophy-item">
+                                    <div class="trophy-badge">
+                                        <div class="badge-star-border" style="background-color: #14b8a6;"></div>
+                                        <div class="badge-star-inner">
+                                            <img src="/api/placeholder/80/80" alt="UI Master badge">
+                                        </div>
+                                    </div>
+                                    <h3 class="trophy-title">UI Master</h3>
+                                    <div class="trophy-count">17 received</div>
+                                </div>
+                                
+                                <div class="trophy-item">
+                                    <div class="trophy-badge">
+                                        <div class="badge-heart-border" style="background-color: #ec4899;"></div>
+                                        <div class="badge-heart-inner">
+                                            <img src="/api/placeholder/80/80" alt="Supportive Critic badge">
+                                        </div>
+                                    </div>
+                                    <h3 class="trophy-title">Supportive Critic</h3>
+                                    <div class="trophy-count">31 received</div>
+                                </div>
+                                
+                                <div class="trophy-item">
+                                    <div class="trophy-badge">
+                                        <div class="badge-hexagon-border" style="background-color: #0ea5e9;"></div>
+                                        <div class="badge-hexagon-inner">
+                                            <img src="/api/placeholder/80/80" alt="Resource Contributor badge">
+                                        </div>
+                                    </div>
+                                    <h3 class="trophy-title">Resource Contributor</h3>
+                                    <div class="trophy-count">12 received</div>
+                                </div>
+                                
+                                <div class="trophy-item">
+                                    <div class="trophy-badge">
+                                        <div class="badge-circle-border" style="background-color: #f97316;"></div>
+                                        <div class="badge-circle-inner">
+                                            <img src="/api/placeholder/80/80" alt="Design Trend Setter badge">
+                                        </div>
+                                    </div>
+                                    <h3 class="trophy-title">Design Trend Setter</h3>
+                                    <div class="trophy-count">9 received</div>
+                                </div>
+                                
+                                <div class="trophy-item">
+                                    <div class="trophy-badge">
+                                        <div class="badge-star-border" style="background-color: #f43f5e;"></div>
+                                        <div class="badge-star-inner">
+                                            <img src="/api/placeholder/80/80" alt="Outstanding Feedback badge">
+                                        </div>
+                                    </div>
+                                    <h3 class="trophy-title">Outstanding Feedback</h3>
+                                    <div class="trophy-count">21 received</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Guild Contacts Card -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">Guild Contacts</h2>
+                        <button class="button button-secondary button-small">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                            </svg>
+                            Edit Contacts
+                        </button>
+                    </div>
+                    
+                    <div class="contact-grid">
+                        <div class="contact-item">
+                            <div class="contact-icon contact-discord">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
+                                </svg>
+                            </div>
+                            <div class="contact-details">
+                                <div class="contact-label">Discord</div>
+                                <div class="contact-value">
+                                    <a href="#" target="_blank">discord.gg/designmasters</a>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="contact-item">
+                            <div class="contact-icon contact-twitter">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M23 3a10.9 10.9 0 0 1-3.14 1.53 4.48 4.48 0 0 0-7.86 3v1A10.66 10.66 0 0 1 3 4s-4 9 5 13a11.64 11.64 0 0 1-7 2c9 5 20 0 20-11.5a4.5 4.5 0 0 0-.08-.83A7.72 7.72 0 0 0 23 3z"></path>
+                                </svg>
+                            </div>
+                            <div class="contact-details">
+                                <div class="contact-label">Twitter</div>
+                                <div class="contact-value">
+                                    <a href="#" target="_blank">@DesignMasters</a>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="contact-item">
+                            <div class="contact-icon contact-website">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <line x1="2" y1="12" x2="22" y2="12"></line>
+                                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                                </svg>
+                            </div>
+                            <div class="contact-details">
+                                <div class="contact-label">Website</div>
+                                <div class="contact-value">
+                                    <a href="#" target="_blank">designmasters.community</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Handle collapsible sections
+        document.addEventListener('DOMContentLoaded', function() {
+            // Set up the trophy case section
+            const trophyHeader = document.getElementById('trophy-header');
+            const trophyContent = document.getElementById('trophy-content');
+            const trophyArrow = trophyHeader.querySelector('svg');
+            
+            // Set up the members section
+            const membersHeader = document.getElementById('members-header');
+            const membersContent = document.getElementById('members-content');
+            const membersArrow = membersHeader.querySelector('svg');
+            
+            // Toggle function for collapsible sections
+            function toggleSection(header, content, arrow) {
+                header.addEventListener('click', function(e) {
+                    // Don't toggle if clicking on a button inside the header
+                    if (e.target.closest('button')) return;
+                    
+                    if (content.classList.contains('expanded')) {
+                        content.classList.remove('expanded');
+                        arrow.style.transform = 'rotate(0deg)';
+                    } else {
+                        content.classList.add('expanded');
+                        arrow.style.transform = 'rotate(90deg)';
+                    }
+                });
+            }
+            
+            // Initialize all sections
+            toggleSection(trophyHeader, trophyContent, trophyArrow);
+            toggleSection(membersHeader, membersContent, membersArrow);
+            
+            // Expand members section by default
+            membersContent.classList.add('expanded');
+            membersArrow.style.transform = 'rotate(90deg)';
+            
+            // Expand trophy case by default
+            trophyContent.classList.add('expanded');
+            trophyArrow.style.transform = 'rotate(90deg)';
+        });
+    </script>
+</body>
+</html>
