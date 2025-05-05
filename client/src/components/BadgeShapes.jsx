@@ -52,8 +52,8 @@ export const StarBadge = ({
   className = '',
   size = 50 
 }) => {
-  // SVG path for star shape
-  const starPath = "M50,0 L63,38 L100,38 L69,59 L82,95 L50,73 L18,95 L31,59 L0,38 L37,38 Z";
+  // New starburst clip path
+  const starburstClipPath = "polygon(79.39% 90.45%, 50% 80%, 20.61% 90.45%, 21.47% 59.27%, 2.45% 34.55%, 32.37% 25.73%, 50% 0%, 67.63% 25.73%, 97.55% 34.55%, 78.53% 59.27%)";
   
   return (
     <div className={`trophy-badge ${className}`} style={{ width: size, height: size }}>
@@ -61,19 +61,13 @@ export const StarBadge = ({
         className="badge-star-border" 
         style={{ 
           backgroundColor: borderColor,
-          WebkitMaskImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='${starPath}' /%3E%3C/svg%3E")`,
-          maskImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='${starPath}' /%3E%3C/svg%3E")`,
-          WebkitMaskSize: '100% 100%',
-          maskSize: '100% 100%'
+          clipPath: starburstClipPath
         }}
       ></div>
       <div 
         className="badge-star-inner"
         style={{ 
-          WebkitMaskImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='${starPath}' /%3E%3C/svg%3E")`,
-          maskImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='${starPath}' /%3E%3C/svg%3E")`,
-          WebkitMaskSize: '100% 100%',
-          maskSize: '100% 100%'
+          clipPath: starburstClipPath
         }}
       >
         {imageUrl && <img src={imageUrl} alt="Badge" />}
@@ -154,19 +148,22 @@ export const HexagonBadge = ({
   className = '',
   size = 50
 }) => {
+  // New hexagon clip path
+  const hexagonClipPath = "polygon(93.56% 74.55%, 50.52% 100%, 6.96% 75.45%, 6.44% 25.45%, 49.48% 0%, 93.04% 24.55%)";
+  
   return (
     <div className={`trophy-badge ${className}`} style={{ width: size, height: size }}>
       <div 
         className="badge-hexagon-border" 
         style={{ 
           backgroundColor: borderColor,
-          clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)'
+          clipPath: hexagonClipPath
         }}
       ></div>
       <div 
         className="badge-hexagon-inner"
         style={{ 
-          clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)'
+          clipPath: hexagonClipPath
         }}
       >
         {imageUrl && <img src={imageUrl} alt="Badge" />}
