@@ -56,7 +56,7 @@ This document outlines the revised implementation plan for the ViaGuild Minimum 
    - ✅ Develop guild creation flow
    - ✅ Develop primary guild selection UI
 
-**Testing Approach**:
+4. **Testing**:
 - Unit tests for models and service layers
 - API endpoint tests with supertest
 - React component tests with React Testing Library
@@ -80,7 +80,7 @@ This document outlines the revised implementation plan for the ViaGuild Minimum 
    - Develop guild profile viewing page
    - Implement responsive guild management layout
 
-**Testing Approach**:
+3. **Testing**:
 - Test guild management flows across user roles
 - Verify permission boundaries for different roles
 - Create end-to-end tests for critical management paths
@@ -105,7 +105,7 @@ This document outlines the revised implementation plan for the ViaGuild Minimum 
    - Develop invitation acceptance flows
    - Build join request review interface
 
-**Testing Approach**:
+3. **Testing**:
 - Test invitation code generation and validation
 - Verify invitation expiration and usage limits
 - Test notification delivery for invitations
@@ -131,7 +131,7 @@ This document outlines the revised implementation plan for the ViaGuild Minimum 
    - Develop user badge showcase
    - Create badge allocation indicators
 
-**Testing Approach**:
+3. **Testing**:
 - Test badge attribution permissions
 - Verify badge limits and allocations
 - Test badge display in different contexts
@@ -157,7 +157,7 @@ This document outlines the revised implementation plan for the ViaGuild Minimum 
    - Develop badge management tools
    - Create demo integration examples
 
-**Testing Approach**:
+3. **Testing**:
 - Test custom badge creation and constraints
 - Verify API endpoint security
 - Test API rate limiting and authentication
