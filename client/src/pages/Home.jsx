@@ -18,10 +18,11 @@ import '../styles/home.css';
  * Landing page with different content based on authentication state
  */
 function Home() {
-  const { currentUser } = useAuth();
+  const auth = useAuth();
   const [isLoading, setIsLoading] = useState(true);
   const [data, setData] = useState(null);
-
+  const { currentUser, loading: authLoading } = auth;
+  
   // Simulate API call to fetch data
   useEffect(() => {
     // In a real implementation, this would be replaced with API calls
@@ -45,6 +46,11 @@ function Home() {
       setIsLoading(false);
     }
   }, [currentUser]);
+
+  // Safely handle auth loading state
+  if (authLoading) {
+    return <div className="loading">Loading authentication...</div>;
+  }
 
   // Handle guild creation
   const handleCreateGuild = () => {
@@ -100,36 +106,44 @@ function Home() {
   return (
     <div className="home-container">
       <div className="welcome-section">
-        <h1>Welcome back, {data.user.displayName.split(' ')[0]}!</h1>
+        <h1>Welcome back, {data && data.user ? data.user.displayName.split(' ')[0] : 'User'}!</h1>
       </div>
 
       {/* Guild Carousel */}
-      <GuildCarousel 
-        guilds={data.guilds} 
-        onCreateGuild={handleCreateGuild} 
-      />
+      {data && data.guilds && (
+        <GuildCarousel 
+          guilds={data.guilds} 
+          onCreateGuild={handleCreateGuild} 
+        />
+      )}
 
       {/* Profile Links */}
       <ProfileLinks />
 
       {/* Badge Section */}
-      <BadgeSection 
-        receivedBadges={data.receivedBadges} 
-        availableBadges={data.availableBadges} 
-      />
+      {data && (
+        <BadgeSection 
+          receivedBadges={data.receivedBadges || []} 
+          availableBadges={data.availableBadges || []} 
+        />
+      )}
 
       {/* Trophy Case */}
-      <TrophyCase 
-        badges={data.trophyCase} 
-        onEdit={handleEditTrophyCase} 
-      />
+      {data && data.trophyCase && (
+        <TrophyCase 
+          badges={data.trophyCase} 
+          onEdit={handleEditTrophyCase} 
+        />
+      )}
 
       {/* Notifications Panel */}
-      <NotificationsPanel 
-        notifications={data.notifications}
-        onAccept={handleAcceptNotification}
-        onDecline={handleDeclineNotification}
-      />
+      {data && data.notifications && (
+        <NotificationsPanel 
+          notifications={data.notifications}
+          onAccept={handleAcceptNotification}
+          onDecline={handleDeclineNotification}
+        />
+      )}
     </div>
   );
 }

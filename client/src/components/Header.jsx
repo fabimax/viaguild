@@ -8,9 +8,10 @@ import viaguildLogo from '../assets/viaguild.svg';
  * Shows different options based on authentication state
  */
 function Header() {
-  const { currentUser, logout } = useAuth();
+  const auth = useAuth();
   const navigate = useNavigate();
-
+  const { currentUser, logout, loading } = auth;
+  
   /**
    * Handle user logout
    * Calls logout function and redirects to home page
@@ -19,6 +20,11 @@ function Header() {
     logout();
     navigate('/');
   };
+
+  // Safely handle loading state
+  if (loading) {
+    return <header className="header"><div className="logo">Loading...</div></header>;
+  }
 
   return (
     <header className="header">

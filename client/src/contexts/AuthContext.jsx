@@ -1,8 +1,16 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import axios from 'axios';
 
-// Create Auth Context
-const AuthContext = createContext();
+// Create Auth Context with a default value to prevent undefined errors
+const AuthContext = createContext({
+  currentUser: null,
+  loading: true,
+  register: () => {},
+  login: () => {},
+  logout: () => {},
+  connectSocialAccount: () => {},
+  refreshUserData: () => Promise.resolve(null)
+});
 
 /**
  * Custom hook to use the auth context
@@ -172,7 +180,7 @@ export const AuthProvider = ({ children }) => {
 
   return (
     <AuthContext.Provider value={value}>
-      {!loading && children}
+      {children}
     </AuthContext.Provider>
   );
 };
