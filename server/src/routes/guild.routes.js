@@ -12,6 +12,12 @@ router.get('/:id', guildController.getGuildById);
 router.put('/:id', guildController.updateGuild);
 router.delete('/:id', guildController.deleteGuild);
 
+// Guild Member Listing
+router.get('/:guildId/members', guildController.getGuildMembers);
+
+// Guild Permissions for current user
+router.get('/:guildId/my-permissions', guildController.getMyGuildPermissions);
+
 // User's guilds
 router.get('/user/me', guildController.getGuildsByUserId);
 

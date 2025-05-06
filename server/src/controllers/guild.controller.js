@@ -207,6 +207,49 @@ class GuildController {
       }
     }
   }
+
+  /**
+   * Get paginated list of guild members
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
+  async getGuildMembers(req, res) {
+    try {
+      const { guildId } = req.params;
+      const page = parseInt(req.query.page, 10) || 1;
+      const limit = parseInt(req.query.limit, 10) || 10;
+
+      const result = await guildService.getGuildMembers(guildId, { page, limit });
+      res.json(result);
+    } catch (error) {
+      if (error.message === 'Guild not found') {
+        res.status(404).json({ error: error.message });
+      } else {
+        res.status(400).json({ error: error.message });
+      }
+    }
+  }
+
+  /**
+   * Get current user's permissions for a specific guild
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
+  async getMyGuildPermissions(req, res) {
+    try {
+      const { guildId } = req.params;
+      const userId = req.user.id; // Assuming authenticate middleware sets req.user
+
+      const permissionsData = await guildService.getMyGuildPermissions(guildId, userId);
+      res.json(permissionsData);
+    } catch (error) {
+      if (error.message === 'Guild not found' || error.message === 'User not a member of this guild') {
+        res.status(404).json({ error: error.message }); // Or 403 if preferred for non-members
+      } else {
+        res.status(500).json({ error: 'Failed to retrieve guild permissions' });
+      }
+    }
+  }
 }
 
 module.exports = new GuildController(); 
