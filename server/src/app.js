@@ -9,13 +9,19 @@ const passport = require('passport');
 const authRoutes = require('./routes/auth.routes');
 const socialAccountRoutes = require('./routes/socialAccount.routes');
 const userRoutes = require('./routes/user.routes');
+const guildRoutes = require('./routes/guild.routes');
 
 // Initialize Express app
 const app = express();
 const prisma = new PrismaClient();
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: 'http://localhost:5173', // Frontend URL
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(helmet());
 app.use(morgan('dev'));
 
@@ -36,6 +42,7 @@ app.use((req, res, next) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/social-accounts', socialAccountRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/guilds', guildRoutes);
 
 // Basic route for testing
 app.get('/', (req, res) => {

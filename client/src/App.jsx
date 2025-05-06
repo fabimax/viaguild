@@ -15,6 +15,8 @@ import Profile from './pages/Profile';
 import EditProfile from './pages/EditProfile';
 import Search from './pages/Search';
 import PublicUserProfile from './pages/PublicUserProfile';
+import HomePage from './pages/HomePage';
+import CreateGuildPage from './pages/CreateGuildPage';
 
 /**
  * Custom error fallback UI for the main application
@@ -83,6 +85,22 @@ function App() {
                   <ErrorBoundary>
                     <PublicUserProfile />
                   </ErrorBoundary>
+                } />
+                
+                {/* Guild System Routes */}
+                <Route path="/dashboard" element={
+                  <ProtectedRoute>
+                    <ErrorBoundary>
+                      <HomePage />
+                    </ErrorBoundary>
+                  </ProtectedRoute>
+                } />
+                <Route path="/guilds/create" element={
+                  <ProtectedRoute>
+                    <ErrorBoundary>
+                      <CreateGuildPage />
+                    </ErrorBoundary>
+                  </ProtectedRoute>
                 } />
               </Routes>
             </main>

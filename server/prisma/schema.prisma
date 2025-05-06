@@ -21,12 +21,17 @@ model User {
   hiddenAccounts String[]        @default([]) // Array of social account IDs to hide from public view
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
-  socialAccounts SocialAccount[]
+  
+  // Relationships
+  socialAccounts     SocialAccount[]
+  createdGuilds      Guild[]          @relation("GuildCreator")
+  updatedGuilds      Guild[]          @relation("GuildUpdater")
+  guildMemberships   GuildMembership[]
 }
 
 model SocialAccount {
   id                String   @id @default(uuid())
-  provider          String   // "twitter" or "bluesky"
+  provider          String   // "twitter", "bluesky", "twitch", "discord"
   providerId        String   // ID from the provider
   username          String   // Username from the provider
   encryptedCredentials String?  // Encrypted app password or OAuth token
@@ -36,4 +41,52 @@ model SocialAccount {
   updatedAt         DateTime @updatedAt
 
   @@unique([provider, providerId])
+}
+
+// New models for Guild system
+model Guild {
+  id            String      @id @default(uuid())
+  name          String      @unique
+  description   String      @db.Text
+  avatar        String?     // URL to image storage
+  isOpen        Boolean     @default(false)
+  createdById   String      // Reference to User who created the guild
+  updatedById   String?     // Reference to User who last updated the guild
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  // Relationships
+  creator        User            @relation("GuildCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy      User?           @relation("GuildUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
+  memberships    GuildMembership[]
+
+  // Indexes
+  @@index([name])
+}
+
+model GuildMembership {
+  id        String   @id @default(uuid())
+  userId    String   // Reference to User
+  guildId   String   // Reference to Guild
+  role      Role     @default(MEMBER)
+  isPrimary Boolean  @default(false)
+  joinedAt  DateTime @default(now())
+
+  // Relationships
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  guild     Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+
+  // Constraints
+  @@unique([userId, guildId], name: "uniqueUserGuild")
+  
+  // Indexes
+  @@index([userId])
+  @@index([guildId])
+  @@index([userId, isPrimary])
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  MEMBER
 }
