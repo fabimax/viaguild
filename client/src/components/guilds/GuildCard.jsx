@@ -125,4 +125,5 @@ GuildCard.propTypes = {
   onSetPrimary: PropTypes.func
 };
 
+// Export the component as default
 export default GuildCard; 

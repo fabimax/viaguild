@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { Link } from 'react-router-dom';
-import GuildCard from './GuildCard';
+import GuildCard from './GuildCard.jsx';
 
 /**
  * Guild Carousel Component

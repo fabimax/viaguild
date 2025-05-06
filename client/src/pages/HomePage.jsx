@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import GuildCarousel from '../components/guilds/GuildCarousel';
+import GuildCarousel from '../components/guilds/GuildCarousel.jsx';
 import guildService from '../services/guild.service';
 
 /**
