@@ -32,7 +32,6 @@ ViaGuild (VG) is a web application that enables users to create and join Guilds 
 ## Guild Invite System
 - Multiple invite methods:
   - Direct to ViaGuild users
-  - Email invitations
   - Social media handle invitations
 - Invite tracking and management
 - Time-limited and usage-limited invites

@@ -3,8 +3,8 @@
 ## Direct Handle Invitations
 - Users can be invited via any implemented social handle (currently Twitter, Bluesky, Twitch, Discord) or ViaGuild username
 - Invitation UI includes:
-  - Username/Email input field
-  - Platform dropdown (ViaGuild, Email, Twitter, Bluesky, Twitch, Discord)
+  - Username input field
+  - Platform dropdown (ViaGuild, Twitter, Bluesky, Twitch, Discord)
 - Invited users see a "Join" button on the guild's profile page
 - Users receive notifications when invited via any of their linked handles
 - Guild admins/owners can revoke pending invitations
