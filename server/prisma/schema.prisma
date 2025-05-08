@@ -27,6 +27,16 @@ model User {
   createdGuilds      Guild[]          @relation("GuildCreator")
   updatedGuilds      Guild[]          @relation("GuildUpdater")
   guildMemberships   GuildMembership[]
+  
+  // New relationships
+  receivedBadges       BadgeInstance[]    @relation("ReceivedBadges")
+  givenBadges          BadgeInstance[]    @relation("GivenBadges")
+  badgeAllocations     UserBadgeAllocation[]
+  badgeCase            UserBadgeCase?
+  createdBadges        BadgeTemplate[]
+  notifications        Notification[]
+  actorNotifications   Notification[]     @relation("NotificationActor")
+  createdRelationships GuildRelationship[]
 }
 
 model SocialAccount {
@@ -43,7 +53,7 @@ model SocialAccount {
   @@unique([provider, providerId])
 }
 
-// New models for Guild system
+// Guild Models
 model Guild {
   id            String      @id @default(uuid())
   name          String      @unique
@@ -59,6 +69,13 @@ model Guild {
   creator        User            @relation("GuildCreator", fields: [createdById], references: [id], onDelete: Restrict)
   updatedBy      User?           @relation("GuildUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
   memberships    GuildMembership[]
+  
+  // New relationships
+  contacts                GuildContact[]
+  badgeTemplates          BadgeTemplate[]
+  badgeCase               GuildBadgeCase?
+  outgoingRelationships   GuildRelationship[] @relation("SourceRelationships")
+  incomingRelationships   GuildRelationship[] @relation("TargetRelationships")
 
   // Indexes
   @@index([name])
@@ -89,4 +106,230 @@ enum Role {
   OWNER
   ADMIN
   MEMBER
+}
+
+// Guild Relationships Model
+model GuildRelationship {
+  id             String           @id @default(uuid())
+  sourceGuildId  String
+  targetGuildId  String
+  type           RelationshipType
+  createdAt      DateTime         @default(now())
+  createdById    String           // Track who created the relationship
+  updatedAt      DateTime         @updatedAt
+
+  // Relationships
+  sourceGuild    Guild            @relation("SourceRelationships", fields: [sourceGuildId], references: [id], onDelete: Cascade)
+  targetGuild    Guild            @relation("TargetRelationships", fields: [targetGuildId], references: [id], onDelete: Cascade)
+  creator        User             @relation(fields: [createdById], references: [id])
+
+  // Constraints
+  @@unique([sourceGuildId, targetGuildId])
+  @@index([sourceGuildId])
+  @@index([targetGuildId])
+}
+
+enum RelationshipType {
+  PARENT
+  CHILD
+  PARTNER
+  CLUSTER
+  RIVAL
+}
+
+// Guild Contacts Model
+enum ContactType {
+  WEBSITE
+  EMAIL
+  DISCORD
+  TWITTER
+  BLUESKY
+  TWITCH
+  GITHUB
+  LINKEDIN
+  CUSTOM
+}
+
+model GuildContact {
+  id           String      @id @default(uuid())
+  guildId      String
+  type         ContactType
+  label        String?     // For custom contact types
+  value        String      // The actual contact info (URL, username, etc.)
+  displayOrder Int         @default(0)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  
+  // Relationships
+  guild        Guild       @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  
+  @@index([guildId])
+}
+
+// Badge System Models
+model BadgeTemplate {
+  id          String      @id @default(uuid())
+  name        String
+  creatorId   String      // Reference to User who created the badge
+  guildId     String?     // Optional reference to Guild
+  imageUrl    String?     // URL to badge image
+  shapeType   BadgeShape  @default(CIRCLE)
+  borderColor String      // Hex color code (#RRGGBB)
+  description String?     @db.Text
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  tier        BadgeTier?  // Gold, Silver, Bronze for default badges
+
+  // Relationships
+  creator     User            @relation(fields: [creatorId], references: [id], onDelete: Restrict)
+  guild       Guild?          @relation(fields: [guildId], references: [id], onDelete: SetNull)
+  instances   BadgeInstance[]
+
+  @@index([creatorId])
+  @@index([guildId])
+}
+
+enum BadgeShape {
+  CIRCLE
+  STAR
+  HEART
+  HEXAGON
+}
+
+enum BadgeTier {
+  GOLD
+  SILVER
+  BRONZE
+}
+
+model BadgeInstance {
+  id          String    @id @default(uuid())
+  templateId  String    // Reference to BadgeTemplate
+  receiverId  String    // Reference to User who received the badge
+  giverId     String    // Reference to User who gave the badge
+  givenAt     DateTime  @default(now())
+  revokedAt   DateTime?
+  message     String?   // Optional message from the giver
+
+  // Relationships
+  template    BadgeTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  receiver    User          @relation("ReceivedBadges", fields: [receiverId], references: [id], onDelete: Cascade)
+  giver       User          @relation("GivenBadges", fields: [giverId], references: [id], onDelete: SetNull)
+  
+  // User badge items referencing this instance
+  userBadgeItems UserBadgeItem[]
+  // Guild badge items referencing this instance
+  guildBadgeItems GuildBadgeItem[]
+
+  @@index([templateId])
+  @@index([receiverId])
+  @@index([giverId])
+}
+
+model UserBadgeAllocation {
+  id                String    @id @default(uuid())
+  userId            String    // Reference to User
+  tier              BadgeTier
+  remaining         Int       @default(0)
+  lastReplenishedAt DateTime  @default(now())
+
+  // Relationships
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tier])
+  @@index([userId])
+}
+
+// Badge Case Models
+model UserBadgeCase {
+  id           String           @id @default(uuid())
+  userId       String           @unique
+  title        String?
+  isPublic     Boolean          @default(true)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  
+  // Relationships
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  badges       UserBadgeItem[]
+}
+
+model UserBadgeItem {
+  id             String         @id @default(uuid())
+  badgeCaseId    String
+  badgeInstanceId String
+  displayOrder   Int            @default(0)
+  addedAt        DateTime       @default(now())
+  
+  // Relationships
+  badgeCase      UserBadgeCase  @relation(fields: [badgeCaseId], references: [id], onDelete: Cascade)
+  badge          BadgeInstance  @relation(fields: [badgeInstanceId], references: [id], onDelete: Cascade)
+  
+  @@unique([badgeCaseId, badgeInstanceId])
+  @@index([badgeCaseId, displayOrder])
+}
+
+model GuildBadgeCase {
+  id             String           @id @default(uuid())
+  guildId        String           @unique
+  title          String?
+  isPublic       Boolean          @default(true)
+  featuredBadgeId String?         @unique // Optional featured badge for special display
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  
+  // Relationships
+  guild          Guild            @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  badges         GuildBadgeItem[]
+  featuredBadge  GuildBadgeItem?  @relation("FeaturedBadge", fields: [featuredBadgeId], references: [id], onDelete: SetNull)
+}
+
+model GuildBadgeItem {
+  id             String         @id @default(uuid())
+  badgeCaseId    String
+  badgeInstanceId String
+  displayOrder   Int            @default(0)
+  addedAt        DateTime       @default(now())
+  
+  // Relationships
+  badgeCase      GuildBadgeCase @relation(fields: [badgeCaseId], references: [id], onDelete: Cascade)
+  badge          BadgeInstance  @relation(fields: [badgeInstanceId], references: [id], onDelete: Cascade)
+  featuredIn     GuildBadgeCase? @relation("FeaturedBadge")
+  
+  @@unique([badgeCaseId, badgeInstanceId])
+  @@index([badgeCaseId, displayOrder])
+}
+
+// Notification System
+enum NotificationType {
+  GUILD_INVITE
+  BADGE_RECEIVED
+  GUILD_JOIN_REQUEST
+  RELATIONSHIP_REQUEST
+  GUILD_UPDATE
+  NEW_GUILD_MEMBER
+}
+
+model Notification {
+  id          String           @id @default(uuid())
+  userId      String
+  type        NotificationType
+  title       String
+  content     String           @db.Text
+  linkUrl     String?          // URL to relevant page when notification is clicked
+  isRead      Boolean          @default(false)
+  createdAt   DateTime         @default(now())
+  
+  // Additional fields for notification context
+  sourceId    String?          // ID of related entity (guild, badge, etc)
+  sourceType  String?          // Type of source ("guild", "badge", etc)
+  actorId     String?          // User who triggered the notification  
+  
+  // Relationships
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  actor       User?            @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+  
+  @@index([userId])
+  @@index([userId, isRead])
+  @@index([createdAt])
 }
