@@ -1,0 +1,516 @@
+// Prisma Schema for ViaGuild - Evolved Version
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// --- ENUMS ---
+
+enum GuildMemberRank {
+  S
+  A
+  B
+  C
+  D
+  E // Default rank
+}
+
+enum RelationshipType {
+  PARENT
+  CHILD
+  PARTNER
+  CLUSTER
+  RIVAL
+}
+
+enum ContactType {
+  WEBSITE
+  EMAIL
+  DISCORD
+  TWITTER
+  BLUESKY
+  TWITCH
+  GITHUB
+  LINKEDIN
+  CUSTOM
+}
+
+enum BadgeShape {
+  CIRCLE
+  STAR
+  HEART
+  HEXAGON
+}
+
+enum BadgeTier { // Used for UserBadgeAllocation and potentially BadgeTemplate default tiers
+  GOLD
+  SILVER
+  BRONZE
+}
+
+enum NotificationType {
+  GUILD_INVITE
+  BADGE_RECEIVED
+  GUILD_JOIN_REQUEST
+  RELATIONSHIP_REQUEST
+  GUILD_UPDATE
+  NEW_GUILD_MEMBER
+  ROLE_ASSIGNED
+  RANK_UPDATED
+  CATEGORY_PRIMARY_SET
+  // Add more as new features arise
+}
+
+// --- CORE MODELS ---
+
+model User {
+  id                      String    @id @default(uuid())
+  email                   String    @unique
+  username                String    @unique // Unique handle
+  displayName             String?            // For display purposes
+  passwordHash            String
+  bio                     String?
+  avatar                  String?            // Base64 encoded image data or file path
+  isPublic                Boolean   @default(true)
+  hiddenAccounts          String[]  @default([]) // Array of social account IDs to hide
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+
+  // Relationships - Permissions & Roles
+  systemRoles             UserSystemRole[]
+
+  // Relationships - Social & Guilds
+  socialAccounts          SocialAccount[]
+  createdGuilds           Guild[]                 @relation("GuildCreator")
+  updatedGuilds           Guild[]                 @relation("GuildUpdater") // Guilds last updated by this user
+  guildMemberships        GuildMembership[]
+  createdRelationships    GuildRelationship[]     @relation("RelationshipCreator") // Guild relationships created by this user
+
+  // Relationships - Badges
+  givenBadgesAsUser       BadgeInstance[]         @relation("UserGivenBadges")    // Badges given directly by this user
+  receivedBadgesAsUser    BadgeInstance[]         @relation("UserReceivedBadges") // Badges received directly by this user
+  createdBadgeTemplates   BadgeTemplate[]         @relation("UserCreatedTemplates") // Templates created by this user
+  badgeAllocations        UserBadgeAllocation[]   // Tiered badge allocations for this user
+  badgeCase               UserBadgeCase?          // User's personal showcase of received badges
+
+  // Relationships - Categories
+  primaryGuildsPerCategory UserCategoryPrimaryGuild[] // User's designated primary guilds for specific categories
+  // createdCategories         Category[]              @relation("UserCreatedCategories") // If users can create categories
+
+  // Relationships - Notifications
+  notifications           Notification[]          @relation("NotificationRecipient")
+  actorNotifications      Notification[]          @relation("NotificationActor") // Notifications where this user was the actor
+}
+
+model SocialAccount {
+  id                      String   @id @default(uuid())
+  provider                String   // "twitter", "bluesky", "twitch", "discord"
+  providerId              String   // ID from the provider
+  username                String   // Username from the provider
+  encryptedCredentials    String?  // Encrypted app password or OAuth token for future use (e.g. posting on their behalf)
+  user                    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId                  String
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  @@unique([provider, providerId])
+  @@index([userId])
+}
+
+model Guild {
+  id            String   @id @default(uuid())
+  name          String   @unique // Unique handle/slug for the guild
+  displayName   String?         // For display purposes
+  description   String   @db.Text
+  avatar        String?         // URL to image storage
+  isOpen        Boolean  @default(false)
+  createdById   String
+  updatedById   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relationships - Creator/Updater
+  creator       User     @relation("GuildCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy     User?    @relation("GuildUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  // Relationships - Members & Structure
+  memberships   GuildMembership[]
+  roles         Role[]                  @relation("GuildCustomRoles") // Custom roles defined for this guild
+  contacts      GuildContact[]
+
+  // Relationships - Badges
+  givenBadgesAsGuild    BadgeInstance[]   @relation("GuildGivenBadges")    // Badges given by this guild as an entity
+  receivedBadgesAsGuild BadgeInstance[]   @relation("GuildReceivedBadges") // Badges received by this guild as an entity
+  badgeTemplates        BadgeTemplate[]   @relation("GuildOwnedTemplates")  // Badge templates "owned" or designed by this guild
+  badgeCase             GuildBadgeCase?   // Guild's showcase of received badges
+
+  // Relationships - Inter-Guild
+  outgoingRelationships GuildRelationship[] @relation("SourceRelationships")
+  incomingRelationships GuildRelationship[] @relation("TargetRelationships")
+
+  // Relationships - Categories
+  categories            GuildCategory[]   // Categories this guild belongs to
+  designatedAsPrimaryInCategory UserCategoryPrimaryGuild[] // Instances where this guild is marked primary for a category by users
+
+  @@index([name])
+}
+
+// --- PERMISSION SYSTEM ---
+
+model Permission {
+  id              String   @id @default(cuid())
+  key             String   @unique // e.g., "GUILD_KICK_MEMBER", "BADGE_TEMPLATE_CREATE_GUILD"
+  description     String?
+  permissionGroup String?  // For UI grouping, e.g., "Guild Management", "Badge Administration"
+  createdAt       DateTime @default(now())
+
+  rolePermissions RolePermission[]
+
+  @@index([key])
+}
+
+model Role {
+  id            String    @id @default(cuid())
+  name          String    // e.g., "Owner", "Admin", "Member", "Treasurer", "SuperAdmin"
+  description   String?
+  guildId       String?   // If null, it's a system-level role. If set, it's a custom role for that specific guild.
+  isSystemRole  Boolean   @default(false) // True for ViaGuild predefined roles (Owner, Admin, Member, SuperAdmin)
+  isDefaultRole Boolean   @default(false) // e.g., new guild members get this role by default for their guild
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  guild         Guild?    @relation("GuildCustomRoles", fields: [guildId], references: [id], onDelete: Cascade) // Custom roles are deleted if guild is deleted
+  permissions   RolePermission[]
+  guildMemberships GuildMembership[] // User-guild links that use this role
+  systemUsers   UserSystemRole[] // Users who have this system-level role
+
+  @@unique([name, guildId]) // Role names must be unique within a guild (or globally if guildId is null)
+  @@index([guildId])
+}
+
+model RolePermission { // Join table for Roles and Permissions
+  id           String     @id @default(cuid())
+  roleId       String
+  permissionId String
+  assignedAt   DateTime   @default(now())
+  // assignedById String? // User who assigned this permission to the role (for auditing)
+
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  // assignedBy   User?      @relation(fields: [assignedById], references: [id], onDelete: SetNull)
+
+  @@unique([roleId, permissionId])
+  @@index([roleId])
+  @@index([permissionId])
+}
+
+model UserSystemRole { // Assigns system-wide roles (like SuperAdmin) to users
+  id        String   @id @default(cuid())
+  userId    String
+  roleId    String   // Must be a Role where guildId is null and isSystemRole is true
+  assignedAt DateTime @default(now())
+  // assignedById User? // User who assigned this system role
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      Role     @relation(fields: [roleId], references: [id], onDelete:Cascade) // Should point to a system role
+
+  @@unique([userId, roleId])
+  @@index([userId])
+  @@index([roleId])
+}
+
+
+// --- GUILD STRUCTURE & MEMBERSHIP ---
+
+model GuildMembership {
+  id        String   @id @default(uuid())
+  userId    String
+  guildId   String
+  roleId    String   // Points to an entry in the Role table
+  isPrimary Boolean  @default(false) // Global primary guild for the user
+  rank      GuildMemberRank @default(E)
+  joinedAt  DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  guild     Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  role      Role     @relation(fields: [roleId], references: [id], onDelete: Restrict) // Don't delete role if in use
+
+  @@unique([userId, guildId], name: "uniqueUserGuild")
+  @@index([userId])
+  @@index([guildId])
+  @@index([roleId])
+  @@index([userId, isPrimary])
+}
+
+model GuildRelationship {
+  id             String           @id @default(uuid())
+  sourceGuildId  String
+  targetGuildId  String
+  type           RelationshipType
+  createdById    String           // User who created the relationship
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  sourceGuild    Guild            @relation("SourceRelationships", fields: [sourceGuildId], references: [id], onDelete: Cascade)
+  targetGuild    Guild            @relation("TargetRelationships", fields: [targetGuildId], references: [id], onDelete: Cascade)
+  creator        User             @relation("RelationshipCreator", fields: [createdById], references: [id], onDelete:Restrict)
+
+  @@unique([sourceGuildId, targetGuildId])
+  @@index([sourceGuildId])
+  @@index([targetGuildId])
+}
+
+model GuildContact {
+  id           String      @id @default(uuid())
+  guildId      String
+  type         ContactType
+  label        String?     // For custom contact types
+  value        String      // The actual contact info (URL, username, etc.)
+  displayOrder Int         @default(0)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  guild        Guild       @relation(fields: [guildId], references: [id], onDelete: Cascade)
+
+  @@index([guildId, displayOrder])
+}
+
+
+// --- BADGE SYSTEM ---
+
+model BadgeTemplate {
+  id            String     @id @default(uuid())
+  name          String
+  description   String?    @db.Text
+  imageUrl      String?
+  shapeType     BadgeShape @default(CIRCLE)
+  borderColor   String     // Hex color code (#RRGGBB)
+  tier          BadgeTier? // Optional: For default/global templates that might have a tier like UserBadgeAllocation
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  // Creator/Owner of the template
+  creatorUserId String?    // User who created this template (if not guild-owned)
+  ownedByGuildId String?   // Guild that owns/designed this template (if not user-created)
+
+  creatorUser   User?      @relation("UserCreatedTemplates", fields: [creatorUserId], references: [id], onDelete: SetNull)
+  ownedByGuild  Guild?     @relation("GuildOwnedTemplates", fields: [ownedByGuildId], references: [id], onDelete: SetNull)
+  instances     BadgeInstance[]
+
+  // A template should be either user-created or guild-owned, or system (both null)
+  @@index([creatorUserId])
+  @@index([ownedByGuildId])
+}
+
+model BadgeInstance {
+  id            String    @id @default(uuid())
+  templateId    String
+  assignedAt    DateTime  @default(now()) // Renamed from givenAt
+  revokedAt     DateTime?
+  message       String?   // Optional message from the giver or context of assignment
+
+  // --- Giver (Polymorphic: User or Guild) ---
+  userGiverId   String?
+  guildGiverId  String?
+
+  // --- Receiver (Polymorphic: User or Guild) ---
+  userReceiverId  String?
+  guildReceiverId String?
+
+  guildAssignmentDetails GuildAssignmentDetails? @relation("BadgeInstanceToGuildAssignmentDetails")
+
+  // Relationships
+  template               BadgeTemplate           @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  userGiver              User?                   @relation("UserGivenBadges", fields: [userGiverId], references: [id], onDelete: SetNull)
+  guildGiver             Guild?                  @relation("GuildGivenBadges", fields: [guildGiverId], references: [id], onDelete: SetNull)
+  userReceiver           User?                   @relation("UserReceivedBadges", fields: [userReceiverId], references: [id], onDelete:Cascade)
+  guildReceiver          Guild?                  @relation("GuildReceivedBadges", fields: [guildReceiverId], references: [id], onDelete:Cascade)
+
+  // Links to Badge Case Items
+  userBadgeItems  UserBadgeItem[]
+  guildBadgeItems GuildBadgeItem[]
+
+  // CHECK constraint (conceptual, enforce in application logic):
+  // 1. (userGiverId != null XOR guildGiverId != null)
+  // 2. (userReceiverId != null XOR guildReceiverId != null)
+  // 3. If guildGiverId is set, detailsOfGuildAssignmentId can be set.
+
+  @@index([templateId])
+  @@index([userGiverId])
+  @@index([guildGiverId])
+  @@index([userReceiverId])
+  @@index([guildReceiverId])
+}
+
+model GuildAssignmentDetails { // Stores specific info on how a guild assigned a badge
+  id                String   @id @default(uuid())
+  badgeInstanceId   String   @unique // Link back to the BadgeInstance
+  badgeInstance     BadgeInstance @relation("BadgeInstanceToGuildAssignmentDetails", fields: [badgeInstanceId], references: [id], onDelete: Cascade)
+
+  assignmentMethod  String?  // e.g., "MEMBER_VOTE", "ADMIN_DECISION", "AUTOMATED_MILESTONE"
+  voteRecordId      String?  // If applicable, link to a vote record elsewhere
+  approvalChain     Json?    // Store who approved it, if a multi-step process
+  notes             String?  @db.Text
+  assignedByUserId  String?  // User who actioned this guild assignment (if applicable)
+
+  // assignedByUser    User?    @relation(fields:[assignedByUserId], references: [id], onDelete:SetNull)
+
+  @@index([badgeInstanceId])
+}
+
+
+model UserBadgeAllocation { // User's quota of badges (e.g., Gold, Silver, Bronze) to give
+  id                 String    @id @default(uuid())
+  userId             String
+  tier               BadgeTier // e.g., GOLD, SILVER, BRONZE
+  remaining          Int       @default(0)
+  lastReplenishedAt  DateTime  @default(now())
+
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tier])
+  @@index([userId])
+}
+
+model UserBadgeCase { // User's personal showcase for their received badges
+  id           String          @id @default(uuid())
+  userId       String          @unique
+  title        String?
+  isPublic     Boolean         @default(true)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  badges       UserBadgeItem[]
+}
+
+model UserBadgeItem { // An item in a user's badge case, linking to a BadgeInstance
+  id              String        @id @default(uuid())
+  badgeCaseId     String
+  badgeInstanceId String        // The specific badge instance being showcased
+  displayOrder    Int           @default(0)
+  addedAt         DateTime      @default(now())
+
+  badgeCase       UserBadgeCase @relation(fields: [badgeCaseId], references: [id], onDelete: Cascade)
+  badge           BadgeInstance @relation(fields: [badgeInstanceId], references: [id], onDelete: Cascade)
+
+  @@unique([badgeCaseId, badgeInstanceId])
+  @@index([badgeCaseId, displayOrder])
+}
+
+model GuildBadgeCase { // Guild's showcase for their received badges
+  id              String          @id @default(uuid())
+  guildId         String          @unique
+  title           String?
+  isPublic        Boolean         @default(true)
+  featuredBadgeId String?         @unique // Optional featured badge for special display
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  guild           Guild           @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  badges          GuildBadgeItem[]
+  featuredBadge   GuildBadgeItem? @relation("FeaturedGuildBadgeInCase", fields: [featuredBadgeId], references: [id], onDelete: SetNull)
+}
+
+model GuildBadgeItem { // An item in a guild's badge case
+  id              String          @id @default(uuid())
+  badgeCaseId     String
+  badgeInstanceId String
+  displayOrder    Int             @default(0)
+  addedAt         DateTime        @default(now())
+
+  badgeCase       GuildBadgeCase  @relation(fields: [badgeCaseId], references: [id], onDelete: Cascade)
+  badge           BadgeInstance   @relation(fields: [badgeInstanceId], references: [id], onDelete: Cascade)
+  featuredIn      GuildBadgeCase? @relation("FeaturedGuildBadgeInCase") // Link back if this item is the featured one
+
+  @@unique([badgeCaseId, badgeInstanceId])
+  @@index([badgeCaseId, displayOrder])
+}
+
+
+// --- GUILD CATEGORIES ---
+
+model Category {
+  id                  String    @id @default(cuid())
+  name                String    @unique
+  description         String?
+  isSystemCategory    Boolean   @default(false)  // True if created by ViaGuild admins
+  allowsGuildPrimary  Boolean   @default(true) // True if users can mark a guild as 'primary' for this category
+  parentId            String?                 // For hierarchical categories
+  // creatorId           String?                 // User who created this category (if user-creatable)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  parent              Category? @relation("SubCategories", fields: [parentId], references: [id], onDelete:SetNull)
+  subcategories       Category[] @relation("SubCategories")
+  // creator             User?     @relation("UserCreatedCategories" fields: [creatorId], references: [id], onDelete:SetNull)
+
+  guildsInCategories  GuildCategory[]           // Guilds associated with this category
+  userPrimaryGuilds   UserCategoryPrimaryGuild[] // User designations of primary guilds in this category
+
+  @@index([parentId])
+}
+
+model GuildCategory { // Join table for Guilds and Categories
+  guildId     String
+  categoryId  String
+  assignedAt  DateTime @default(now())
+  // assignedById String? // User ID of who assigned the guild to category (permission controlled)
+
+  guild       Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  category    Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  // assignedBy  User?    @relation(fields:[assignedById], references: [id], onDelete:SetNull)
+
+
+  @@id([guildId, categoryId])
+  @@index([guildId])
+  @@index([categoryId])
+}
+
+model UserCategoryPrimaryGuild { // Stores a user's primary guild FOR a specific category
+  userId      String
+  categoryId  String
+  guildId     String   // The guild the user has marked as primary for this category
+
+  setAt       DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category    Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  guild       Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+
+  // User must be a member of guildId, guildId must be in categoryId, and category.allowsGuildPrimary must be true.
+  @@id([userId, categoryId]) // A user can only have one primary guild per category
+  @@index([userId])
+  @@index([categoryId])
+  @@index([guildId])
+}
+
+
+// --- NOTIFICATION SYSTEM ---
+
+model Notification {
+  id           String           @id @default(uuid())
+  userId       String           // The user who receives the notification
+  type         NotificationType
+  title        String
+  content      String           @db.Text
+  linkUrl      String?          // URL to relevant page when notification is clicked
+  isRead       Boolean          @default(false)
+  createdAt    DateTime         @default(now())
+
+  // Contextual information about the notification
+  sourceId     String?          // ID of related entity (guild, badge, user, etc.)
+  sourceType   String?          // Type of source ("guild", "badgeInstance", "user", "category")
+  actorId      String?          // User who triggered the notification (if applicable)
+
+  recipient    User             @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  actor        User?            @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([userId, isRead])
+  @@index([createdAt])
+} 
