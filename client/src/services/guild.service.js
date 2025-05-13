@@ -75,6 +75,7 @@ class GuildService {
         const newGuild = {
           id: `g${Math.floor(Math.random() * 1000)}`,
           name: guildData.name,
+          displayName: guildData.displayName || guildData.name,
           description: guildData.description,
           avatar: guildData.avatar || null,
           isOpen: guildData.isOpen || false,
@@ -113,6 +114,7 @@ class GuildService {
         const updatedGuild = {
           ...mockGuildDetails,
           ...guildData,
+          displayName: guildData.displayName || guildData.name,
           updatedAt: new Date().toISOString()
         };
         

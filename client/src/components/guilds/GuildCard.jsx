@@ -10,6 +10,7 @@ const GuildCard = ({ guild, onSetPrimary }) => {
   const {
     id,
     name,
+    displayName,
     description,
     avatar,
     memberCount,
@@ -40,6 +41,11 @@ const GuildCard = ({ guild, onSetPrimary }) => {
     return name ? name.charAt(0).toUpperCase() : '?';
   };
 
+  // Get display name, falling back to name if displayName is not set
+  const getDisplayName = () => {
+    return displayName || name;
+  };
+
   return (
     <div className="bg-white rounded-lg shadow-md overflow-hidden h-full flex flex-col">
       {/* Guild Banner */}
@@ -62,18 +68,21 @@ const GuildCard = ({ guild, onSetPrimary }) => {
           {avatar ? (
             <img 
               src={avatar} 
-              alt={`${name} avatar`} 
+              alt={`${getDisplayName()} avatar`} 
               className="w-full h-full rounded-full object-cover"
             />
           ) : (
-            getInitial(name)
+            getInitial(getDisplayName())
           )}
         </div>
       </div>
       
       {/* Guild Content */}
       <div className="p-4 flex-grow">
-        <h3 className="text-xl font-semibold text-gray-800 text-center mb-2">{name}</h3>
+        <h3 className="text-xl font-semibold text-gray-800 text-center mb-2">{getDisplayName()}</h3>
+        {displayName && (
+          <p className="text-sm text-gray-500 text-center mb-2">@{name}</p>
+        )}
         
         <div className="flex justify-center items-center gap-2 mb-3">
           <span className="text-gray-500 text-sm">
@@ -115,6 +124,7 @@ GuildCard.propTypes = {
   guild: PropTypes.shape({
     id: PropTypes.string.isRequired,
     name: PropTypes.string.isRequired,
+    displayName: PropTypes.string,
     description: PropTypes.string.isRequired,
     avatar: PropTypes.string,
     memberCount: PropTypes.number.isRequired,

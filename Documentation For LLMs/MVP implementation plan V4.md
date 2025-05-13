@@ -2,6 +2,7 @@
 
 ## Overview
 This document outlines the revised implementation plan for the ViaGuild Minimum Viable Product (MVP). Building on the foundation of existing functionality (user registration, authentication, social account linking, and user search), this plan takes an iterative, test-driven approach with parallel frontend and backend development to deliver user value sooner.
+Completed items of the plan have been and will be marked with: ✅
 
 ## Key Implementation Principles
 

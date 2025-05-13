@@ -26,7 +26,12 @@ const hasGuildRole = (allowedRoles) => {
             userId,
             guildId
           }
-        }
+        },
+        include: {
+          role: {
+            select: { name: true },
+          },
+        },
       });
       
       // Check if user is a member of the guild
@@ -34,10 +39,10 @@ const hasGuildRole = (allowedRoles) => {
         return res.status(403).json({ error: 'You are not a member of this guild' });
       }
       
-      // Check if user has one of the allowed roles
-      if (!allowedRoles.includes(membership.role)) {
+      // Check if the fetched role's name is one of the allowed roles
+      if (!membership.role || !membership.role.name || !allowedRoles.includes(membership.role.name)) {
         return res.status(403).json({ 
-          error: `This action requires ${allowedRoles.join(' or ')} role` 
+          error: `This action requires one of the following roles: ${allowedRoles.join(', ')}` 
         });
       }
       
@@ -47,7 +52,10 @@ const hasGuildRole = (allowedRoles) => {
       // User has required role, proceed
       next();
     } catch (error) {
-      next(error);
+      // Log the error for debugging purposes on the server
+      console.error('Error in hasGuildRole middleware:', error);
+      // Pass a generic error to the client or use a centralized error handler
+      next(new Error('An internal server error occurred while checking permissions.'));
     }
   };
 };

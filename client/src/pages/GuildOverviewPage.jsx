@@ -46,6 +46,7 @@ const GuildOverviewPage = () => {
   
   // Form states for Edit Guild modal
   const [guildNameInput, setGuildNameInput] = useState('Design Masters');
+  const [guildDisplayNameInput, setGuildDisplayNameInput] = useState('Design Masters Guild');
   const [avatarPreview, setAvatarPreview] = useState(null);
 
   // State for dynamic contacts in Edit Contacts Modal
@@ -322,7 +323,8 @@ const GuildOverviewPage = () => {
               <div className="guild-profile-header">
                 <div className="guild-avatar-large">D</div>
                 <div className="guild-info">
-                  <h2 className="guild-name">Design Masters</h2>
+                  <h2 className="guild-name">{guildDisplayNameInput}</h2>
+                  <p className="guild-handle">@{guildNameInput}</p>
                   <div className="guild-meta">
                     <div className="guild-meta-item">
                       <Users size={18} />
@@ -578,60 +580,84 @@ const GuildOverviewPage = () => {
       
       {/* Edit Guild Modal */}
       {editGuildModalOpen && (
-        <div className="modal-backdrop active">
-          <div className="modal">
+        <div className="modal-overlay">
+          <div className="modal-content">
             <div className="modal-header">
-              <h3 className="modal-title">Edit Guild</h3>
-              <button className="modal-close" onClick={() => setEditGuildModalOpen(false)}>
-                <X size={24} />
+              <h3>Edit Guild</h3>
+              <button 
+                className="modal-close"
+                onClick={() => setEditGuildModalOpen(false)}
+              >
+                <X size={20} />
               </button>
             </div>
             <div className="modal-body">
               <div className="form-group">
-                <label className="form-label" htmlFor="guild-name">Guild Name</label>
-                <input 
-                  type="text" 
-                  className="form-input" 
-                  id="guild-name" 
+                <label htmlFor="guildName">Guild Handle</label>
+                <input
+                  type="text"
+                  id="guildName"
                   value={guildNameInput}
                   onChange={(e) => setGuildNameInput(e.target.value)}
-                  placeholder="Enter guild name" 
+                  placeholder="Enter guild handle"
+                  className="form-input"
                 />
-                <div className="form-hint">Guild names must be unique across ViaGuild</div>
+                <small className="form-help">This is the unique identifier for your guild (e.g., @designmasters)</small>
               </div>
               
               <div className="form-group">
-                <label className="form-label">Guild Avatar</label>
-                <div className="avatar-upload-container">
+                <label htmlFor="guildDisplayName">Display Name</label>
+                <input
+                  type="text"
+                  id="guildDisplayName"
+                  value={guildDisplayNameInput}
+                  onChange={(e) => setGuildDisplayNameInput(e.target.value)}
+                  placeholder="Enter display name"
+                  className="form-input"
+                />
+                <small className="form-help">This is the name that will be shown to users</small>
+              </div>
+              
+              <div className="form-group">
+                <label>Guild Avatar</label>
+                <div className="avatar-upload">
                   <div className="avatar-preview">
                     {avatarPreview ? (
                       <img src={avatarPreview} alt="Avatar preview" />
                     ) : (
-                      <div className="guild-avatar-preview">D</div>
+                      <div className="avatar-placeholder">D</div>
                     )}
                   </div>
-                  <div className="avatar-upload-button">
-                    <label htmlFor="avatar-upload" className="button button-secondary">
-                      <Upload size={16} />
-                      Upload Image
-                    </label>
-                    <input 
-                      type="file" 
-                      id="avatar-upload" 
-                      accept="image/*" 
-                      onChange={handleAvatarChange}
-                      style={{ display: 'none' }} 
-                    />
-                    <div className="form-hint">
-                      Recommended: Square image, at least 200x200px (PNG, JPG)
-                    </div>
-                  </div>
+                  <input
+                    type="file"
+                    id="avatar"
+                    accept="image/*"
+                    onChange={handleAvatarChange}
+                    className="hidden"
+                  />
+                  <label htmlFor="avatar" className="button button-secondary">
+                    <Upload size={16} />
+                    Upload Avatar
+                  </label>
                 </div>
               </div>
             </div>
             <div className="modal-footer">
-              <button className="button button-secondary" onClick={() => setEditGuildModalOpen(false)}>Cancel</button>
-              <button className="button button-primary" onClick={() => setEditGuildModalOpen(false)}>Save Changes</button>
+              <button 
+                className="button button-secondary"
+                onClick={() => setEditGuildModalOpen(false)}
+              >
+                Cancel
+              </button>
+              <button 
+                className="button button-primary"
+                onClick={() => {
+                  // TODO: Implement save functionality
+                  setEditGuildModalOpen(false);
+                }}
+              >
+                Save Changes
+              </button>
             </div>
           </div>
         </div>
@@ -1128,6 +1154,11 @@ We regularly organize challenges, portfolio reviews, and skill-sharing sessions 
           margin-bottom: 0.5rem;
         }
 
+        .guild-handle {
+          font-size: 0.875rem;
+          color: var(--secondary);
+        }
+
         .guild-meta {
           display: flex;
           gap: 1rem;
@@ -1148,7 +1179,7 @@ We regularly organize challenges, portfolio reviews, and skill-sharing sessions 
         }
 
         /* Avatar preview in Edit Guild modal */
-        .avatar-upload-container {
+        .avatar-upload {
           display: flex;
           gap: 1.5rem;
           align-items: center;
@@ -1168,9 +1199,9 @@ We regularly organize challenges, portfolio reviews, and skill-sharing sessions 
           object-fit: cover;
         }
 
-        .guild-avatar-preview {
-          width: 100%;
-          height: 100%;
+        .avatar-placeholder {
+          width: 100px;
+          height: 100px;
           background-color: var(--primary-light);
           display: flex;
           align-items: center;
@@ -1180,7 +1211,7 @@ We regularly organize challenges, portfolio reviews, and skill-sharing sessions 
           font-size: 2.5rem;
         }
 
-        .avatar-upload-button {
+        .avatar-upload button {
           flex: 1;
         }
 

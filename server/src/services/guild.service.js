@@ -22,6 +22,7 @@ class GuildService {
       const guild = await prisma.guild.create({
         data: {
           name: guildData.name,
+          displayName: guildData.displayName || guildData.name, // Use name as fallback
           description: guildData.description,
           avatar: guildData.avatar,
           isOpen: guildData.isOpen || false,
@@ -30,12 +31,28 @@ class GuildService {
         }
       });
 
+      // Fetch the system OWNER role ID
+      const ownerRole = await prisma.appRole.findFirst({
+        where: {
+          name: 'OWNER',
+          isSystemRole: true,
+          guildId: null, // Ensure it's a global system role
+        },
+        select: { id: true },
+      });
+
+      if (!ownerRole) {
+        // This should ideally not happen if system roles were seeded correctly.
+        // In a real app, you might have a more robust way to get these IDs (e.g., constants or cache).
+        throw new Error('System OWNER role not found. Please ensure system roles are seeded.');
+      }
+
       // Create membership for creator as OWNER
       await prisma.guildMembership.create({
         data: {
           userId,
           guildId: guild.id,
-          role: 'OWNER',
+          roleId: ownerRole.id, // Assign the roleId of the fetched OWNER AppRole
           // If user has no primary guild yet, make this one primary
           isPrimary: await this.shouldBeSetAsPrimary(userId)
         }
@@ -110,18 +127,25 @@ class GuildService {
     // Check if guild exists
     const guild = await prisma.guild.findUnique({
       where: { id: guildId },
+      // Include memberships AND the role object within each membership for permission check
       include: {
-        memberships: true
-      }
+        memberships: {
+          where: { userId }, // Optimization: only fetch the relevant user's membership
+          include: {
+            role: true, // Include the AppRole object associated with the membership
+          },
+        },
+      },
     });
 
     if (!guild) {
       throw new Error('Guild not found');
     }
 
-    // Check if user has permission (must be OWNER or ADMIN)
-    const membership = guild.memberships.find(m => m.userId === userId);
-    if (!membership || (membership.role !== 'OWNER' && membership.role !== 'ADMIN')) {
+    // Since we filtered memberships to the specific userId, we can take the first (and only) one.
+    const membership = guild.memberships[0];
+
+    if (!membership || !membership.role || (membership.role.name !== 'OWNER' && membership.role.name !== 'ADMIN')) {
       throw new Error('You do not have permission to update this guild');
     }
 
@@ -130,6 +154,7 @@ class GuildService {
       where: { id: guildId },
       data: {
         name: guildData.name,
+        displayName: guildData.displayName || guildData.name, // Use name as fallback
         description: guildData.description,
         avatar: guildData.avatar,
         isOpen: guildData.isOpen,
@@ -149,17 +174,23 @@ class GuildService {
     const guild = await prisma.guild.findUnique({
       where: { id: guildId },
       include: {
-        memberships: true
-      }
+        memberships: {
+          where: { userId }, // Optimization: only fetch the relevant user's membership
+          include: {
+            role: true, // Include the AppRole object
+          },
+        },
+      },
     });
 
     if (!guild) {
       throw new Error('Guild not found');
     }
 
+    const membership = guild.memberships[0]; // User's specific membership
+
     // Check if user has permission (only OWNER can delete)
-    const membership = guild.memberships.find(m => m.userId === userId);
-    if (!membership || membership.role !== 'OWNER') {
+    if (!membership || !membership.role || membership.role.name !== 'OWNER') {
       throw new Error('Only the guild owner can delete this guild');
     }
 
@@ -191,13 +222,16 @@ class GuildService {
               select: { memberships: true }
             }
           }
+        },
+        role: {
+          select: { name: true }
         }
       }
     });
 
     return memberships.map(membership => ({
       ...membership.guild,
-      role: membership.role,
+      role: membership.role ? membership.role.name : null,
       isPrimary: membership.isPrimary,
       memberCount: membership.guild._count.memberships
     }));
@@ -279,12 +313,27 @@ class GuildService {
       throw new Error('You are already a member of this guild');
     }
 
+    // Fetch the system MEMBER role ID
+    const memberRole = await prisma.appRole.findFirst({
+      where: {
+        name: 'MEMBER',
+        isSystemRole: true,
+        guildId: null, // Ensure it's a global system role
+      },
+      select: { id: true },
+    });
+
+    if (!memberRole) {
+      // This should ideally not happen if system roles were seeded correctly.
+      throw new Error('System MEMBER role not found. Please ensure system roles are seeded.');
+    }
+
     // Create membership
     return prisma.guildMembership.create({
       data: {
         userId,
         guildId,
-        role: 'MEMBER',
+        roleId: memberRole.id, // Assign the roleId of the fetched MEMBER AppRole
         isPrimary: await this.shouldBeSetAsPrimary(userId)
       }
     });
@@ -300,23 +349,32 @@ class GuildService {
     // Check if guild exists
     const guild = await prisma.guild.findUnique({
       where: { id: guildId },
-      include: {
-        memberships: true
-      }
+      // We don't need all memberships initially, just confirm guild exists
     });
 
     if (!guild) {
       throw new Error('Guild not found');
     }
 
-    // Check if user is a member
-    const membership = guild.memberships.find(m => m.userId === userId);
+    // Check if user is a member and get their role
+    const membership = await prisma.guildMembership.findUnique({
+      where: {
+        userId_guildId: { // Assuming the @@unique([userId, guildId], name: "uniqueUserGuild") exists
+          userId,
+          guildId,
+        },
+      },
+      include: {
+        role: { select: { name: true } }, // Include the role name
+      },
+    });
+
     if (!membership) {
       throw new Error('You are not a member of this guild');
     }
 
     // Check if user is the owner
-    if (membership.role === 'OWNER') {
+    if (membership.role && membership.role.name === 'OWNER') {
       throw new Error('The owner cannot leave the guild. Transfer ownership first or delete the guild');
     }
 
@@ -335,64 +393,109 @@ class GuildService {
    * Update member role
    * @param {string} guildId - Guild ID
    * @param {string} targetUserId - ID of the user to update
-   * @param {string} role - New role
+   * @param {string} newRoleId - ID of the AppRole to assign
    * @param {string} actorUserId - ID of the user performing the update
    * @returns {Promise<Object>} Updated membership
    */
-  async updateMemberRole(guildId, targetUserId, role, actorUserId) {
-    // Check if guild exists
+  async updateMemberRole(guildId, targetUserId, newRoleId, actorUserId) {
+    // Fetch guild and include actor's and target's memberships with their roles
     const guild = await prisma.guild.findUnique({
       where: { id: guildId },
       include: {
-        memberships: true
-      }
+        memberships: {
+          where: {
+            OR: [{ userId: actorUserId }, { userId: targetUserId }],
+          },
+          include: {
+            role: { select: { id: true, name: true } }, // Include role id and name
+          },
+        },
+      },
     });
 
     if (!guild) {
       throw new Error('Guild not found');
     }
 
-    // Check if actor has permission (must be OWNER)
     const actorMembership = guild.memberships.find(m => m.userId === actorUserId);
-    if (!actorMembership || actorMembership.role !== 'OWNER') {
+    const targetMembership = guild.memberships.find(m => m.userId === targetUserId);
+
+    // Check if actor has permission (must be OWNER)
+    if (!actorMembership || !actorMembership.role || actorMembership.role.name !== 'OWNER') {
       throw new Error('Only the guild owner can update member roles');
     }
 
-    // Check if target user is a member
-    const targetMembership = guild.memberships.find(m => m.userId === targetUserId);
     if (!targetMembership) {
       throw new Error('User is not a member of this guild');
     }
 
-    // Validate role
-    const validRoles = ['OWNER', 'ADMIN', 'MEMBER'];
-    if (!validRoles.includes(role)) {
-      throw new Error('Invalid role');
+    // Validate the newRoleId exists as an AppRole (either system or custom for this guild)
+    const newAppRole = await prisma.appRole.findFirst({
+        where: { 
+            id: newRoleId,
+            OR: [
+                { guildId: null, isSystemRole: true }, // System role
+                { guildId: guildId } // Custom role for this guild
+            ]
+        }
+    });
+    if (!newAppRole) {
+        throw new Error('Invalid role ID or role not applicable to this guild.');
+    }
+    
+    const systemOwnerRole = await prisma.appRole.findFirst({ where: {name: 'OWNER', isSystemRole: true, guildId: null}, select: {id: true}});
+    const systemAdminRole = await prisma.appRole.findFirst({ where: {name: 'ADMIN', isSystemRole: true, guildId: null}, select: {id: true}});
+
+    if (!systemOwnerRole || !systemAdminRole) {
+        throw new Error('Core system roles (OWNER/ADMIN) not found.');
     }
 
-    // If changing to OWNER, update the current owner to ADMIN
-    if (role === 'OWNER') {
-      await prisma.guildMembership.updateMany({
+    // If changing target's role to OWNER and they are not already the owner
+    if (newAppRole.id === systemOwnerRole.id && targetMembership.roleId !== systemOwnerRole.id) {
+      // Find the current guild owner(s) other than the target user
+      const currentOtherOwners = await prisma.guildMembership.findMany({
         where: {
           guildId,
-          role: 'OWNER'
+          roleId: systemOwnerRole.id,
+          NOT: { userId: targetUserId } 
         },
-        data: {
-          role: 'ADMIN'
+      });
+
+      // Demote current other owner(s) to ADMIN
+      for (const owner of currentOtherOwners) {
+        await prisma.guildMembership.update({
+          where: { id: owner.id }, // Assuming GuildMembership has its own unique id
+          data: { roleId: systemAdminRole.id },
+        });
+      }
+    }
+    
+    // Prevent owner from changing their own role if they are the sole owner and not assigning to OWNER (which is a no-op covered above or a transfer to another OWNER)
+    if (actorMembership.userId === targetUserId && 
+        actorMembership.roleId === systemOwnerRole.id && 
+        newRoleId !== systemOwnerRole.id) {
+        const otherOwnersCount = await prisma.guildMembership.count({
+            where: {
+                guildId,
+                roleId: systemOwnerRole.id,
+                NOT: { userId: actorMembership.userId }
         }
       });
+        if (otherOwnersCount === 0) {
+            throw new Error('Cannot change your own role as the sole owner. Transfer ownership or delete the guild.');
+        }
     }
 
-    // Update membership
+    // Update target user's membership
     return prisma.guildMembership.update({
       where: {
-        userId_guildId: {
-          userId: targetUserId,
-          guildId
-        }
+        id: targetMembership.id // Use the membership ID for update (ensure GuildMembership has an id field)
       },
       data: {
-        role
+        roleId: newRoleId,
+      },
+      include: { // Return the updated membership with role name
+          role: {select: {name: true}}
       }
     });
   }
@@ -427,6 +530,30 @@ class GuildService {
       throw new Error('You are not a member of this guild');
     }
 
+    // Check if user has changed primary guild recently (within 4 weeks)
+    const lastPrimaryChange = await prisma.guildMembership.findFirst({
+      where: {
+        userId,
+        isPrimary: true,
+        primarySetAt: {
+          not: null
+        }
+      },
+      orderBy: {
+        primarySetAt: 'desc'
+      }
+    });
+
+    if (lastPrimaryChange?.primarySetAt) {
+      const fourWeeksAgo = new Date();
+      fourWeeksAgo.setDate(fourWeeksAgo.getDate() - 28); // 4 weeks = 28 days
+
+      if (lastPrimaryChange.primarySetAt > fourWeeksAgo) {
+        const daysLeft = Math.ceil((lastPrimaryChange.primarySetAt - fourWeeksAgo) / (1000 * 60 * 60 * 24));
+        throw new Error(`You can only change your primary guild once every 4 weeks. Please try again in ${daysLeft} days.`);
+      }
+    }
+
     // Reset all user's primary guilds
     await prisma.guildMembership.updateMany({
       where: {
@@ -434,7 +561,8 @@ class GuildService {
         isPrimary: true
       },
       data: {
-        isPrimary: false
+        isPrimary: false,
+        primarySetAt: null
       }
     });
 
@@ -447,7 +575,8 @@ class GuildService {
         }
       },
       data: {
-        isPrimary: true
+        isPrimary: true,
+        primarySetAt: new Date()
       }
     });
   }
@@ -499,6 +628,9 @@ class GuildService {
               avatar: true,
             },
           },
+          role: { // Include the AppRole object
+            select: { name: true }, // Select only the name
+          },
         },
       }),
       prisma.guildMembership.count({
@@ -510,7 +642,7 @@ class GuildService {
       userId: m.user.id,
       username: m.user.username,
       avatar: m.user.avatar,
-      role: m.role,
+      role: m.role ? m.role.name : null, // Use the role name
       joinedAt: m.joinedAt
     }));
 
@@ -539,10 +671,13 @@ class GuildService {
 
     const membership = await prisma.guildMembership.findUnique({
       where: {
-        uniqueUserGuild: { // Using the compound unique key name from schema.prisma
+        userId_guildId: { // Using the compound unique key name from schema.prisma
           userId,
           guildId,
         },
+      },
+      include: {
+        role: { select: { name: true } }, // Include the AppRole name
       },
     });
 
@@ -552,8 +687,8 @@ class GuildService {
       throw new Error('User not a member of this guild');
     }
 
-    const role = membership.role;
-    const isOwnerOrAdmin = role === 'OWNER' || role === 'ADMIN';
+    const roleName = membership.role ? membership.role.name : null;
+    const isOwnerOrAdmin = roleName === 'OWNER' || roleName === 'ADMIN';
 
     const permissions = {
       canEditGuildDetails: isOwnerOrAdmin,
@@ -566,9 +701,100 @@ class GuildService {
     return {
       guildId,
       userId,
-      role,
+      role: roleName, // Return the role name
       permissions,
     };
+  }
+
+  /**
+   * Set a guild as primary for a specific category
+   * @param {string} guildId - Guild ID
+   * @param {string} categoryId - Category ID
+   * @param {string} userId - User ID
+   * @returns {Promise<Object>} Updated category primary guild
+   */
+  async setCategoryPrimaryGuild(guildId, categoryId, userId) {
+    // Check if category exists and allows primary guilds
+    const category = await prisma.category.findUnique({
+      where: { id: categoryId }
+    });
+
+    if (!category) {
+      throw new Error('Category not found');
+    }
+
+    if (!category.allowsGuildPrimary) {
+      throw new Error('This category does not allow primary guilds');
+    }
+
+    // Check if guild exists and is in the category
+    const guildCategory = await prisma.guildCategory.findUnique({
+      where: {
+        guildId_categoryId: {
+          guildId,
+          categoryId
+        }
+      }
+    });
+
+    if (!guildCategory) {
+      throw new Error('Guild is not in this category');
+    }
+
+    // Check if user is a member of the guild
+    const membership = await prisma.guildMembership.findUnique({
+      where: {
+        userId_guildId: {
+          userId,
+          guildId
+        }
+      }
+    });
+
+    if (!membership) {
+      throw new Error('You are not a member of this guild');
+    }
+
+    // Check if user has changed category primary guild recently (within 4 weeks)
+    const lastCategoryPrimaryChange = await prisma.userCategoryPrimaryGuild.findFirst({
+      where: {
+        userId,
+        categoryId
+      },
+      orderBy: {
+        setAt: 'desc'
+      }
+    });
+
+    if (lastCategoryPrimaryChange?.setAt) {
+      const fourWeeksAgo = new Date();
+      fourWeeksAgo.setDate(fourWeeksAgo.getDate() - 28); // 4 weeks = 28 days
+
+      if (lastCategoryPrimaryChange.setAt > fourWeeksAgo) {
+        const daysLeft = Math.ceil((lastCategoryPrimaryChange.setAt - fourWeeksAgo) / (1000 * 60 * 60 * 24));
+        throw new Error(`You can only change your primary guild for this category once every 4 weeks. Please try again in ${daysLeft} days.`);
+      }
+    }
+
+    // Create or update the category primary guild
+    return prisma.userCategoryPrimaryGuild.upsert({
+      where: {
+        userId_categoryId: {
+          userId,
+          categoryId
+        }
+      },
+      create: {
+        userId,
+        categoryId,
+        guildId,
+        setAt: new Date()
+      },
+      update: {
+        guildId,
+        setAt: new Date()
+      }
+    });
   }
 }
 
