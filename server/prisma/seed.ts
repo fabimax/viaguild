@@ -4,6 +4,8 @@ import { seedGuilds } from './seeds/guilds';
 import { seedPermissions } from './seeds/system/permissions';
 import { seedSystemRoles } from './seeds/system/systemRoles';
 import { seedRolePermissions } from './seeds/system/rolePermissions';
+import { seedClusterSystemRoles } from './seeds/system/clusterSystemRoles';
+import { seedClusterRolePermissions } from './seeds/system/clusterRolePermissions';
 import { seedMemberships } from './seeds/memberships';
 
 const prisma = new PrismaClient();
@@ -16,8 +18,14 @@ async function main() {
   
   // System setup in order
   await seedPermissions(prisma);       // Defines all possible actions
-  await seedSystemRoles(prisma);       // Creates global system roles (OWNER, ADMIN, MODERATOR, MEMBER)
-  await seedRolePermissions(prisma);   // Assigns default permissions to those system roles
+  
+  // Guild System Roles & Permissions
+  await seedSystemRoles(prisma);       // Creates global system roles (CREATOR, ADMIN, MODERATOR, MEMBER)
+  await seedRolePermissions(prisma);   // Assigns default permissions to those system roles for guilds
+
+  // Cluster System Roles & Permissions
+  await seedClusterSystemRoles(prisma);      // Defines global system role templates for clusters (CLUSTER_CREATOR, etc.)
+  await seedClusterRolePermissions(prisma);  // Assigns default permissions to cluster system role templates
   
   await seedMemberships(prisma);       // Creates guild memberships with roles assigned
   
