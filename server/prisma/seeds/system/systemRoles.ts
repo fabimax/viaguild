@@ -9,13 +9,12 @@ import { PrismaClient } from '@prisma/client';
 export async function seedSystemRoles(prisma: PrismaClient) {
   console.log('🌱 Seeding system roles...');
 
-  const systemRoles = [
+  const systemRolesData = [
     {
-      name: 'OWNER',
-      description: 'Grants full control over a guild. Typically assigned to the guild creator.',
+      name: 'CREATOR',
+      description: 'Full control over a guild. Typically the user who created the guild.',
       isSystemRole: true,
-      isDefaultRole: false, // Usually not a default role for new members
-      guildId: null, // Global system role
+      isDefaultRole: false, // Not assigned by default to new members, but to the creator on guild creation
     },
     {
       name: 'ADMIN',
@@ -40,7 +39,7 @@ export async function seedSystemRoles(prisma: PrismaClient) {
     },
   ];
 
-  for (const roleData of systemRoles) {
+  for (const roleData of systemRolesData) {
     const existingRole = await prisma.role.findFirst({
       where: {
         name: roleData.name,

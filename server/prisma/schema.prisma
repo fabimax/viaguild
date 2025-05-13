@@ -111,10 +111,14 @@ model User {
   bansIssued   GuildBan[] @relation("BanIssuer")
 
   // Relations for audit trails (who assigned what)
-  rolePermissionsAssigned      RolePermission[]         @relation("RolePermissionAssignedBy")
-  systemRolesAssigned          UserSystemRole[]         @relation("UserSystemRoleAssignedBy")
+  rolePermissionsAssigned       RolePermission[]         @relation("RolePermissionAssignedBy")
+  systemRolesAssigned           UserSystemRole[]         @relation("UserSystemRoleAssignedBy")
   guildBadgeAssignmentsActioned GuildAssignmentDetails[] @relation("GuildAssignmentDetailsAssignedBy")
-  guildCategoriesAssigned      GuildCategory[]          @relation("GuildCategoryAssignedBy")
+  guildCategoriesAssigned       GuildCategory[]          @relation("GuildCategoryAssignedBy")
+
+  // Relationships - Clusters
+  createdClusters Cluster[]         @relation("ClusterCreator")
+  clusterRoles    UserClusterRole[] // Roles held by the user in various clusters
 }
 
 model SocialAccount {
@@ -167,10 +171,16 @@ model Guild {
   categories                    GuildCategory[] // Categories this guild belongs to
   designatedAsPrimaryInCategory UserCategoryPrimaryGuild[] // Instances where this guild is marked primary for a category by users
 
+  // Relationships - Clusters
+  primaryClusterId   String?             @unique // Optional: A guild can have one primary cluster
+  primaryCluster     Cluster?            @relation("PrimaryClusterForGuilds", fields: [primaryClusterId], references: [id], onDelete: SetNull)
+  clusterMemberships ClusterMembership[] // Guilds that are members of this cluster
+
   // Add this relation
   bans GuildBan[]
 
   @@index([name])
+  @@index([primaryClusterId])
 }
 
 // --- PERMISSION SYSTEM ---
@@ -182,7 +192,8 @@ model Permission {
   permissionGroup String? // For UI grouping, e.g., "Guild Management", "Badge Administration"
   createdAt       DateTime @default(now())
 
-  rolePermissions RolePermission[]
+  rolePermissions        RolePermission[]
+  clusterRolePermissions ClusterRolePermission[] // New: For cluster roles
 
   @@index([key])
 }
@@ -207,15 +218,15 @@ model Role {
 }
 
 model RolePermission {
-  id           String     @id @default(cuid())
+  id           String   @id @default(cuid())
   roleId       String
   permissionId String
-  assignedAt   DateTime   @default(now())
+  assignedAt   DateTime @default(now())
   assignedById String? // User who assigned this permission to the role (for auditing)
 
-  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
-  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
-  assignedBy   User?      @relation("RolePermissionAssignedBy", fields: [assignedById], references: [id], onDelete: SetNull)
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  assignedBy User?      @relation("RolePermissionAssignedBy", fields: [assignedById], references: [id], onDelete: SetNull)
 
   @@unique([roleId, permissionId])
   @@index([roleId])
@@ -223,15 +234,15 @@ model RolePermission {
 }
 
 model UserSystemRole {
-  id         String   @id @default(cuid())
-  userId     String
-  roleId     String // Must be a Role where guildId is null and isSystemRole is true
-  assignedAt DateTime @default(now())
+  id           String   @id @default(cuid())
+  userId       String
+  roleId       String // Must be a Role where guildId is null and isSystemRole is true
+  assignedAt   DateTime @default(now())
   assignedById String? // User who assigned this system role
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade) // Should point to a system role
-  assignedBy User?   @relation("UserSystemRoleAssignedBy", fields: [assignedById], references: [id], onDelete: SetNull)
+  user       User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role       Role  @relation(fields: [roleId], references: [id], onDelete: Cascade) // Should point to a system role
+  assignedBy User? @relation("UserSystemRoleAssignedBy", fields: [assignedById], references: [id], onDelete: SetNull)
 
   @@unique([userId, roleId])
   @@index([userId])
@@ -330,27 +341,32 @@ model BadgeInstance {
   // --- Giver (Polymorphic: User or Guild) ---
   userGiverId  String?
   guildGiverId String?
+  // clusterGiverId String? // Future: If clusters can give badges
 
-  // --- Receiver (Polymorphic: User or Guild) ---
-  userReceiverId  String?
-  guildReceiverId String?
+  // --- Receiver (Polymorphic: User or Guild or Cluster) ---
+  userReceiverId    String?
+  guildReceiverId   String?
+  clusterReceiverId String? // New: Cluster as a receiver
 
   guildAssignmentDetails GuildAssignmentDetails? @relation("BadgeInstanceToGuildAssignmentDetails")
 
   // Relationships
-  template      BadgeTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict)
-  userGiver     User?         @relation("UserGivenBadges", fields: [userGiverId], references: [id], onDelete: SetNull)
-  guildGiver    Guild?        @relation("GuildGivenBadges", fields: [guildGiverId], references: [id], onDelete: SetNull)
-  userReceiver  User?         @relation("UserReceivedBadges", fields: [userReceiverId], references: [id], onDelete: Cascade)
-  guildReceiver Guild?        @relation("GuildReceivedBadges", fields: [guildReceiverId], references: [id], onDelete: Cascade)
+  template        BadgeTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  userGiver       User?         @relation("UserGivenBadges", fields: [userGiverId], references: [id], onDelete: SetNull)
+  guildGiver      Guild?        @relation("GuildGivenBadges", fields: [guildGiverId], references: [id], onDelete: SetNull)
+  // clusterGiver    Cluster?      @relation("ClusterGivenBadges", fields: [clusterGiverId], references: [id], onDelete: SetNull) // Future
+  userReceiver    User?         @relation("UserReceivedBadges", fields: [userReceiverId], references: [id], onDelete: Cascade)
+  guildReceiver   Guild?        @relation("GuildReceivedBadges", fields: [guildReceiverId], references: [id], onDelete: Cascade)
+  clusterReceiver Cluster?      @relation("ClusterReceivedBadges", fields: [clusterReceiverId], references: [id], onDelete: Cascade) // New
 
   // Links to Badge Case Items
-  userBadgeItems  UserBadgeItem[]
-  guildBadgeItems GuildBadgeItem[]
+  userBadgeItem     UserBadgeItem?
+  guildBadgeItems   GuildBadgeItem[]
+  clusterBadgeItems ClusterBadgeItem[] // New: links to showcases where this badge instance is displayed
 
   // CHECK constraint (conceptual, enforce in application logic):
-  // 1. (userGiverId != null XOR guildGiverId != null)
-  // 2. (userReceiverId != null XOR guildReceiverId != null)
+  // 1. (userGiverId != null XOR guildGiverId != null XOR clusterGiverId != null) // Consider clusterGiver later
+  // 2. (userReceiverId != null XOR guildReceiverId != null XOR clusterReceiverId != null)
   // 3. If guildGiverId is set, detailsOfGuildAssignmentId can be set.
 
   @@index([templateId])
@@ -358,6 +374,7 @@ model BadgeInstance {
   @@index([guildGiverId])
   @@index([userReceiverId])
   @@index([guildReceiverId])
+  @@index([clusterReceiverId]) // New
 }
 
 model GuildAssignmentDetails {
@@ -371,7 +388,7 @@ model GuildAssignmentDetails {
   notes            String? @db.Text
   assignedByUserId String? // User who actioned this guild assignment (if applicable)
 
-  assignedByUser    User?    @relation("GuildAssignmentDetailsAssignedBy", fields:[assignedByUserId], references: [id], onDelete:SetNull)
+  assignedByUser User? @relation("GuildAssignmentDetailsAssignedBy", fields: [assignedByUserId], references: [id], onDelete: SetNull)
 
   @@index([badgeInstanceId])
 }
@@ -404,7 +421,7 @@ model UserBadgeCase {
 model UserBadgeItem {
   id              String   @id @default(uuid())
   badgeCaseId     String
-  badgeInstanceId String // The specific badge instance being showcased
+  badgeInstanceId String   @unique // Added @unique
   displayOrder    Int      @default(0)
   addedAt         DateTime @default(now())
 
@@ -468,14 +485,14 @@ model Category {
 }
 
 model GuildCategory {
-  guildId     String
-  categoryId  String
-  assignedAt  DateTime @default(now())
+  guildId      String
+  categoryId   String
+  assignedAt   DateTime @default(now())
   assignedById String? // User ID of who assigned the guild to category (permission controlled)
 
-  guild       Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
-  category    Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-  assignedBy  User?    @relation("GuildCategoryAssignedBy", fields:[assignedById], references: [id], onDelete:SetNull)
+  guild      Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  assignedBy User?    @relation("GuildCategoryAssignedBy", fields: [assignedById], references: [id], onDelete: SetNull)
 
   @@id([guildId, categoryId])
   @@index([guildId])
@@ -549,4 +566,148 @@ model GuildBan {
   @@index([bannedByUserId])
   @@index([isActive])
   @@index([expiresAt])
+}
+
+// --- CLUSTER SYSTEM ---
+
+model Cluster {
+  id          String   @id @default(uuid())
+  name        String   @unique // Unique handle/slug for the cluster
+  displayName String? // For display purposes
+  description String?  @db.Text
+  avatar      String? // URL to image storage
+  isOpen      Boolean  @default(false) // True if guilds can join without approval
+  createdById String // User who created the cluster
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  creator User @relation("ClusterCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  // Relationships - Members & Structure
+  guildMemberships ClusterMembership[] // Guilds that are members of this cluster
+  roles            ClusterRole[]       @relation("ClusterCustomRoles") // Custom roles for this cluster
+  userRoles        UserClusterRole[] // New: User roles within this cluster
+
+  // Relationships - Primary Designation
+  primaryForGuilds Guild[] @relation("PrimaryClusterForGuilds")
+
+  // Relationships - Badges
+  // givenBadgesAsCluster    BadgeInstance[] @relation("ClusterGivenBadges") // Future: If clusters can give badges
+  receivedBadgesAsCluster BadgeInstance[]   @relation("ClusterReceivedBadges") // Badges received by this cluster
+  badgeCase               ClusterBadgeCase? // Cluster's showcase of received badges
+  contacts                ClusterContact[] // New: Contact links for the cluster
+
+  @@index([name])
+}
+
+model ClusterMembership {
+  id        String   @id @default(uuid())
+  guildId   String
+  clusterId String
+  joinedAt  DateTime @default(now())
+
+  guild   Guild   @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  cluster Cluster @relation(fields: [clusterId], references: [id], onDelete: Cascade)
+
+  @@unique([guildId, clusterId])
+  @@index([guildId])
+  @@index([clusterId])
+}
+
+model ClusterRole {
+  id           String   @id @default(cuid())
+  name         String
+  description  String?
+  clusterId    String?   // Link to the specific cluster, optional for system roles
+  isSystemRole Boolean  @default(false) // e.g., CLUSTER_OWNER, CLUSTER_ADMIN
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  cluster          Cluster? @relation("ClusterCustomRoles", fields: [clusterId], references: [id], onDelete: Cascade) // Made Cluster optional
+  permissions      ClusterRolePermission[] // Link to the permissions this cluster role has
+  userClusterRoles UserClusterRole[]
+
+  @@unique([name, clusterId])
+  @@index([clusterId])
+}
+
+model UserClusterRole {
+  id            String   @id @default(cuid())
+  userId        String
+  clusterId     String // To identify the cluster context directly
+  clusterRoleId String
+  assignedAt    DateTime @default(now())
+  // assignedById String? // User who assigned this cluster role
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cluster     Cluster     @relation(fields: [clusterId], references: [id], onDelete: Cascade) // Direct link to Cluster
+  clusterRole ClusterRole @relation(fields: [clusterRoleId], references: [id], onDelete: Cascade)
+  // assignedBy  User?       @relation("UserClusterRoleAssignedBy", fields: [assignedById], references: [id], onDelete: SetNull)
+
+  @@unique([userId, clusterId, clusterRoleId], name: "uniqueUserClusterRoleInCluster")
+  @@index([userId])
+  @@index([clusterId])
+  @@index([clusterRoleId])
+}
+
+model ClusterBadgeCase {
+  id              String   @id @default(uuid())
+  clusterId       String   @unique
+  title           String?
+  isPublic        Boolean  @default(true)
+  featuredBadgeId String?  @unique
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  cluster       Cluster            @relation(fields: [clusterId], references: [id], onDelete: Cascade)
+  badges        ClusterBadgeItem[]
+  featuredBadge ClusterBadgeItem?  @relation("FeaturedClusterBadgeInCase", fields: [featuredBadgeId], references: [id], onDelete: SetNull)
+}
+
+model ClusterBadgeItem {
+  id              String   @id @default(uuid())
+  badgeCaseId     String
+  badgeInstanceId String
+  displayOrder    Int      @default(0)
+  addedAt         DateTime @default(now())
+
+  badgeCase  ClusterBadgeCase  @relation(fields: [badgeCaseId], references: [id], onDelete: Cascade)
+  badge      BadgeInstance     @relation(fields: [badgeInstanceId], references: [id], onDelete: Cascade)
+  featuredIn ClusterBadgeCase? @relation("FeaturedClusterBadgeInCase")
+
+  @@unique([badgeCaseId, badgeInstanceId])
+  @@index([badgeCaseId, displayOrder])
+}
+
+// New model for Cluster Contacts
+model ClusterContact {
+  id           String      @id @default(uuid())
+  clusterId    String
+  type         ContactType // Reusing the existing ContactType enum
+  label        String? // For custom contact types
+  value        String // The actual contact info (URL, username, etc.)
+  displayOrder Int         @default(0)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  cluster Cluster @relation(fields: [clusterId], references: [id], onDelete: Cascade)
+
+  @@index([clusterId, displayOrder])
+}
+
+// New model for linking ClusterRoles to Permissions
+model ClusterRolePermission {
+  id            String   @id @default(cuid())
+  clusterRoleId String
+  permissionId  String
+  assignedAt    DateTime @default(now())
+  // assignedById  String?  // Optional: User who assigned this permission to the cluster role (for auditing)
+
+  clusterRole ClusterRole @relation(fields: [clusterRoleId], references: [id], onDelete: Cascade)
+  permission  Permission  @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  // assignedBy  User?       @relation("ClusterRolePermissionAssignedBy", fields: [assignedById], references: [id], onDelete: SetNull)
+
+  @@unique([clusterRoleId, permissionId])
+  @@index([clusterRoleId])
+  @@index([permissionId])
 }

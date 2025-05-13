@@ -269,6 +269,82 @@ export async function seedPermissions(prisma: PrismaClient) {
       description: 'System admin can view global platform analytics',
       permissionGroup: 'System Administration',
     },
+
+    // X. Cluster Management (User) - Permissions for users to create and manage clusters they own/administer
+    {
+      key: 'CLUSTER_CREATE',
+      description: 'Allows a user to create a new cluster of guilds.',
+      permissionGroup: 'Cluster Management (User)',
+    },
+    {
+      key: 'CLUSTER_EDIT_DETAILS',
+      description: 'Change cluster name, description, avatar, open/invitation-only status for a cluster they manage.',
+      permissionGroup: 'Cluster Management (User)',
+    },
+    {
+      key: 'CLUSTER_MANAGE_MEMBERSHIP',
+      description: 'Invite guilds to a managed cluster, accept/reject guild join requests, and remove member guilds from the cluster.',
+      permissionGroup: 'Cluster Management (User)',
+    },
+    {
+      key: 'CLUSTER_ROLE_MANAGE_PERMISSIONS',
+      description: 'Define roles, assign/manage permissions for those roles, and assign users to roles within a specific cluster they manage.',
+      permissionGroup: 'Cluster Management (User)',
+    },
+    {
+      key: 'CLUSTER_DISBAND',
+      description: 'Delete a managed cluster. The cluster must be empty of all member guilds before it can be disbanded.',
+      permissionGroup: 'Cluster Management (User)',
+    },
+    {
+      key: 'CLUSTER_VIEW_AUDIT_LOG',
+      description: 'View audit logs for a managed cluster.',
+      permissionGroup: 'Cluster Management (User)',
+    },
+    {
+      key: 'CLUSTER_MANAGE_CONTACTS',
+      description: 'Add/edit/remove contact links for a managed cluster.',
+      permissionGroup: 'Cluster Management (User)',
+    },
+
+    // XI. Cluster Management (Guild) - Permissions for guild leadership to manage their guild's participation in clusters
+    {
+      key: 'GUILD_MANAGE_CLUSTER_MEMBERSHIP',
+      description: 'Allows a guild (via its authorized members) to make the guild join or leave a cluster.',
+      permissionGroup: 'Cluster Management (Guild)',
+    },
+    {
+      key: 'GUILD_SET_PRIMARY_CLUSTER',
+      description: 'Allows a guild (via its authorized members) to set or change its primary cluster.',
+      permissionGroup: 'Cluster Management (Guild)',
+    },
+
+    // XII. Badge Case Management (Cluster) - Permissions for managing a cluster's own badge case
+    {
+      key: 'CLUSTER_BADGE_CASE_EDIT_DETAILS',
+      description: "Edit title, public/private status of the cluster's badge case",
+      permissionGroup: 'Badge Case Management (Cluster)',
+    },
+    {
+      key: 'CLUSTER_BADGE_CASE_ADD_BADGE',
+      description: "Cluster adds one of its received badges to its showcase",
+      permissionGroup: 'Badge Case Management (Cluster)',
+    },
+    {
+      key: 'CLUSTER_BADGE_CASE_REMOVE_BADGE',
+      description: "Cluster removes a badge from its showcase",
+      permissionGroup: 'Badge Case Management (Cluster)',
+    },
+    {
+      key: 'CLUSTER_BADGE_CASE_REORDER_BADGES',
+      description: "Change display order in cluster's badge case",
+      permissionGroup: 'Badge Case Management (Cluster)',
+    },
+    {
+      key: 'CLUSTER_BADGE_CASE_SET_FEATURED',
+      description: "Set a featured badge in the cluster's badge case",
+      permissionGroup: 'Badge Case Management (Cluster)',
+    },
   ];
 
   for (const permData of permissionsToSeed) {
