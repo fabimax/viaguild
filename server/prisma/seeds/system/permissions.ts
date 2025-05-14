@@ -48,8 +48,23 @@ export async function seedPermissions(prisma: PrismaClient) {
       permissionGroup: 'Member Management',
     },
     {
-      key: 'GUILD_ACCEPT_JOIN_REQUEST',
-      description: 'Approve requests to join guild',
+      key: 'GUILD_MANAGE_JOIN_REQUESTS',
+      description: 'View, approve, or deny requests from users to join the guild',
+      permissionGroup: 'Member Management',
+    },
+    {
+      key: 'GUILD_REVOKE_DIRECT_INVITATION',
+      description: 'Revoke a pending direct invitation to the guild',
+      permissionGroup: 'Member Management',
+    },
+    {
+      key: 'GUILD_CREATE_INVITATION_LINK',
+      description: 'Create a new shareable invitation link for the guild',
+      permissionGroup: 'Member Management',
+    },
+    {
+      key: 'GUILD_MANAGE_INVITATION_LINKS',
+      description: 'View and revoke invitation links for the guild',
       permissionGroup: 'Member Management',
     },
     {
@@ -283,7 +298,7 @@ export async function seedPermissions(prisma: PrismaClient) {
     },
     {
       key: 'CLUSTER_MANAGE_MEMBERSHIP',
-      description: 'Invite guilds to a managed cluster, accept/reject guild join requests, and remove member guilds from the cluster.',
+      description: 'Manage guild membership in a cluster, including inviting guilds, revoking pending invitations, accepting/rejecting guild join requests, and removing member guilds from the cluster.',
       permissionGroup: 'Cluster Management (User)',
     },
     {
@@ -310,7 +325,7 @@ export async function seedPermissions(prisma: PrismaClient) {
     // XI. Cluster Management (Guild) - Permissions for guild leadership to manage their guild's participation in clusters
     {
       key: 'GUILD_MANAGE_CLUSTER_MEMBERSHIP',
-      description: 'Allows a guild (via its authorized members) to make the guild join or leave a cluster.',
+      description: 'Allows a guild (via its authorized members) to manage its cluster affiliations, including requesting to join a cluster, responding to cluster invitations, or leaving a cluster.',
       permissionGroup: 'Cluster Management (Guild)',
     },
     {

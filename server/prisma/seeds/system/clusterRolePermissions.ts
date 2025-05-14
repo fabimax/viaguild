@@ -67,7 +67,11 @@ export async function seedClusterRolePermissions(prisma: PrismaClient) {
     if (permissionsToAssign.length !== permissionKeys.length) {
       const foundKeys = permissionsToAssign.map(p => p.key);
       const missingKeys = permissionKeys.filter(k => !foundKeys.includes(k));
-      console.warn(`   ⚠️ For cluster system role "${roleName}", could not find all specified permissions. Missing: ${missingKeys.join(', ')}. Ensure all permissions are seeded first.`);
+      // Filter out the explicitly removed key from missingKeys warning if it was there
+      const trulyMissingKeys = missingKeys.filter(k => k !== 'CLUSTER_REVOKE_DIRECT_GUILD_INVITATION');
+      if (trulyMissingKeys.length > 0) {
+         console.warn(`   ⚠️ For cluster system role "${roleName}", could not find all specified permissions. Missing: ${trulyMissingKeys.join(', ')}. Ensure all permissions are seeded first.`);
+      }
     }
 
     let assignedCount = 0;
