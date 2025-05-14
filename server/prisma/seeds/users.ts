@@ -16,7 +16,10 @@ export async function seedUsers(prisma: PrismaClient) {
 
   const createdUsers = []
   for (let i = 0; i < usersNeeded; i++) {
-    const username = faker.internet.userName() + Math.random().toString(36).substring(2, 5) // Ensure more unique usernames
+    const baseUsername = faker.internet.username();
+    const sanitizedUsername = baseUsername.replace(/[^\w]/g, '_'); // Replace non-alphanumeric (excluding _) with underscore
+    const randomNumber = Math.floor(Math.random() * 1000); // Random number between 0 and 999
+    const username = `${sanitizedUsername}${randomNumber}`; // Ensure more unique usernames
     const email = faker.internet.email({ firstName: username })
     const password = 'password123' // Use a simple default password for all seeded users
     const passwordHash = await bcrypt.hash(password, 10)
