@@ -86,6 +86,12 @@ enum InvitationPlatform {
   // OTHER // Generic for unlisted platforms
 }
 
+enum GuildJoinRequestStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
 // --- Cluster Invitation/Join Request System Enums ---
 enum ClusterDirectInvitationStatus {
   PENDING
@@ -166,6 +172,7 @@ model User {
   sentClusterDirectInvitations    ClusterDirectInvitation[] @relation("ClusterInviter")
   initiatedClusterJoinRequests    ClusterJoinRequest[]      @relation("ClusterJoinRequester")
   reviewedClusterJoinRequests     ClusterJoinRequest[]      @relation("ClusterJoinRequestReviewer")
+
 }
 
 model SocialAccount {
@@ -238,19 +245,6 @@ model Guild {
 
   @@index([name])
   @@index([primaryClusterId])
-  @@index([expiresAt])
-
-  // Relationships - Badges
-  // givenBadgesAsCluster    BadgeInstance[] @relation("ClusterGivenBadges") // Future: If clusters can give badges
-  receivedBadgesAsCluster BadgeInstance[]   @relation("ClusterReceivedBadges") // Badges received by this cluster
-  badgeCase               ClusterBadgeCase? // Cluster's showcase of received badges
-  contacts                ClusterContact[] // New: Contact links for the cluster
-
-  allowGuildJoinRequests Boolean @default(true) // If true, guilds can submit requests to join this cluster (moderated).
-
-  // Relationships - Cluster Invitations & Join Requests (as source)
-  directInvitationsToGuilds ClusterDirectInvitation[] @relation("InvitingCluster")
-  joinRequestsFromGuilds    ClusterJoinRequest[]      @relation("TargetClusterForJoinRequest")
 }
 
 // --- PERMISSION SYSTEM ---
@@ -662,10 +656,13 @@ model Cluster {
   primaryForGuilds Guild[] @relation("PrimaryClusterForGuilds")
 
   // Relationships - Badges
-  // givenBadgesAsCluster    BadgeInstance[] @relation("ClusterGivenBadges") // Future: If clusters can give badges
   receivedBadgesAsCluster BadgeInstance[]   @relation("ClusterReceivedBadges") // Badges received by this cluster
   badgeCase               ClusterBadgeCase? // Cluster's showcase of received badges
   contacts                ClusterContact[] // New: Contact links for the cluster
+
+  // Relationships - Cluster Invitations & Join Requests (as source)
+  directInvitationsToGuilds ClusterDirectInvitation[] @relation("InvitingCluster")
+  joinRequestsFromGuilds    ClusterJoinRequest[]      @relation("TargetClusterForJoinRequest")
 
   @@index([name])
 }
@@ -826,12 +823,6 @@ model GuildInvitationLink {
   @@index([guildId])
   @@index([createdByUserId])
   @@index([code])
-}
-
-enum GuildJoinRequestStatus {
-  PENDING
-  ACCEPTED
-  REJECTED
 }
 
 model GuildJoinRequest {
