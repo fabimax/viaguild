@@ -4,8 +4,13 @@ import { faker } from '@faker-js/faker';
 const contactTypes = Object.values(ContactType);
 const SPECIAL_GUILD_NAME = 'TheNexusHub'; // Defined here as well
 
+function getRandomPicsumUrl(width: number, height: number): string {
+  const imageNumber = faker.number.int({ min: 0, max: 999 });
+  return `https://picsum.photos/id/${imageNumber}/${width}/${height}`;
+}
+
 export async function seedGuilds(prisma: PrismaClient) {
-  console.log('Seeding guilds with contacts (and Special Guild)...');
+  console.log('Seeding guilds with contacts (and Special Guild) using Picsum for avatars...');
 
   const users = await prisma.user.findMany();
   if (users.length === 0) {
@@ -31,7 +36,7 @@ export async function seedGuilds(prisma: PrismaClient) {
           name: guildName,
           displayName: displayName,
           description: description,
-          avatar: faker.image.urlLoremFlickr({ category: isSpecialGuild ? 'city' : 'abstract' }),
+          avatar: getRandomPicsumUrl(128, 128), // Using Picsum photos
           isOpen: isSpecialGuild ? true : faker.datatype.boolean(),
           createdById: creator.id,
           updatedById: creator.id,
