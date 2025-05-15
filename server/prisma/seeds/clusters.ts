@@ -3,6 +3,11 @@ import { faker } from '@faker-js/faker';
 
 const contactTypes = Object.values(ContactType);
 
+function getRandomPicsumUrl(width: number, height: number): string {
+  const imageNumber = faker.number.int({ min: 0, max: 999 });
+  return `https://picsum.photos/id/${imageNumber}/${width}/${height}`;
+}
+
 export async function seedClusters(prisma: PrismaClient) {
   console.log('Seeding clusters, contacts, and system roles (creator/admin)...');
 
@@ -24,6 +29,7 @@ export async function seedClusters(prisma: PrismaClient) {
       name: 'Cluster1',
       displayName: 'The First Cluster',
       description: faker.lorem.paragraph(),
+      avatar: getRandomPicsumUrl(128, 128),
       isOpen: faker.datatype.boolean(),
       createdById: users[Math.floor(Math.random() * users.length)].id,
     },
@@ -31,6 +37,7 @@ export async function seedClusters(prisma: PrismaClient) {
       name: 'Cluster2',
       displayName: 'The Second Cluster',
       description: faker.lorem.paragraph(),
+      avatar: getRandomPicsumUrl(128, 128),
       isOpen: faker.datatype.boolean(),
       createdById: users[Math.floor(Math.random() * users.length)].id,
     },
@@ -39,7 +46,7 @@ export async function seedClusters(prisma: PrismaClient) {
   for (const data of clusterData) {
     const cluster = await prisma.cluster.upsert({
       where: { name: data.name },
-      update: {},
+      update: { avatar: data.avatar, description: data.description, isOpen: data.isOpen, displayName: data.displayName },
       create: data,
     });
     console.log(`Upserted cluster: ${cluster.displayName} (ID: ${cluster.id})`);
