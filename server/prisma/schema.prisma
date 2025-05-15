@@ -22,10 +22,10 @@ enum GuildMemberRank {
 }
 
 enum RelationshipType {
-  PARENT
-  CHILD
+  PARENT // Defines a hierarchical relationship where sourceGuildId is parent, targetGuildId is child
   PARTNER
   RIVAL
+  // WAR // Example for future unilateral type
 }
 
 enum ContactType {
@@ -57,12 +57,19 @@ enum NotificationType {
   GUILD_INVITE
   BADGE_RECEIVED
   GUILD_JOIN_REQUEST
-  RELATIONSHIP_REQUEST
+  RELATIONSHIP_REQUEST // This might be deprecated or reused for general relationship updates
   GUILD_UPDATE
   NEW_GUILD_MEMBER
   ROLE_ASSIGNED
   RANK_UPDATED
   CATEGORY_PRIMARY_SET
+
+  // Guild Relationship Proposal Notifications
+  GUILD_RELATIONSHIP_PROPOSAL_RECEIVED
+  GUILD_RELATIONSHIP_PROPOSAL_ACCEPTED
+  GUILD_RELATIONSHIP_PROPOSAL_REJECTED
+  GUILD_RELATIONSHIP_PROPOSAL_REVOKED
+  GUILD_RELATIONSHIP_PROPOSAL_EXPIRED
   // Add more as new features arise
 }
 
@@ -101,6 +108,15 @@ enum ClusterDirectInvitationStatus {
   EXPIRED // Optional: if cluster-to-guild invites can expire
 }
 
+enum RelationshipProposalStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  REVOKED // By the proposer
+  EXPIRED
+  SUPERSEDED // When another proposal between the same guilds is accepted
+}
+
 enum ClusterJoinRequestStatus {
   PENDING
   ACCEPTED
@@ -126,11 +142,19 @@ model User {
   systemRoles UserSystemRole[]
 
   // Relationships - Social & Guilds
-  socialAccounts       SocialAccount[]
-  createdGuilds        Guild[]             @relation("GuildCreator")
-  updatedGuilds        Guild[]             @relation("GuildUpdater") // Guilds last updated by this user
-  guildMemberships     GuildMembership[]
-  createdRelationships GuildRelationship[] @relation("RelationshipCreator") // Guild relationships created by this user
+  socialAccounts   SocialAccount[]
+  createdGuilds    Guild[]           @relation("GuildCreator")
+  updatedGuilds    Guild[]           @relation("GuildUpdater") // Guilds last updated by this user
+  guildMemberships GuildMembership[]
+  // createdRelationships GuildRelationship[] @relation("RelationshipCreator") // Guild relationships created by this user // REMOVED
+
+  // Guild Relationships - as proposer or accepter
+  proposedGuildRelationships GuildRelationship[] @relation("RelationshipProposer")
+  acceptedGuildRelationships GuildRelationship[] @relation("RelationshipAccepter")
+
+  // Guild Relationship Proposals - as initiator or resolver
+  initiatedGuildRelationshipProposals GuildRelationshipProposal[] @relation("ProposedByUser")
+  resolvedGuildRelationshipProposals  GuildRelationshipProposal[] @relation("ResolvedByUser")
 
   // Relationships - Badges
   givenBadgesAsUser     BadgeInstance[]       @relation("UserGivenBadges") // Badges given directly by this user
@@ -162,17 +186,16 @@ model User {
   clusterRoles    UserClusterRole[] // Roles held by the user in various clusters
 
   // Relationships - Guild Invitations & Join Requests
-  sentGuildDirectInvitations GuildDirectInvitation[] @relation("Inviter")
+  sentGuildDirectInvitations     GuildDirectInvitation[] @relation("Inviter")
   receivedGuildDirectInvitations GuildDirectInvitation[] @relation("InvitedUser")
-  createdGuildInvitationLinks  GuildInvitationLink[] @relation("LinkCreator")
-  guildJoinRequests            GuildJoinRequest[]    @relation("Requester")
-  reviewedGuildJoinRequests    GuildJoinRequest[]    @relation("Reviewer")
+  createdGuildInvitationLinks    GuildInvitationLink[]   @relation("LinkCreator")
+  guildJoinRequests              GuildJoinRequest[]      @relation("Requester")
+  reviewedGuildJoinRequests      GuildJoinRequest[]      @relation("Reviewer")
 
   // Relationships - Cluster Invitations & Join Requests (as initiator/reviewer)
-  sentClusterDirectInvitations    ClusterDirectInvitation[] @relation("ClusterInviter")
-  initiatedClusterJoinRequests    ClusterJoinRequest[]      @relation("ClusterJoinRequester")
-  reviewedClusterJoinRequests     ClusterJoinRequest[]      @relation("ClusterJoinRequestReviewer")
-
+  sentClusterDirectInvitations ClusterDirectInvitation[] @relation("ClusterInviter")
+  initiatedClusterJoinRequests ClusterJoinRequest[]      @relation("ClusterJoinRequester")
+  reviewedClusterJoinRequests  ClusterJoinRequest[]      @relation("ClusterJoinRequestReviewer")
 }
 
 model SocialAccount {
@@ -191,17 +214,17 @@ model SocialAccount {
 }
 
 model Guild {
-  id          String   @id @default(uuid())
-  name        String   @unique // Unique handle/slug for the guild
-  displayName String? // For display purposes
-  description String   @db.Text
-  avatar      String? // URL to image storage
-  isOpen      Boolean  @default(false) // If true, users can join automatically without needing permission/invitation.
-  allowJoinRequests Boolean @default(true) // If true, users can submit requests to join this guild (moderated).
-  createdById String
-  updatedById String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                String   @id @default(uuid())
+  name              String   @unique // Unique handle/slug for the guild
+  displayName       String? // For display purposes
+  description       String   @db.Text
+  avatar            String? // URL to image storage
+  isOpen            Boolean  @default(false) // If true, users can join automatically without needing permission/invitation.
+  allowJoinRequests Boolean  @default(true) // If true, users can submit requests to join this guild (moderated).
+  createdById       String
+  updatedById       String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   // Relationships - Creator/Updater
   creator   User  @relation("GuildCreator", fields: [createdById], references: [id], onDelete: Restrict)
@@ -221,6 +244,10 @@ model Guild {
   // Relationships - Inter-Guild
   outgoingRelationships GuildRelationship[] @relation("SourceRelationships")
   incomingRelationships GuildRelationship[] @relation("TargetRelationships")
+
+  // Relationships - Inter-Guild Proposals
+  sentRelationshipProposals     GuildRelationshipProposal[] @relation("ProposingGuildForRelationship")
+  receivedRelationshipProposals GuildRelationshipProposal[] @relation("TargetGuildForRelationship")
 
   // Relationships - Categories
   categories                    GuildCategory[] // Categories this guild belongs to
@@ -337,17 +364,21 @@ model GuildMembership {
 }
 
 model GuildRelationship {
-  id            String           @id @default(uuid())
-  sourceGuildId String
-  targetGuildId String
-  type          RelationshipType
-  createdById   String // User who created the relationship
-  createdAt     DateTime         @default(now())
-  updatedAt     DateTime         @updatedAt
+  id             String           @id @default(uuid())
+  sourceGuildId  String
+  targetGuildId  String
+  type           RelationshipType
+  // createdById   String // User who created the relationship // REMOVED
+  proposerUserId String? // User who initiated the proposal or unilateral action
+  accepterUserId String? // User who accepted a proposal; nullable for unilateral actions
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
 
-  sourceGuild Guild @relation("SourceRelationships", fields: [sourceGuildId], references: [id], onDelete: Cascade)
-  targetGuild Guild @relation("TargetRelationships", fields: [targetGuildId], references: [id], onDelete: Cascade)
-  creator     User  @relation("RelationshipCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  sourceGuild  Guild @relation("SourceRelationships", fields: [sourceGuildId], references: [id], onDelete: Cascade)
+  targetGuild  Guild @relation("TargetRelationships", fields: [targetGuildId], references: [id], onDelete: Cascade)
+  // creator     User  @relation("RelationshipCreator", fields: [createdById], references: [id], onDelete: Restrict) // REMOVED
+  proposerUser User? @relation("RelationshipProposer", fields: [proposerUserId], references: [id], onDelete: SetNull)
+  accepterUser User? @relation("RelationshipAccepter", fields: [accepterUserId], references: [id], onDelete: SetNull)
 
   @@unique([sourceGuildId, targetGuildId])
   @@index([sourceGuildId])
@@ -685,12 +716,12 @@ model ClusterRole {
   id           String   @id @default(cuid())
   name         String
   description  String?
-  clusterId    String?   // Link to the specific cluster, optional for system roles
+  clusterId    String? // Link to the specific cluster, optional for system roles
   isSystemRole Boolean  @default(false) // e.g., CLUSTER_OWNER, CLUSTER_ADMIN
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  cluster          Cluster? @relation("ClusterCustomRoles", fields: [clusterId], references: [id], onDelete: Cascade) // Made Cluster optional
+  cluster          Cluster?                @relation("ClusterCustomRoles", fields: [clusterId], references: [id], onDelete: Cascade) // Made Cluster optional
   permissions      ClusterRolePermission[] // Link to the permissions this cluster role has
   userClusterRoles UserClusterRole[]
 
@@ -782,20 +813,20 @@ model ClusterRolePermission {
 // --- GUILD INVITATION SYSTEM ---
 
 model GuildDirectInvitation {
-  id                String                @id @default(uuid())
-  guildId           String
-  invitedByUserId   String // User who sent the invitation
-  targetUserId      String? // User who received the invitation (if they exist in ViaGuild system)
-  targetUserHandle  String // The handle/username used for the invitation (e.g. "username123", "user@example.com")
-  platform          InvitationPlatform // Platform of the targetUserHandle (e.g. VIAGUILD, TWITTER, DISCORD)
-  status            GuildInvitationStatus @default(PENDING)
-  createdAt         DateTime              @default(now())
-  updatedAt         DateTime              @updatedAt
-  expiresAt         DateTime? // Optional: For invitations that have a time limit
+  id               String                @id @default(uuid())
+  guildId          String
+  invitedByUserId  String // User who sent the invitation
+  targetUserId     String? // User who received the invitation (if they exist in ViaGuild system)
+  targetUserHandle String // The handle/username used for the invitation (e.g. "username123", "user@example.com")
+  platform         InvitationPlatform // Platform of the targetUserHandle (e.g. VIAGUILD, TWITTER, DISCORD)
+  status           GuildInvitationStatus @default(PENDING)
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  expiresAt        DateTime? // Optional: For invitations that have a time limit
 
-  guild           Guild @relation("InvitedToGuild", fields: [guildId], references: [id], onDelete: Cascade)
-  invitedByUser   User  @relation("Inviter", fields: [invitedByUserId], references: [id], onDelete: Cascade)
-  targetUser      User? @relation("InvitedUser", fields: [targetUserId], references: [id], onDelete:SetNull) // Null if invited user is not yet on platform
+  guild         Guild @relation("InvitedToGuild", fields: [guildId], references: [id], onDelete: Cascade)
+  invitedByUser User  @relation("Inviter", fields: [invitedByUserId], references: [id], onDelete: Cascade)
+  targetUser    User? @relation("InvitedUser", fields: [targetUserId], references: [id], onDelete: SetNull) // Null if invited user is not yet on platform
 
   @@unique([guildId, targetUserHandle, platform], name: "uniqueInvitationByHandle") // Prevent duplicate invites to the same handle for the same guild
   @@index([guildId])
@@ -836,9 +867,9 @@ model GuildJoinRequest {
   createdAt        DateTime               @default(now())
   updatedAt        DateTime               @updatedAt
 
-  guild          Guild  @relation("RequestToGuild", fields: [guildId], references: [id], onDelete: Cascade)
-  requestingUser User   @relation("Requester", fields: [userId], references: [id], onDelete: Cascade)
-  reviewedByUser User?  @relation("Reviewer", fields: [reviewedByUserId], references: [id], onDelete:SetNull)
+  guild          Guild @relation("RequestToGuild", fields: [guildId], references: [id], onDelete: Cascade)
+  requestingUser User  @relation("Requester", fields: [userId], references: [id], onDelete: Cascade)
+  reviewedByUser User? @relation("Reviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
 
   @@unique([guildId, userId]) // User can only have one pending request per guild
   @@index([guildId])
@@ -850,14 +881,14 @@ model GuildJoinRequest {
 // --- CLUSTER INVITATION & JOIN REQUEST SYSTEM ---
 
 model ClusterDirectInvitation {
-  id                String                        @id @default(uuid())
-  clusterId         String // The cluster sending the invitation
-  invitedByUserId   String // User (cluster admin) who sent the invitation
-  targetGuildId     String // The guild being invited
-  status            ClusterDirectInvitationStatus @default(PENDING)
-  createdAt         DateTime                      @default(now())
-  updatedAt         DateTime                      @updatedAt
-  expiresAt         DateTime? // Optional: for invitations that have a time limit
+  id              String                        @id @default(uuid())
+  clusterId       String // The cluster sending the invitation
+  invitedByUserId String // User (cluster admin) who sent the invitation
+  targetGuildId   String // The guild being invited
+  status          ClusterDirectInvitationStatus @default(PENDING)
+  createdAt       DateTime                      @default(now())
+  updatedAt       DateTime                      @updatedAt
+  expiresAt       DateTime? // Optional: for invitations that have a time limit
 
   invitingCluster Cluster @relation("InvitingCluster", fields: [clusterId], references: [id], onDelete: Cascade)
   invitedByUser   User    @relation("ClusterInviter", fields: [invitedByUserId], references: [id], onDelete: Cascade)
@@ -871,21 +902,21 @@ model ClusterDirectInvitation {
 }
 
 model ClusterJoinRequest {
-  id                 String                   @id @default(uuid())
-  clusterId          String // The cluster being requested to join
-  requestingGuildId  String // The guild making the request
-  requestedByUserId  String // User from the requesting guild who initiated the request
-  message            String?                  @db.Text
-  status             ClusterJoinRequestStatus @default(PENDING)
-  reviewedByUserId   String? // User (cluster admin) who reviewed the request
-  reviewedAt         DateTime?
-  createdAt          DateTime                 @default(now())
-  updatedAt          DateTime                 @updatedAt
+  id                String                   @id @default(uuid())
+  clusterId         String // The cluster being requested to join
+  requestingGuildId String // The guild making the request
+  requestedByUserId String // User from the requesting guild who initiated the request
+  message           String?                  @db.Text
+  status            ClusterJoinRequestStatus @default(PENDING)
+  reviewedByUserId  String? // User (cluster admin) who reviewed the request
+  reviewedAt        DateTime?
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
 
-  targetCluster    Cluster @relation("TargetClusterForJoinRequest", fields: [clusterId], references: [id], onDelete: Cascade)
-  requestingGuild  Guild   @relation("RequestingGuildForClusterJoin", fields: [requestingGuildId], references: [id], onDelete: Cascade)
-  requestedByUser  User    @relation("ClusterJoinRequester", fields: [requestedByUserId], references: [id], onDelete: Cascade)
-  reviewedByUser   User?   @relation("ClusterJoinRequestReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+  targetCluster   Cluster @relation("TargetClusterForJoinRequest", fields: [clusterId], references: [id], onDelete: Cascade)
+  requestingGuild Guild   @relation("RequestingGuildForClusterJoin", fields: [requestingGuildId], references: [id], onDelete: Cascade)
+  requestedByUser User    @relation("ClusterJoinRequester", fields: [requestedByUserId], references: [id], onDelete: Cascade)
+  reviewedByUser  User?   @relation("ClusterJoinRequestReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
 
   @@unique([clusterId, requestingGuildId], name: "uniqueGuildToClusterJoinRequest")
   @@index([clusterId])
@@ -893,4 +924,33 @@ model ClusterJoinRequest {
   @@index([requestedByUserId])
   @@index([status])
   @@index([reviewedByUserId])
+}
+
+// --- GUILD RELATIONSHIP PROPOSAL SYSTEM ---
+
+model GuildRelationshipProposal {
+  id                   String                     @id @default(uuid())
+  proposingGuildId     String
+  targetGuildId        String
+  proposedType         RelationshipType
+  status               RelationshipProposalStatus @default(PENDING)
+  messageFromProposer  String?                    @db.Text
+  messageFromResponder String?                    @db.Text
+  proposedByUserId     String
+  resolvedByUserId     String?
+  createdAt            DateTime                   @default(now())
+  updatedAt            DateTime                   @updatedAt
+  expiresAt            DateTime?
+
+  proposingGuild Guild @relation("ProposingGuildForRelationship", fields: [proposingGuildId], references: [id], onDelete: Cascade)
+  targetGuild    Guild @relation("TargetGuildForRelationship", fields: [targetGuildId], references: [id], onDelete: Cascade)
+  proposedByUser User  @relation("ProposedByUser", fields: [proposedByUserId], references: [id], onDelete: Cascade) // Relation name to match User model
+  resolvedByUser User? @relation("ResolvedByUser", fields: [resolvedByUserId], references: [id], onDelete: SetNull) // Relation name to match User model
+
+  @@unique([proposingGuildId, targetGuildId, proposedType, status], name: "unique_pending_guild_relationship_proposal") // Prevents identical pending proposals
+  @@index([proposingGuildId])
+  @@index([targetGuildId])
+  @@index([status])
+  @@index([proposedByUserId])
+  @@index([resolvedByUserId])
 }
