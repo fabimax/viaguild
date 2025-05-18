@@ -45,7 +45,7 @@ enum BadgeShape {
   STAR
   HEART
   HEXAGON
-  SQUARE // Added
+  SQUARE
 }
 
 enum BadgeTier {
@@ -54,7 +54,7 @@ enum BadgeTier {
   BRONZE
 }
 
-// --- Configuration Enums (for validating badge display properties) ---
+// --- Configuration Enums (for validating JSON content in application logic) ---
 
 enum BackgroundContentType {
   SOLID_COLOR     // The 'value' will be a hex color string.
@@ -67,11 +67,13 @@ enum ForegroundContentType {
   UPLOADED_ICON   // The 'value' will be a hostedUrl from an UploadedAsset (typically an SVG or small raster icon).
 }
 
-// Optional: Describes a predefined visual style for text elements.
+// Optional: Describes a predefined visual style for text elements (e.g., metadata fields or even foreground text).
+// These would correspond to CSS classes or styling logic in your frontend.
 // enum TextStyle {
 //   METADATA_DEFAULT
 //   METADATA_HIGHLIGHT
-//   FOREGROUND_TITLE
+//   FOREGROUND_TITLE // Example if foreground text has specific styling options
+//   // ... etc.
 // }
 // --- END Configuration Enums ---
 
@@ -154,7 +156,7 @@ model User {
   displayName    String? // For display purposes
   passwordHash   String
   bio            String?
-  avatar         String? // Current: Base64/file path. Future: hostedUrl from UploadedAsset
+  avatar         String? // Base64 encoded image data or file path (Can eventually become a hostedUrl from UploadedAsset)
   isPublic       Boolean  @default(true)
   hiddenAccounts String[] @default([]) // Array of social account IDs to hide
   createdAt      DateTime @default(now())
@@ -178,15 +180,17 @@ model User {
   initiatedGuildRelationshipProposals GuildRelationshipProposal[] @relation("ProposedByUser")
   resolvedGuildRelationshipProposals  GuildRelationshipProposal[] @relation("ResolvedByUser")
 
-  // --- BADGE SYSTEM RELATIONS (Updated) ---
-  givenBadgesAsUser      BadgeInstance[]       @relation("UserGivenBadges") // Badges given directly by this user
-  receivedBadgesAsUser   BadgeInstance[]       @relation("UserReceivedBadges") // Badges received directly by this user
-  authoredBadgeTemplates BadgeTemplate[]       @relation("AuthoredByRelation") // Templates authored by this user
-  ownedBadgeTemplates    BadgeTemplate[]       @relation("UserOwnedBadgeTemplates")
-  badgeAllocations       UserBadgeAllocation[] // Tiered badge allocations for this user
-  badgeCase              UserBadgeCase?
-  uploadedAssets         UploadedAsset[]       @relation("UserUploadedAssets")
-  // --- END BADGE SYSTEM RELATIONS ---
+  // --- MODIFIED Badge Relationships ---
+  givenBadgesAsUser    BadgeInstance[]       @relation("UserGivenBadges") // Badges given directly by this user
+  receivedBadgesAsUser BadgeInstance[]       @relation("UserReceivedBadges") // Badges received directly by this user
+  
+  authoredBadgeTemplates BadgeTemplate[]     @relation("AuthoredByRelation") // Templates this user physically created/designed
+  ownedBadgeTemplates    BadgeTemplate[]     @relation("UserOwnedBadgeTemplates")  // Templates this user explicitly owns
+
+  badgeAllocations     UserBadgeAllocation[] // Tiered badge allocations for this user
+  badgeCase            UserBadgeCase?        // User's personal showcase of received badges
+  uploadedAssets       UploadedAsset[]       @relation("UserUploadedAssets") // Assets uploaded by this user
+  // --- END MODIFIED Badge Relationships ---
 
   // Relationships - Categories
   primaryGuildsPerCategory UserCategoryPrimaryGuild[] // User's designated primary guilds for specific categories
@@ -243,7 +247,7 @@ model Guild {
   name              String   @unique // Unique handle/slug for the guild
   displayName       String? // For display purposes
   description       String   @db.Text
-  avatar            String? // Current: URL to image storage. Future: hostedUrl from UploadedAsset
+  avatar            String? // URL to image storage (Can eventually become a hostedUrl from UploadedAsset)
   isOpen            Boolean  @default(false) // If true, users can join automatically without needing permission/invitation.
   allowJoinRequests Boolean  @default(true) // If true, users can submit requests to join this guild (moderated).
   createdById       String
@@ -260,12 +264,12 @@ model Guild {
   roles       Role[]            @relation("GuildCustomRoles") // Custom roles defined for this guild
   contacts    GuildContact[]
 
-  // --- BADGE SYSTEM RELATIONS (Updated) ---
+  // --- MODIFIED Badge Relationships ---
   givenBadgesAsGuild    BadgeInstance[] @relation("GuildGivenBadges") // Badges given by this guild as an entity
   receivedBadgesAsGuild BadgeInstance[] @relation("GuildReceivedBadges") // Badges received by this guild as an entity
   ownedBadgeTemplates   BadgeTemplate[] @relation("GuildOwnedBadgeTemplates") // Badge templates "owned" or designed by this guild
   badgeCase             GuildBadgeCase? // Guild's showcase of received badges
-  // --- END BADGE SYSTEM RELATIONS ---
+  // --- END MODIFIED Badge Relationships ---
 
   // Relationships - Inter-Guild
   outgoingRelationships GuildRelationship[] @relation("SourceRelationships")
@@ -301,6 +305,7 @@ model Guild {
 }
 
 // --- PERMISSION SYSTEM ---
+
 model Permission {
   id              String   @id @default(cuid())
   key             String   @unique // e.g., "GUILD_KICK_MEMBER", "BADGE_TEMPLATE_CREATE_GUILD"
@@ -309,7 +314,7 @@ model Permission {
   createdAt       DateTime @default(now())
 
   rolePermissions        RolePermission[]
-  clusterRolePermissions ClusterRolePermission[]
+  clusterRolePermissions ClusterRolePermission[] // New: For cluster roles
 
   @@index([key])
 }
@@ -366,6 +371,7 @@ model UserSystemRole {
 }
 
 // --- GUILD STRUCTURE & MEMBERSHIP ---
+
 model GuildMembership {
   id           String          @id @default(uuid())
   userId       String
@@ -424,162 +430,182 @@ model GuildContact {
   @@index([guildId, displayOrder])
 }
 
-// --- BADGE SYSTEM (REVISED with Tables Solution) ---
+// --- BADGE SYSTEM ---
 
 model BadgeTemplate {
-  id                          String  @id @default(uuid())
-  internalNotes               String? @db.Text // Internal notes about template purpose
+  id                   String  @id @default(uuid())
+  baseName             String  // Default base name, can be overridden by dynamicDisplayConfig.badgeName
+  baseSubtitle         String? // Default base subtitle, can be overridden by dynamicDisplayConfig.subtitle
+  description          String? @db.Text // General description of the template's purpose
 
-  // Ownership and Creation (of the template)
-  authoredByUserId            String? 
-  authoredByUser              User?   @relation("AuthoredByRelation", fields: [authoredByUserId], references: [id], onDelete: SetNull)
-  ownedByUserId               String?
-  ownedByUser                 User?   @relation("UserOwnedBadgeTemplates", fields: [ownedByUserId], references: [id], onDelete: SetNull)
-  ownedByGuildId              String?
-  ownedByGuild                Guild?  @relation("GuildOwnedBadgeTemplates", fields: [ownedByGuildId], references: [id], onDelete: SetNull)
+  // --- Ownership and Creation ---
+  // User who physically designed/inputted this template. Nullable for system-generated.
+  authoredByUserId     String?
+  authoredByUser       User?   @relation("AuthoredByRelation", fields: [authoredByUserId], references: [id], onDelete: SetNull)
 
-  // Lifecycle & Behavior
-  isArchived                  Boolean @default(false) // Whether the template owner has archived/soft-deleted this template
-  isModifiableByIssuer        Boolean @default(false) // Can these embedded display config fields be changed?
-  allowsPushedInstanceUpdates Boolean @default(false) // Can instance metadata or credentialValue be updated by issuer post-award?
+  // Explicit user owner. Mutually exclusive with ownedByGuildId.
+  ownedByUserId        String?
+  ownedByUser          User?   @relation("UserOwnedBadgeTemplates", fields: [ownedByUserId], references: [id], onDelete: SetNull)
 
-  // --- Tier Configuration ---
-  inherentTier                BadgeTier? // Renamed from defaultTier. Optional: The inherent tier of this template, influences allocation use & can enforce/suggest styling (e.g., border color).
+  // Explicit guild owner. Mutually exclusive with ownedByUserId.
+  ownedByGuildId       String?
+  ownedByGuild         Guild?  @relation("GuildOwnedBadgeTemplates", fields: [ownedByGuildId], references: [id], onDelete: SetNull)
 
-  // --- Default Display Properties (Effectively the "Display Config" embedded) ---
-  defaultBadgeName              String   // Default display name
-  defaultSubtitleText           String?  // Default subtitle text
-  defaultOuterShape             BadgeShape @default(CIRCLE)
-  defaultBorderColor            String     @default("#000000") // Hex
-  defaultBackgroundType         BackgroundContentType @default(SOLID_COLOR)
-  defaultBackgroundValue        String     // Hex color or HostedAsset.hostedUrl
-  defaultForegroundType         ForegroundContentType @default(SYSTEM_ICON)
-  defaultForegroundValue        String     // Text, SystemIcon.id, or HostedAsset.hostedUrl
-  defaultForegroundColor        String?    // Hex
-  defaultTextFont               String?    // If foreground type is TEXT (from approved list)
-  defaultTextSize               Int?       // If foreground type is TEXT (e.g., in pixels)
-  defaultDisplayDescription     String?    @db.Text // Default user-facing description for this badge type
+  // --- Behavior Control & Lifecycle ---
+  isArchived           Boolean @default(false) // If true, template is archived and not available for new badge awards
+  isModifiableByIssuer Boolean @default(false) // If true, issuer can update this template's core props (like dynamicDisplayConfig or baseName), affecting all instances.
+  allowsPushedInstanceUpdates Boolean @default(false) // If true, issuer can push updates to instanceData of badges awarded from this template AFTER initial award, affecting one specific instance.
 
-  // --- Programmatic Credential Configuration ---
-  definesCredential             Boolean @default(false) // Does this template type utilize BadgeInstance.credentialValue?
-  credentialLabel               String? // How to label this metric if shown, e.g., "Rank", "Security Level"
-  credentialBest                Float?  // Numeric value representing the best possible score/rank
-  credentialWorst               Float?  // Numeric value representing the worst possible score/rank
-  // (Interpretation: if credentialWorst > credentialBest, lower is better; if credentialBest > credentialWorst, higher is better)
-  credentialNotes               String? // e.g. the credentialValue represents xyz and is calculated in such and such way
-  credentialIsNormalizable      Boolean @default(false) // Hints if the credentialValue can be normalized from 0 to 1
-  
-  metadataFieldDefinitions MetadataFieldDefinition[] // Defines slots for displayable textual metadata
-  instances                BadgeInstance[]
-  
-  createdAt                DateTime        @default(now())
-  updatedAt                DateTime        @updatedAt
+  // dynamicDisplayConfig: Defines the rendering rules and how instanceData is used.
+  // Structure:
+  // {
+  //   "badgeName": { // How the badge's display name is determined
+  //     "default": "string (Default display name, template.baseName can be a fallback if this is empty)",
+  //     // Rendering engine will look for "override_badgeName" in instanceData for the text content
+  //   },
+  //   "subtitle": { // Optional subtitle text on the badge. Font, color, and size are typically predefined by the template's overall style for subtitles.
+  //     "default": "string (Default subtitle, template.baseSubtitle can be a fallback if this is empty)",
+  //     // Rendering engine will look for "override_subtitleText" (or "override_subtitle") in instanceData for the text content
+  //   },
+  //   "displayDescription": { // User-facing description shown on badge detail page or rich views
+  //     "default": "string (Default detailed description for this badge type)",
+  //     // Rendering engine will look for "override_displayDescription" in instanceData
+  //   },
+  //   "outerShape": {
+  //     "default": "CIRCLE", // Expects a BadgeShape enum string (e.g., CIRCLE, STAR, HEXAGON, HEART, SQUARE)
+  //     // Rendering engine will look for e.g. "override_outerShape" in instanceData
+  //   },
+  //   "borderColor": {
+  //     "default": "#RRGGBB (hex color)"
+  //     // Rendering engine will look for e.g. "override_borderColor" in instanceData
+  //   },
+  //   "background": {
+  //     "type": { // Defines how the background is sourced
+  //       "default": "SOLID_COLOR" // Expects a BackgroundContentType ENUM string.
+  //       // Rendering engine will look for e.g. "override_bgType" in instanceData
+  //     },
+  //     "value": { // The actual color hex or hosted_image_url
+  //       "default": "#RRGGBB or hosted_image_url_string",
+  //       // Rendering engine will look for e.g. "override_bgValue" in instanceData
+  //     }
+  //   },
+  //   "foreground": { // Primary element on the badge (icon or text)
+  //     "type": { // Defines how the foreground is sourced
+  //       "default": "SYSTEM_ICON" // Expects a ForegroundContentType ENUM string.
+  //       // Rendering engine will look for e.g. "override_fgType" in instanceData
+  //     },
+  //     "value": { // The actual text content or hosted_icon_url
+  //       "default": "string (for TEXT) or system_icon_id (for SYSTEM_ICON) or uploaded_asset_hosted_url (for UPLOADED_ICON)",
+  //       // Rendering engine will look for e.g. "override_fgValue" in instanceData
+  //     },
+  //     "color": { // Color for the text or icon tint
+  //       "default": "#333333", // Example default foreground color
+  //       // Rendering engine will look for e.g. "override_foregroundColor" in instanceData
+  //     },
+  //     "textFont": { // Only applicable if foreground.type is TEXT
+  //       "default": "FONT_NAME_FROM_APPROVED_LIST (string)",
+  //       // Rendering engine will look for e.g. "override_textFont" in instanceData
+  //     },
+  //     "textSize": { // Only applicable if foreground.type is TEXT
+  //       "default": font size (int),
+  //       // Rendering engine will look for e.g. "override_fgSize" in instanceData
+  //     }  
+  //   },
+  //   "instanceTextFields": [ // Array of objects, each defining a text slot for METADATA (tooltips, detail pages)
+  //     {
+  //       "fieldKeyInInstanceData": "string (key in instanceData for this field's value, e.g., 'achievement')",
+  //       "label": "string (Static label, e.g., 'Achieved:')",
+  //       // "labelPath": "string (Optional: key in instanceData for a dynamic label)",
+  //       "prefix": "string (Optional)",
+  //       "suffix": "string (Optional)",
+  //       "style": "string (Predefined style name for metadata display, e.g., 'METADATA_DEFAULT', from TextStyle enum if used)",
+  //       "displayOrder": "integer (e.g., 0, 1, 2... lower numbers displayed first)"
+  //       // --- For fields intended to provide programmatic credentials and access control ---
+  //       // "isCredentialValue": "boolean (default: false, ideally only one field per template is true)",
+  //       // "credentialValueBest": "number (e.g., 1 for rank, 10000 for score if higher is better)",
+  //       // "credentialValueWorst": "number (e.g., 100 for rank, 0 for score if higher is better)",
+  //       //   Rule: If credentialValueWorst > credentialValueBest, then lower actual values are better.
+  //       //   Rule: If credentialValueBest > credentialValueWorst, then higher actual values are better.
+  //       // "credentialValueDescription": "string (Explains what this numeric credential represents, e.g., 'Competitive tier; lower is best.')",
+  //       // "canBeNormalized": "boolean (optional, default: false or true if best/worst define a range (i.e. they're not the same number). Hints if value can be normalized to 0-1 scale)"
+  //     }
+  //     // ... more text field definitions ...
+  //   ]
+  // }
+  dynamicDisplayConfig Json?
 
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  instances BadgeInstance[]
+
+  // A template should be user-owned, guild-owned, or system (all owner fields null).
+  // Application logic should enforce that ownedByUserId and ownedByGuildId are mutually exclusive.
   @@index([authoredByUserId])
   @@index([ownedByUserId])
   @@index([ownedByGuildId])
   @@index([isArchived])
   @@index([isModifiableByIssuer])
   @@index([allowsPushedInstanceUpdates])
-  @@index([inherentTier])
-}
-
-// Defines a slot for DISPLAYABLE instance-specific textual metadata
-model MetadataFieldDefinition {
-  id                      String  @id @default(uuid())
-  badgeTemplateId         String  // Foreign key to BadgeTemplate
-  badgeTemplate           BadgeTemplate @relation(fields: [badgeTemplateId], references: [id], onDelete: Cascade)
-
-  fieldKeyForInstanceData String  // The key used in `InstanceMetadataValue.dataKey`
-  label                   String  // e.g., "Date Achieved:", "Score:"
-  prefix                  String?
-  suffix                  String?
-  style                   String? // e.g., "METADATA_DEFAULT", maps to CSS/UI styling
-  displayOrder            Int     @default(0)
-
-  @@unique([badgeTemplateId, fieldKeyForInstanceData])
-  @@index([badgeTemplateId, displayOrder])
 }
 
 model BadgeInstance {
   id         String    @id @default(uuid())
   templateId String
-  template   BadgeTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  assignedAt DateTime  @default(now())
+  revokedAt  DateTime?
+  message    String?   @db.Text // Optional message from the giver or context of assignment
 
   // --- Giver (Polymorphic: User or Guild) ---
   userGiverId  String?
-  userGiver    User?   @relation("UserGivenBadges", fields: [userGiverId], references: [id], onDelete: SetNull)
   guildGiverId String?
-  guildGiver   Guild?  @relation("GuildGivenBadges", fields: [guildGiverId], references: [id], onDelete: SetNull)
-  
+  // clusterGiverId String? // Future: If clusters can give badges
+
   // --- Receiver (Polymorphic: User or Guild or Cluster) ---
   userReceiverId    String?
-  userReceiver      User?     @relation("UserReceivedBadges", fields: [userReceiverId], references: [id], onDelete: Cascade)
   guildReceiverId   String?
-  guildReceiver     Guild?    @relation("GuildReceivedBadges", fields: [guildReceiverId], references: [id], onDelete: Cascade)
-  clusterReceiverId String? 
-  clusterReceiver   Cluster?  @relation("ClusterReceivedBadges", fields: [clusterReceiverId], references: [id], onDelete: Cascade)
+  clusterReceiverId String? // New: Cluster as a receiver
 
-  assignedAt DateTime  @default(now())
-  revokedAt  DateTime?
-  message    String?   @db.Text
-
-  // --- Direct, Typed Fields for Core Visual Overrides (Nullable) ---
-  overrideBadgeName        String?
-  overrideSubtitle         String?
-  overrideOuterShape       BadgeShape?
-  overrideBorderColor      String?    // Hex
-  overrideBackgroundType   BackgroundContentType?
-  overrideBackgroundValue  String?    // Hex or HostedAsset.hostedUrl
-  overrideForegroundType   ForegroundContentType?
-  overrideForegroundValue  String?    // Text, SystemIcon.id, or HostedAsset.hostedUrl
-  overrideForegroundColor  String?    // Hex
-  overrideTextFont         String?
-  overrideTextSize         Int?
-  overrideDisplayDescription String? @db.Text
-
-  // --- Dedicated Field for Programmatic Credential Value ---
-  credentialValue          Float? // This value is the metric used for programmatic checks.
-
-  // --- Link to Instance-Specific DISPLAYABLE METADATA Values ---
-  metadataValues InstanceMetadataValue[] // Stores values for fields defined in MetadataFieldDefinition
+  // --- Instance Specific Data ---
+  // Provides specific values for the dynamic parts defined by
+  // the associated BadgeTemplate's dynamicDisplayConfig.
+  // Structure: Key-value pairs. Keys should match those specified in
+  // dynamicDisplayConfig's "fieldKeyInInstanceData" for instanceTextFields,
+  // OR platform-defined conventional override keys (e.g., "override_borderColor").
+  // Example:
+  // {
+  //   "override_borderColor": "#FF0000", 
+  //   "override_backgroundValue": "https://yourcdn.com/specific_bg.png", // This would be an UploadedAsset.hostedUrl
+  //   "achievement": "Completed the tutorial!" // Value for an instanceTextField where fieldKeyInInstanceData was "achievement"
+  // }
+  instanceData Json?
 
   guildAssignmentDetails GuildAssignmentDetails? @relation("BadgeInstanceToGuildAssignmentDetails")
 
-  // Links to Badge Case Items
-  userBadgeItem          UserBadgeItem?          // Link to badgecase where this badge instance is displayed
-  guildBadgeItems        GuildBadgeItem[]        // Link to badgecases where this badge instance is displayed
-  clusterBadgeItems      ClusterBadgeItem[]      // Link to badgecases where this badge instance is displayed
+  // Relationships
+  template        BadgeTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict) // IMPORTANT: Prevents template deletion if instances exist
+  userGiver       User?         @relation("UserGivenBadges", fields: [userGiverId], references: [id], onDelete: SetNull)
+  guildGiver      Guild?        @relation("GuildGivenBadges", fields: [guildGiverId], references: [id], onDelete: SetNull)
+  // clusterGiver    Cluster?      @relation("ClusterGivenBadges", fields: [clusterGiverId], references: [id], onDelete: SetNull) // Future
+  userReceiver    User?         @relation("UserReceivedBadges", fields: [userReceiverId], references: [id], onDelete: Cascade)
+  guildReceiver   Guild?        @relation("GuildReceivedBadges", fields: [guildReceiverId], references: [id], onDelete: Cascade)
+  clusterReceiver Cluster?      @relation("ClusterReceivedBadges", fields: [clusterReceiverId], references: [id], onDelete: Cascade) // New
 
+  // Links to Badge Case Items
+  userBadgeItem     UserBadgeItem?
+  guildBadgeItems   GuildBadgeItem[]
+  clusterBadgeItems ClusterBadgeItem[] // New: links to showcases where this badge instance is displayed
 
   // CHECK constraint (conceptual, enforce in application logic):
   // 1. (userGiverId != null XOR guildGiverId != null XOR clusterGiverId != null) // Consider clusterGiver later
   // 2. (userReceiverId != null XOR guildReceiverId != null XOR clusterReceiverId != null)
   // 3. If guildGiverId is set, detailsOfGuildAssignmentId can be set.
-  //    (The link is via GuildAssignmentDetails.badgeInstanceId pointing to this BadgeInstance.id)
 
   @@index([templateId])
   @@index([userGiverId])
   @@index([guildGiverId])
   @@index([userReceiverId])
   @@index([guildReceiverId])
-  @@index([clusterReceiverId])
-  @@index([credentialValue])
-}
-
-// Stores the actual key-value pairs for DISPLAYABLE textual metadata for a specific BadgeInstance
-model InstanceMetadataValue {
-  id               String  @id @default(uuid())
-  badgeInstanceId  String
-  badgeInstance    BadgeInstance @relation(fields: [badgeInstanceId], references: [id], onDelete: Cascade)
-
-  // This `dataKey` MUST match a `fieldKeyForInstanceData` from one of the
-  // BadgeInstance's template's associated MetadataFieldDefinitions.
-  dataKey          String  // e.g., "dateAchieved", "playerScore", "reasonForAward"
-  dataValue        String  // Actual metadata value (application logic parses if needed)
-
-  @@unique([badgeInstanceId, dataKey])
-  @@index([badgeInstanceId])
+  @@index([clusterReceiverId]) // New
 }
 
 model GuildAssignmentDetails {
@@ -601,10 +627,12 @@ model GuildAssignmentDetails {
 model UserBadgeAllocation {
   id                String    @id @default(uuid())
   userId            String
-  tier              BadgeTier
+  tier              BadgeTier // e.g., GOLD, SILVER, BRONZE
   remaining         Int       @default(0)
   lastReplenishedAt DateTime  @default(now())
+
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@unique([userId, tier])
   @@index([userId])
 }
@@ -616,6 +644,7 @@ model UserBadgeCase {
   isPublic  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
   user   User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   badges UserBadgeItem[]
 }
@@ -623,11 +652,13 @@ model UserBadgeCase {
 model UserBadgeItem {
   id              String   @id @default(uuid())
   badgeCaseId     String
-  badgeInstanceId String   @unique
+  badgeInstanceId String   @unique // Added @unique
   displayOrder    Int      @default(0)
   addedAt         DateTime @default(now())
+
   badgeCase UserBadgeCase @relation(fields: [badgeCaseId], references: [id], onDelete: Cascade)
   badge     BadgeInstance @relation(fields: [badgeInstanceId], references: [id], onDelete: Cascade)
+
   @@unique([badgeCaseId, badgeInstanceId])
   @@index([badgeCaseId, displayOrder])
 }
@@ -640,6 +671,7 @@ model GuildBadgeCase {
   featuredBadgeId String?  @unique // Optional featured badge for special display
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+
   guild         Guild            @relation(fields: [guildId], references: [id], onDelete: Cascade)
   badges        GuildBadgeItem[]
   featuredBadge GuildBadgeItem?  @relation("FeaturedGuildBadgeInCase", fields: [featuredBadgeId], references: [id], onDelete: SetNull)
@@ -651,6 +683,7 @@ model GuildBadgeItem {
   badgeInstanceId String
   displayOrder    Int      @default(0)
   addedAt         DateTime @default(now())
+
   badgeCase  GuildBadgeCase  @relation(fields: [badgeCaseId], references: [id], onDelete: Cascade)
   badge      BadgeInstance   @relation(fields: [badgeInstanceId], references: [id], onDelete: Cascade)
   featuredIn GuildBadgeCase? @relation("FeaturedGuildBadgeInCase") // Link back if this item is the featured one
@@ -659,47 +692,8 @@ model GuildBadgeItem {
   @@index([badgeCaseId, displayOrder])
 }
 
-// +++ NEW UPLOAD/ICON MODELS (as defined in schema4.prisma) +++
-model UploadedAsset {
-  id                 String    @id @default(cuid())
-  uploaderId         String?   
-  uploader           User?     @relation("UserUploadedAssets", fields: [uploaderId], references: [id], onDelete: SetNull)
-  originalFilename   String?
-  mimeType           String    
-  sizeBytes          Int       
-  hostedUrl          String    @unique 
-  storageIdentifier  String    @unique 
-  assetType          String    
-  description        String?   
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
-  systemIconsAsAsset SystemIcon[] 
-
-  @@index([uploaderId])
-  @@index([assetType])
-  @@index([hostedUrl])
-}
-
-model SystemIcon {
-  id           String  @id @default(cuid()) 
-  name         String  @unique              
-  category     String?                     
-  svgContent   String?                     
-  assetId      String? @unique             
-  asset        UploadedAsset? @relation(fields: [assetId], references: [id], onDelete: SetNull) 
-  isAvailable  Boolean @default(true)      
-  description  String?                     
-  tags         String[]                    
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  @@index([name])
-  @@index([category])
-  @@index([isAvailable])
-}
-// --- END NEW UPLOAD/ICON MODELS ---
-
 // --- GUILD CATEGORIES ---
+
 model Category {
   id                 String   @id @default(cuid())
   name               String   @unique
@@ -740,6 +734,7 @@ model UserCategoryPrimaryGuild {
   userId     String
   categoryId String
   guildId    String // The guild the user has marked as primary for this category
+
   setAt DateTime @default(now())
 
   user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -754,6 +749,7 @@ model UserCategoryPrimaryGuild {
 }
 
 // --- NOTIFICATION SYSTEM ---
+
 model Notification {
   id        String           @id @default(uuid())
   userId    String // The user who receives the notification
@@ -776,7 +772,7 @@ model Notification {
   @@index([createdAt])
 }
 
-// --- GUILD BAN MODEL ---
+// Add the new GuildBan model
 model GuildBan {
   id             String    @id @default(uuid())
   guildId        String // The guild that issued the ban
@@ -807,12 +803,12 @@ model GuildBan {
 
 model Cluster {
   id          String   @id @default(uuid())
-  name        String   @unique
-  displayName String?
+  name        String   @unique // Unique handle/slug for the cluster
+  displayName String? // For display purposes
   description String?  @db.Text
   avatar      String? // URL to image storage
   isOpen      Boolean  @default(false) // True if guilds can join without approval
-  createdById String
+  createdById String // User who created the cluster
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -857,7 +853,7 @@ model ClusterRole {
   name         String
   description  String?
   clusterId    String? // Link to the specific cluster, optional for system roles
-  isSystemRole Boolean  @default(false) // e.g., CLUSTER_CREATOR, CLUSTER_ADMIN
+  isSystemRole Boolean  @default(false) // e.g., CLUSTER_OWNER, CLUSTER_ADMIN
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -872,13 +868,13 @@ model ClusterRole {
 model UserClusterRole {
   id            String   @id @default(cuid())
   userId        String
-  clusterId     String
+  clusterId     String // To identify the cluster context directly
   clusterRoleId String
   assignedAt    DateTime @default(now())
   // assignedById String? // User who assigned this cluster role
 
   user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  cluster     Cluster     @relation(fields: [clusterId], references: [id], onDelete: Cascade)
+  cluster     Cluster     @relation(fields: [clusterId], references: [id], onDelete: Cascade) // Direct link to Cluster
   clusterRole ClusterRole @relation(fields: [clusterRoleId], references: [id], onDelete: Cascade)
   // assignedBy  User?       @relation("UserClusterRoleAssignedBy", fields: [assignedById], references: [id], onDelete: SetNull)
 
@@ -917,6 +913,7 @@ model ClusterBadgeItem {
   @@index([badgeCaseId, displayOrder])
 }
 
+// New model for Cluster Contacts
 model ClusterContact {
   id           String      @id @default(uuid())
   clusterId    String
@@ -926,10 +923,13 @@ model ClusterContact {
   displayOrder Int         @default(0)
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
+
   cluster Cluster @relation(fields: [clusterId], references: [id], onDelete: Cascade)
+
   @@index([clusterId, displayOrder])
 }
 
+// New model for linking ClusterRoles to Permissions
 model ClusterRolePermission {
   id            String   @id @default(cuid())
   clusterRoleId String
@@ -946,16 +946,15 @@ model ClusterRolePermission {
   @@index([permissionId])
 }
 
-
 // --- GUILD INVITATION SYSTEM ---
 
 model GuildDirectInvitation {
   id               String                @id @default(uuid())
   guildId          String
   invitedByUserId  String // User who sent the invitation
-  targetUserId     String? // VG user who received the invitation (if they exist in ViaGuild system)
+  targetUserId     String? // User who received the invitation (if they exist in ViaGuild system)
   targetUserHandle String // The handle/username used for the invitation (e.g. "username123", "user@example.com")
-  platform         InvitationPlatform // Platform of the targetUserHandle (e.g. VIAGUILD, TWITTER, DISCORD, etc.)
+  platform         InvitationPlatform // Platform of the targetUserHandle (e.g. VIAGUILD, TWITTER, DISCORD)
   status           GuildInvitationStatus @default(PENDING)
   createdAt        DateTime              @default(now())
   updatedAt        DateTime              @updatedAt
@@ -999,7 +998,7 @@ model GuildJoinRequest {
   userId           String // User requesting to join
   message          String?                @db.Text // Optional message from the user
   status           GuildJoinRequestStatus @default(PENDING)
-  reviewedByUserId String? // Admin/Creator who reviewed the request
+  reviewedByUserId String? // Admin/Owner who reviewed the request
   reviewedAt       DateTime?
   createdAt        DateTime               @default(now())
   updatedAt        DateTime               @updatedAt
@@ -1081,12 +1080,71 @@ model GuildRelationshipProposal {
 
   proposingGuild Guild @relation("ProposingGuildForRelationship", fields: [proposingGuildId], references: [id], onDelete: Cascade)
   targetGuild    Guild @relation("TargetGuildForRelationship", fields: [targetGuildId], references: [id], onDelete: Cascade)
-  proposedByUser User  @relation("ProposedByUser", fields: [proposedByUserId], references: [id], onDelete: Cascade)
-  resolvedByUser User? @relation("ResolvedByUser", fields: [resolvedByUserId], references: [id], onDelete: SetNull)
-  @@unique([proposingGuildId, targetGuildId, proposedType, status], name: "unique_pending__guild_relationship_proposal")
+  proposedByUser User  @relation("ProposedByUser", fields: [proposedByUserId], references: [id], onDelete: Cascade) // Relation name to match User model
+  resolvedByUser User? @relation("ResolvedByUser", fields: [resolvedByUserId], references: [id], onDelete: SetNull) // Relation name to match User model
+
+  @@unique([proposingGuildId, targetGuildId, proposedType, status], name: "unique_pending_guild_relationship_proposal") // Prevents identical pending proposals
   @@index([proposingGuildId])
   @@index([targetGuildId])
   @@index([status])
   @@index([proposedByUserId])
   @@index([resolvedByUserId])
 }
+
+// +++ NEW MODEL +++
+model UploadedAsset {
+  id                 String    @id @default(cuid())
+  uploaderId         String?   // User who uploaded it (nullable if system can upload e.g. default assets)
+  uploader           User?     @relation("UserUploadedAssets", fields: [uploaderId], references: [id], onDelete: SetNull)
+  
+  originalFilename   String?
+  mimeType           String    // e.g., "image/png", "image/jpeg", "image/svg+xml"
+  sizeBytes          Int       // Size AFTER Sharp.js processing (if applicable)
+  
+  // The publicly accessible URL (e.g., /uploads/images/... or S3/R2 URL, or CDN URL)
+  // This is what frontends will use in <img> tags or CSS.
+  hostedUrl          String    @unique 
+  
+  // The key/filename within the specific storage system (e.g., local filename, S3/R2 object key).
+  // Used by the backend storage service to locate/delete the actual file.
+  storageIdentifier  String    @unique 
+  
+  assetType          String    // For categorization, e.g., "BADGE_TEMPLATE_IMAGE", "USER_AVATAR", "BADGE_ICON_FG"
+  description        String?   // Optional description of the asset
+  
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  // Example: If you wanted a direct one-to-one for User Avatars instead of User.avatar storing the hostedUrl
+  // userAsAvatar       User?     @relation("UserAvatarAsset")
+
+  @@index([uploaderId])
+  @@index([assetType])
+  @@index([hostedUrl]) // If you need to look up assets by their public URL
+}
+// +++ END NEW MODEL +++
+
+// +++ NEW MODEL for Predefined System Icons +++
+model SystemIcon {
+  id           String  @id @default(cuid()) // Or a unique key like "icon_star_filled"
+  name         String  @unique              // e.g., "Star Filled", "Shield", "Heart Outline"
+  category     String?                     // e.g., "Achievements", "Interface", "Common"
+  svgContent   String?                     // If you store SVG markup directly (ensure sanitization on render)
+  assetId      String? @unique             // Optional: Link to an UploadedAsset if it also has a raster version or is managed there
+  asset        UploadedAsset? @relation(fields: [assetId], references: [id], onDelete: SetNull) // If linked to an UploadedAsset
+  isAvailable  Boolean @default(true)      // If you want to enable/disable icons from the predefined list
+  description  String?                     // Optional description or usage hint
+  tags         String[]                    // For searchability, e.g., ["favorite", "rating", "achievement"]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // If you were to use the full relational approach for BadgeDisplayConfig,
+  // this icon could be linked there. For JSON approach, config refers to SystemIcon.id/name.
+  // badgeDisplayConfigsAsForeground SystemIconForeground[]
+
+  @@index([name])
+  @@index([category])
+  @@index([isAvailable])
+}
+// +++ END NEW MODEL +++

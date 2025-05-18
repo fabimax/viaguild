@@ -1,0 +1,184 @@
+// Explanatory schema for Badge Configuration and Instance Data using tables
+// in Documentation For LLMs/mockups/schema4.prisma
+
+// --- ENUMS (Assumed from previous discussions) ---
+enum BadgeShape {
+  CIRCLE
+  STAR
+  HEXAGON
+  SQUARE
+  HEART
+}
+
+enum BackgroundContentType {
+  SOLID_COLOR
+  HOSTED_IMAGE
+}
+
+enum ForegroundContentType {
+  TEXT
+  SYSTEM_ICON
+  UPLOADED_ICON
+}
+
+// --- CORE MODELS (Simplified) ---
+
+model User {
+  id String @id
+  // ... other user fields
+  authoredBadgeTemplates       BadgeTemplate[]            @relation("AuthoredByRelation")
+  ownedBadgeTemplates          BadgeTemplate[]            @relation("UserOwnedBadgeTemplates")
+  badgeInstancesGiven          BadgeInstance[]            @relation("UserGivenBadges")
+  badgeInstancesReceived       BadgeInstance[]            @relation("UserReceivedBadges")
+  uploadedAssets               UploadedAsset[]            @relation("UserUploadedAssets")
+}
+
+model Guild {
+  id String @id
+  // ... other guild fields
+  ownedBadgeTemplates    BadgeTemplate[] @relation("GuildOwnedBadgeTemplates")
+  badgeInstancesGiven    BadgeInstance[] @relation("GuildGivenBadges")
+  badgeInstancesReceived BadgeInstance[] @relation("GuildReceivedBadges")
+}
+
+model UploadedAsset {
+  id        String  @id @default(cuid())
+  hostedUrl String  @unique
+  // ... other asset fields
+  systemIconsAsAsset SystemIcon[]
+}
+
+model SystemIcon {
+  id         String  @id @default(cuid())
+  name       String  @unique
+  assetId    String? @unique
+  asset      UploadedAsset? @relation(fields: [assetId], references: [id])
+  // ... other icon fields
+}
+
+
+// --- BADGE SYSTEM (Relational Configuration - Refined & Combined) ---
+
+model BadgeTemplate {
+  id                   String  @id @default(uuid())
+  internalNotes        String? @db.Text // Renamed from description; Internal notes about template purpose
+
+  authoredByUserId     String?
+  authoredByUser       User?   @relation("AuthoredByRelation", fields: [authoredByUserId], references: [id])
+  ownedByUserId        String?
+  ownedByUser          User?   @relation("UserOwnedBadgeTemplates", fields: [ownedByUserId], references: [id])
+  ownedByGuildId       String?
+  ownedByGuild         Guild?  @relation("GuildOwnedBadgeTemplates", fields: [ownedByGuildId], references: [id])
+
+  // Lifecycle & Behavior
+  isArchived                   Boolean @default(false)
+  isModifiableByIssuer         Boolean @default(false) // Can these embedded display config fields be changed?
+  allowsPushedInstanceUpdates  Boolean @default(false) // Can instance metadata or metricValue be updated by issuer post-award?
+
+  // --- Default Display Properties (Formerly in BadgeDisplayConfig, now embedded) ---
+  defaultBadgeName        String   // Default display name (was baseName)
+  defaultSubtitleText     String?  // Default subtitle text (was baseSubtitle)
+  defaultOuterShape       BadgeShape @default(CIRCLE)
+  defaultBorderColor      String     @default("#000000") // Hex
+  defaultBackgroundType   BackgroundContentType @default(SOLID_COLOR)
+  defaultBackgroundValue  String     // Hex color or HostedAsset.hostedUrl
+  defaultForegroundType   ForegroundContentType @default(SYSTEM_ICON)
+  defaultForegroundValue  String     // Text, SystemIcon.id, or HostedAsset.hostedUrl
+  defaultForegroundColor  String?    // Hex, for text or icon tint
+  defaultTextFont         String?    // If foreground type is TEXT (from approved list)
+  defaultTextSize         Int?       // If foreground type is TEXT (e.g., in pixels)
+  defaultDisplayDescription String? @db.Text // Default user-facing description for this badge type
+
+  // --- Programmatic Credential Configuration (Formerly in BadgeDisplayConfig, now embedded) ---
+  definesCredential           Boolean @default(false) // Does this template type utilize BadgeInstance.credentialValue?
+  credentialLabel             String? // Renamed from credentialDisplayName; e.g., "Rank", "Security Level"
+  credentialBest              Float?  // Renamed from credentialBestValue
+  credentialWorst             Float?  // Renamed from credentialWorstValue
+  // (Interpretation: if credentialWorst > credentialBest, lower is better; if credentialBest > credentialWorst, higher is better)
+  credentialNotes             String? // Renamed from credentialInterpretationNotes; e.g., "Lower is better, range 1-100"
+  credentialIsNormalizable    Boolean @default(false) // Renamed from credentialCanBeNormalized
+
+  // --- Definitions for Instance-Specific DISPLAYABLE METADATA Fields ---
+  metadataFieldDefinitions MetadataFieldDefinition[]
+
+  instances            BadgeInstance[]
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@index([authoredByUserId])
+  @@index([ownedByUserId])
+  @@index([ownedByGuildId])
+}
+
+// Defines a slot for DISPLAYABLE instance-specific textual metadata
+model MetadataFieldDefinition {
+  id                      String  @id @default(uuid())
+  badgeTemplateId         String  // Foreign key to BadgeTemplate
+  badgeTemplate           BadgeTemplate @relation(fields: [badgeTemplateId], references: [id], onDelete: Cascade)
+
+  fieldKeyForInstanceData String  // The key used in `InstanceMetadataValue.dataKey`
+  label                   String  // e.g., "Date Achieved:", "Score:"
+  prefix                  String?
+  suffix                  String?
+  style                   String? // e.g., "METADATA_DEFAULT", maps to CSS/UI styling
+  displayOrder            Int     @default(0)
+
+  @@unique([badgeTemplateId, fieldKeyForInstanceData])
+  @@index([badgeTemplateId, displayOrder])
+}
+
+
+model BadgeInstance {
+  id         String    @id @default(uuid())
+  templateId String
+  template   BadgeTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict)
+
+  // Giver, Receiver, Message, Timestamps etc.
+  userGiverId      String?
+  userGiver        User?   @relation("UserGivenBadges", fields: [userGiverId], references: [id])
+  guildGiverId     String?
+  guildGiver       Guild?  @relation("GuildGivenBadges", fields: [guildGiverId], references: [id])
+  userReceiverId   String?
+  userReceiver     User?   @relation("UserReceivedBadges", fields: [userReceiverId], references: [id])
+  guildReceiverId  String?
+  guildReceiver    Guild?  @relation("GuildReceivedBadges", fields: [guildReceiverId], references: [id])
+  assignedAt       DateTime @default(now())
+  message          String?  @db.Text
+
+  // --- Direct, Typed Fields for Core Visual Overrides (Nullable) ---
+  overrideBadgeName        String?
+  overrideSubtitle         String?
+  overrideOuterShape       BadgeShape?
+  overrideBorderColor      String?    // Hex
+  overrideBackgroundType   BackgroundContentType?
+  overrideBackgroundValue  String?    // Hex or HostedAsset.hostedUrl
+  overrideForegroundType   ForegroundContentType?
+  overrideForegroundValue  String?    // Text, SystemIcon.id, or HostedAsset.hostedUrl
+  overrideForegroundColor  String?    // Hex
+  overrideTextFont         String?
+  overrideTextSize         Int?
+  overrideDisplayDescription String? @db.Text // NEW: Instance-specific user-facing description
+
+  // --- Dedicated Field for Programmatic Credential Value ---
+  credentialValue          Float? // This value is the metric used for programmatic checks.
+  
+  // --- Link to Instance-Specific DISPLAYABLE METADATA Values ---
+  metadataValues InstanceMetadataValue[] // Stores values for fields defined in MetadataFieldDefinition
+
+  @@index([credentialValue]) // Updated index from metricValue
+}
+
+// Stores the actual key-value pairs for DISPLAYABLE textual metadata for a specific BadgeInstance
+model InstanceMetadataValue { // Renamed from InstanceDisplayDataValue for clarity
+  id               String  @id @default(uuid())
+  badgeInstanceId  String
+  badgeInstance    BadgeInstance @relation(fields: [badgeInstanceId], references: [id], onDelete: Cascade)
+
+  // This `dataKey` MUST match a `fieldKeyForInstanceData` from one of the
+  // BadgeInstance's template's associated MetadataFieldDefinitions.
+  dataKey          String  // e.g., "dateAchieved", "playerScore", "reasonForAward"
+  dataValue        String  // Actual metadata value (application logic parses if needed)
+
+  @@unique([badgeInstanceId, dataKey])
+  @@index([badgeInstanceId])
+}
