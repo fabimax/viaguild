@@ -439,9 +439,9 @@ model BadgeTemplate {
   ownedByGuild                Guild?  @relation("GuildOwnedBadgeTemplates", fields: [ownedByGuildId], references: [id], onDelete: SetNull)
 
   // Lifecycle & Behavior
-  isArchived                  Boolean @default(false) // Whether the template owner has archived/soft-deleted this template
-  isModifiableByIssuer        Boolean @default(false) // Can these embedded display config fields be changed?
-  allowsPushedInstanceUpdates Boolean @default(false) // Can instance metadata or credentialValue be updated by issuer post-award?
+  isArchived                  Boolean @default(false) // Whether the template owner has archived/soft-deleted this template (it is not deleted from the db if there exist awarded badge instances with this template)
+  isModifiableByIssuer        Boolean @default(false) // Can this template be modified? (changes propagate to non-overridden properties of awarded badges)
+  allowsPushedInstanceUpdates Boolean @default(false) // Can the issuer modify individual instances of this badge post-award?
 
   // --- Tier Configuration ---
   inherentTier                BadgeTier? // Renamed from defaultTier. Optional: The inherent tier of this template, influences allocation use & can enforce/suggest styling (e.g., border color).

@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { seedUsers } from './seeds/users';
 import { seedGuilds } from './seeds/guilds';
+import { seedSystemIcons } from './seeds/system/systemIcons';
 import { seedCategories } from './seeds/categories';
 import { seedClusters } from './seeds/clusters';
 import { seedPermissions } from './seeds/system/permissions';
@@ -28,6 +29,7 @@ async function main() {
   await seedGuilds(prisma);
   
   // System setup in order
+  await seedSystemIcons(prisma);
   await seedPermissions(prisma);
   await seedSystemRoles(prisma);
   await seedRolePermissions(prisma);
