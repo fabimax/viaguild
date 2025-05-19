@@ -6,21 +6,25 @@ const SPECIAL_GUILD_NAME = 'TheNexusHub'; // For Special Guild
 export async function seedCustomGuildRoles(prisma: PrismaClient) {
   console.log('Seeding custom guild roles and their permissions (including for Special Guild)...');
 
-  const guilds = await prisma.guild.findMany();
+  const guilds = await prisma.guild.findMany({
+    take: 3, // Example: Add custom roles to the first 3 guilds
+    include: { memberships: { include: { user: true } } } // Include memberships to find users
+  });
+
+  if (guilds.length === 0) {
+    console.log('No guilds found to add custom roles to, skipping.');
+    return;
+  }
+
   const users = await prisma.user.findMany();
-  const memberSystemRole = await prisma.role.findFirst({ where: { name: 'MEMBER', isSystemRole: true, guildId: null } });
+  const memberSystemRole = await prisma.role.findFirst({
+    where: { name: 'MEMBER', isSystemRole: true, guildId: null },
+    select: { id: true }
+  });
   const allPermissions = await prisma.permission.findMany(); // Fetch all permissions
 
-  if (guilds.length < 10) {
-    console.warn('⚠️ Not enough guilds to create 10 distinct custom roles. Skipping custom guild role seeding.');
-    return;
-  }
-  if (users.length === 0) {
-    console.warn('⚠️ No users found. Skipping custom guild role assignment.');
-    return;
-  }
   if (!memberSystemRole) {
-    console.error('❌ System role MEMBER not found. Cannot reliably assign custom roles by updating members.');
+    console.error('Could not find MEMBER system role. Skipping custom guild role assignments.');
     return;
   }
   if (allPermissions.length === 0) { console.warn('No permissions found to assign to custom roles.'); return; }
@@ -76,31 +80,81 @@ export async function seedCustomGuildRoles(prisma: PrismaClient) {
       console.warn(`Special Guild ${SPECIAL_GUILD_NAME} not found for custom roles.`);
   }
 
-  let usersAssignedCustomRolesCount = 0; 
-  const targetAssignments = 20 + (specialGuild ? 4 : 0); // Slightly more to account for special guild roles
+  let rolesCreatedCount = 0;
+  let rolesAssignedCount = 0;
 
-  for (let attempt = 0; attempt < 5 && usersAssignedCustomRolesCount < targetAssignments; attempt++) {
-    const shuffledCustomRoles = faker.helpers.shuffle([...customRolesCreated]);
-    for (const customRole of shuffledCustomRoles) {
-      if (usersAssignedCustomRolesCount >= targetAssignments) break;
-      if (!customRole.guildId) continue;
-      const potentialMemberships = await prisma.guildMembership.findMany({
-        where: { guildId: customRole.guildId, roleId: memberSystemRole.id }, // Find generic members
-        select: { userId: true }, take: targetAssignments, 
-      });
-      const shuffledPotentialMemberships = faker.helpers.shuffle(potentialMemberships);
-      for (const membershipInfo of shuffledPotentialMemberships) {
-        if (usersAssignedCustomRolesCount >= targetAssignments) break;
-        try {
-          await prisma.guildMembership.update({
-            where: { uniqueUserGuild: { userId: membershipInfo.userId, guildId: customRole.guildId }},
-            data: { roleId: customRole.id },
-          });
-          usersAssignedCustomRolesCount++;
-          console.log(`Assigned custom role ${customRole.name} to user ${membershipInfo.userId} in guild ${customRole.guildId}`);
-        } catch (e:any) { if(e.code !== 'P2025'){ /* console.warn(...); */ } }
+  for (const guild of guilds) {
+    const guildCustomRoles = [];
+    // Create a couple of custom roles for this guild
+    const rolesToCreateForThisGuild = faker.helpers.arrayElements(customRolesCreated, faker.number.int({ min: 1, max: 2 }));
+
+    for (const roleDef of rolesToCreateForThisGuild) {
+      try {
+        const customRole = await prisma.role.upsert({
+          where: { name_guildId: { name: roleDef.name, guildId: guild.id } }, // Assumes @@unique([name, guildId]) on Role
+          update: { description: roleDef.description },
+          create: {
+            name: roleDef.name,
+            description: roleDef.description,
+            guildId: guild.id,
+            isSystemRole: false,
+            isDefaultRole: false,
+          },
+        });
+        guildCustomRoles.push(customRole);
+        rolesCreatedCount++;
+        console.log(`   Upserted custom role "${customRole.name}" for guild "${guild.name}".`);
+      } catch (e) {
+        console.error(`Error upserting custom role ${roleDef.name} for guild ${guild.name}:`, e);
+      }
+    }
+
+    // Assign these custom roles to a few existing members of the guild
+    // Find members who currently only have the MEMBER system role (or any member for simplicity)
+    if (guildCustomRoles.length > 0 && guild.memberships.length > 0) {
+      const membersToPotentiallyPromote = guild.memberships;
+      const shuffledMembers = faker.helpers.shuffle(membersToPotentiallyPromote);
+
+      for (const customRole of guildCustomRoles) {
+        // Assign this custom role to 1 or 2 members
+        const membersToAssignThisRole = shuffledMembers.slice(0, faker.number.int({ min: 1, max: Math.min(2, shuffledMembers.length) }));
+        
+        for (const membership of membersToAssignThisRole) {
+          try {
+            // Create an entry in UserGuildRole
+            await prisma.userGuildRole.create({
+              data: {
+                guildMembershipId: membership.id,
+                roleId: customRole.id,
+              },
+            });
+            rolesAssignedCount++;
+            console.log(`     Assigned custom role "${customRole.name}" to member ${membership.user.username} in guild "${guild.name}".`);
+            
+            // Optional: If assigning a custom role should remove the generic MEMBER role
+            // This part depends on your desired logic. For now, we add roles.
+            // const memberRoleAssignment = await prisma.userGuildRole.findFirst({
+            //   where: { guildMembershipId: membership.id, roleId: memberSystemRole.id }
+            // });
+            // if (memberRoleAssignment) {
+            //   await prisma.userGuildRole.delete({
+            //     where: { id: memberRoleAssignment.id }
+            //   });
+            //   console.log(`       Removed MEMBER role from ${membership.user.username} after assigning custom role.`);
+            // }
+
+          } catch (e: any) {
+            if (e.code === 'P2002') { // Unique constraint violation - user already has this role in this guild membership
+              // This is fine, means the role was already assigned (idempotency)
+              console.log(`     User ${membership.user.username} already has role "${customRole.name}" in guild "${guild.name}".`);
+            } else {
+              console.error(`Error assigning custom role "${customRole.name}" to user ${membership.user.username} in guild ${guild.name}:`, e);
+            }
+          }
+        }
       }
     }
   }
-  console.log(`Custom guild roles & permissions seeding finished. ${customRolesCreated.length} roles created, ${usersAssignedCustomRolesCount} user assignments made.`);
+
+  console.log(`✅ Custom guild roles seeding finished. ${rolesCreatedCount} roles created/updated, ${rolesAssignedCount} roles assigned.`);
 } 

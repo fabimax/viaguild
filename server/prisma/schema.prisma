@@ -326,7 +326,7 @@ model Role {
 
   guild            Guild?            @relation("GuildCustomRoles", fields: [guildId], references: [id], onDelete: Cascade)
   permissions      RolePermission[]
-  guildMemberships GuildMembership[]
+  assignedUserGuildRoles UserGuildRole[]   // NEW: Relation to the new join table
   systemUsers      UserSystemRole[]
 
   @@unique([name, guildId])
@@ -370,7 +370,6 @@ model GuildMembership {
   id           String          @id @default(uuid())
   userId       String
   guildId      String
-  roleId       String // Points to an entry in the Role table
   isPrimary    Boolean         @default(false) // Global primary guild for the user
   primarySetAt DateTime? // When this guild was set as primary
   rank         GuildMemberRank @default(E)
@@ -378,13 +377,33 @@ model GuildMembership {
 
   user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
   guild Guild @relation(fields: [guildId], references: [id], onDelete: Cascade)
-  role  Role  @relation(fields: [roleId], references: [id], onDelete: Restrict) // Don't delete role if in use
 
-  @@unique([userId, guildId], name: "uniqueUserGuild")
+  @@unique([userId, guildId], name: "uniqueUserGuildMembership") // Name clarified
+
+  // New relation to the roles this membership holds
+  assignedRoles UserGuildRole[]
+
   @@index([userId])
   @@index([guildId])
-  @@index([roleId])
   @@index([userId, isPrimary])
+}
+
+// NEW JOIN TABLE: UserGuildRole
+model UserGuildRole {
+  id                String   @id @default(cuid())
+  guildMembershipId String
+  roleId            String
+  assignedAt        DateTime @default(now())
+  // assignedByUserId String? // Optional: User who assigned this specific role to the member
+
+  guildMembership GuildMembership @relation(fields: [guildMembershipId], references: [id], onDelete: Cascade)
+  role            Role            @relation(fields: [roleId], references: [id], onDelete: Restrict) // Don't delete Role if in use here
+  // assignedBy   User?        @relation("RoleAssignedToMemberBy", fields: [assignedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([guildMembershipId, roleId]) // A member can only have a specific role once in a guild
+  @@index([guildMembershipId])
+  @@index([roleId])
+  // @@index([assignedByUserId])
 }
 
 model GuildRelationship {
