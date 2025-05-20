@@ -58,12 +58,16 @@ export async function seedBadgeTemplates(prisma: PrismaClient) {
   const testUserPrime = users.find(u => u.username === TEST_USER_PRIME_USERNAME);
   const specialGuild = guilds.find(g => g.name === SPECIAL_GUILD_NAME);
   const systemDesignerUser = users[0]; // Fallback or a designated system content creator user
+  const artisanCraftersGuild = guilds.find(g => g.name === 'ArtisanCrafters'); // Fetch ArtisanCrafters guild
 
   if (!testUserPrime) {
     console.warn(`⚠️ TestUserPrime not found. Some templates might not be correctly authored/owned.`);
   }
   if (!specialGuild) {
     console.warn(`⚠️ Special Guild ${SPECIAL_GUILD_NAME} not found. Some templates might not be correctly owned.`);
+  }
+  if (!artisanCraftersGuild) { // Add warning for ArtisanCrafters
+    console.warn('⚠️ Guild "ArtisanCrafters" not found. Template 7 might not be correctly owned or might fail if it depends on it.');
   }
   if (allSystemIcons.length === 0) {
     console.warn('⚠️ No system icons found. Foreground icons for templates might be missing.');
@@ -350,13 +354,13 @@ export async function seedBadgeTemplates(prisma: PrismaClient) {
         },
       ],
     },
-    // Template 7: "Artisan Guild - Bronze Achievement" (Owned by another guild, Bronze, static)
+    // Template 7: "Artisan Guild - Bronze Achievement" (Owned by ArtisanCrafters guild, Bronze, static)
     {
-      templateSlug: 'guild_ArtisanCrafters_bronze_craft', // Changed from uniqueKey
+      templateSlug: 'guild_ArtisanCrafters_bronze_craft', 
       internalNotes: 'Standard bronze crafting achievement for the Artisan Crafters guild.',
-      authoredByUserId: systemDesignerUser?.id, // Or a member of that guild
+      authoredByUserId: systemDesignerUser?.id, 
       ownedByUserId: null,
-      ownedByGuildId: guilds.find(g => g.name === 'ArtisanCrafters')?.id || guilds[1]?.id || null, // Assign to a faker guild if specific one not found
+      ownedByGuildId: artisanCraftersGuild?.id || null, // Use the fetched ID
       isArchived: false,
       isModifiableByIssuer: false,
       allowsPushedInstanceUpdates: false,

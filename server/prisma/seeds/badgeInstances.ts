@@ -66,8 +66,10 @@ export async function seedBadgeInstances(prisma: PrismaClient) {
       ownedByUserId: true,
       ownedByGuildId: true,
       definesCredential: true,
-      defaultBadgeName: true, // Kept for now for the heuristic, but aim to remove heuristic
-      metadataFieldDefinitions: { // This structure should make it available
+      defaultBadgeName: true, 
+      credentialBest: true, 
+      credentialWorst: true, 
+      metadataFieldDefinitions: {
         select: { fieldKeyForInstanceData: true, id: true },
       },
     },
@@ -76,17 +78,26 @@ export async function seedBadgeInstances(prisma: PrismaClient) {
 
   const testUserPrime = users.find(u => u.username === TEST_USER_PRIME_USERNAME);
   const specialGuild = guilds.find(g => g.name === SPECIAL_GUILD_NAME);
-  // Assuming TheNexusHub's primary cluster is the first one for simplicity in seeding
-  const nexusHubPrimaryCluster = clusters.length > 0 ? clusters[0] : null; 
+  const artisanCraftersGuild = guilds.find(g => g.name === 'ArtisanCrafters'); // Fetch ArtisanCrafters guild
+  
+  const otherUsers = users.filter(u => u.id !== testUserPrime?.id);
+  const otherGuilds = guilds.filter(g => g.id !== specialGuild?.id && g.id !== artisanCraftersGuild?.id);
+
+  const nexusHubPrimaryCluster = clusters.find(c => c.name === 'Cluster1'); 
+  const secondCluster = clusters.find(c => c.name === 'Cluster2'); 
 
   if (!testUserPrime) console.warn('TestUserPrime not found for badge instance seeding!');
   if (!specialGuild) console.warn(`${SPECIAL_GUILD_NAME} not found for badge instance seeding!`);
+  if (!artisanCraftersGuild) console.warn('ArtisanCrafters guild not found for badge instance seeding! Badge awards from/to it might be skipped.');
+  if (!nexusHubPrimaryCluster) console.warn('Cluster1 (nexusHubPrimaryCluster) not found for badge instance seeding!');
+
   if (badgeTemplates.length === 0) {
     console.warn('No badge templates found. Cannot seed instances.');
     return;
   }
+  if (otherUsers.length < 5) console.warn('Fewer than 5 other users available for diverse badge seeding.');
+  if (otherGuilds.length < 3) console.warn('Fewer than 3 other guilds available for diverse badge seeding.');
 
-  // --- Helper to resolve entity IDs ---
   const getEntityId = (entityInfo: any, type: 'USER' | 'GUILD' | 'CLUSTER'): string | undefined => {
     if (entityInfo.id) return entityInfo.id;
     if (type === 'USER' && entityInfo.username) return users.find(u => u.username === entityInfo.username)?.id;
@@ -97,59 +108,44 @@ export async function seedBadgeInstances(prisma: PrismaClient) {
 
   const getSystemIconIdByName = (name: string): string | undefined => systemIcons.find(si => si.name === name)?.id;
 
-  // --- 2. Define Badge Instance Seed Data ---
-  const instancesToSeed: BadgeInstanceSeedEntry[] = [
-    // Scenario 1: TestUserPrime receives "Site Pioneer" badge (System gives)
+  let instancesToSeed: BadgeInstanceSeedEntry[] = [
+    // Scenario 1: TestUserPrime receives "Site Pioneer"
     {
       description: 'TestUserPrime receives Site Pioneer',
-      templateTarget: { 
-        slug: 'system_site_pioneer', 
-        ownedByUserId: null, 
-        ownedByGuildId: null 
-      },
+      templateTarget: { slug: 'system_site_pioneer', ownedByUserId: null, ownedByGuildId: null },
       giver: { type: 'USER', username: TEST_USER_PRIME_USERNAME }, 
       receiver: { type: 'USER', username: TEST_USER_PRIME_USERNAME },
       awardStatus: BadgeAwardStatus.ACCEPTED,
-      apiVisible: false, // It's not a credential badge
+      apiVisible: false,
       message: 'Welcome, Pioneer! Thank you for your early support of ViaGuild.',
       metadataValues: {
         joinDate: faker.date.past({years: 1}).toISOString().split('T')[0],
         userNumber: faker.number.int({min: 1, max: 100}).toString(),
       },
     },
-    // Scenario 2: TestUserPrime (as TheNexusHub Founder) receives the "Nexus Visionary" badge from TheNexusHub itself
+    // Scenario 2: TestUserPrime receives "Nexus Visionary" from TheNexusHub
     {
       description: `TestUserPrime receives Nexus Visionary from ${SPECIAL_GUILD_NAME}`,
-      templateTarget: { 
-        slug: `guild_${SPECIAL_GUILD_NAME}_founder`, 
-        ownedByGuildId: specialGuild?.id, 
-        ownedByUserId: null 
-      },
+      templateTarget: { slug: `guild_${SPECIAL_GUILD_NAME}_founder`, ownedByGuildId: specialGuild?.id, ownedByUserId: null },
       giver: { type: 'GUILD', guildName: SPECIAL_GUILD_NAME },
       receiver: { type: 'USER', username: TEST_USER_PRIME_USERNAME },
       awardStatus: BadgeAwardStatus.ACCEPTED,
       apiVisible: false,
       message: `For founding and leading ${SPECIAL_GUILD_NAME} with unparalleled vision.`,
-      overrideBorderColor: '#FFD700', // Special gold border for the founder's own badge
-      metadataValues: {
-        foundingDate: '2024-01-01', // Example fixed date
-      },
+      overrideBorderColor: '#FFD700',
+      metadataValues: { foundingDate: '2024-01-01' },
     },
-    // Scenario 3: TestUserPrime awards their "Project Completion" badge to another user
+    // Scenario 3: TestUserPrime awards "Project Completion" to another user
     {
       description: `TestUserPrime awards Project Completion to another user`,
-      templateTarget: { 
-        slug: `user_${TEST_USER_PRIME_USERNAME}_project_alpha`, 
-        ownedByUserId: testUserPrime?.id, 
-        ownedByGuildId: null 
-      },
+      templateTarget: { slug: `user_${TEST_USER_PRIME_USERNAME}_project_alpha`, ownedByUserId: testUserPrime?.id, ownedByGuildId: null },
       giver: { type: 'USER', username: TEST_USER_PRIME_USERNAME },
-      receiver: { type: 'USER', id: users.filter(u => u.id !== testUserPrime?.id)[0]?.id || users[0]?.id }, // Another user
+      receiver: { type: 'USER', id: otherUsers[0]?.id || users[0]?.id },
       awardStatus: BadgeAwardStatus.ACCEPTED,
-      apiVisible: true, // This template defines a credential
+      apiVisible: true,
       message: 'Great work on completing the Alpha Project!',
-      credentialValue: 8, // Project difficulty was 8
-      overrideForegroundValue: getSystemIconIdByName('Glowing Star'), // Override with a different icon for this award
+      credentialValue: 8,
+      overrideForegroundValue: getSystemIconIdByName('Glowing Star'),
       overrideForegroundColor: '#f59e0b',
       metadataValues: {
         projectName: 'Project Alpha - Internal Tools Suite',
@@ -157,16 +153,12 @@ export async function seedBadgeInstances(prisma: PrismaClient) {
         hoursSpent: faker.number.int({min: 40, max: 120}).toString(),
       },
     },
-    // Scenario 4: TheNexusHub awards "Nexus Contributor" to a couple of members
+    // Scenario 4: TheNexusHub awards "Nexus Contributor" to members
     {
       description: `${SPECIAL_GUILD_NAME} awards Nexus Contributor to User2`,
-      templateTarget: { 
-        slug: `guild_${SPECIAL_GUILD_NAME}_contributor`, 
-        ownedByGuildId: specialGuild?.id, 
-        ownedByUserId: null 
-      },
+      templateTarget: { slug: `guild_${SPECIAL_GUILD_NAME}_contributor`, ownedByGuildId: specialGuild?.id, ownedByUserId: null },
       giver: { type: 'GUILD', guildName: SPECIAL_GUILD_NAME },
-      receiver: { type: 'USER', id: users[1]?.id || users[0]?.id }, // User different from TUP ideally
+      receiver: { type: 'USER', id: otherUsers[1]?.id || users[0]?.id },
       awardStatus: BadgeAwardStatus.ACCEPTED,
       apiVisible: false,
       message: 'Thanks for your valuable contributions to the Hub discussions!',
@@ -176,15 +168,11 @@ export async function seedBadgeInstances(prisma: PrismaClient) {
       }
     },
     {
-      description: `${SPECIAL_GUILD_NAME} awards Nexus Contributor to User3 (pending)`,
-      templateTarget: { 
-        slug: `guild_${SPECIAL_GUILD_NAME}_contributor`, 
-        ownedByGuildId: specialGuild?.id, 
-        ownedByUserId: null 
-      },
+      description: `${SPECIAL_GUILD_NAME} awards Nexus Contributor to User3 (now ACCEPTED)`,
+      templateTarget: { slug: `guild_${SPECIAL_GUILD_NAME}_contributor`, ownedByGuildId: specialGuild?.id, ownedByUserId: null },
       giver: { type: 'GUILD', guildName: SPECIAL_GUILD_NAME },
-      receiver: { type: 'USER', id: users[2]?.id || users[0]?.id }, 
-      awardStatus: BadgeAwardStatus.PENDING_ACCEPTANCE,
+      receiver: { type: 'USER', id: otherUsers[2]?.id || users[0]?.id }, 
+      awardStatus: BadgeAwardStatus.ACCEPTED, 
       apiVisible: false,
       message: 'Your recent project proposal was outstanding! Please accept this recognition.',
       metadataValues: {
@@ -192,127 +180,369 @@ export async function seedBadgeInstances(prisma: PrismaClient) {
         contributionDate: new Date().toISOString().split('T')[0],
       }
     },
-    // Scenario 5: TestUserPrime gets a "Live Rank Badge" instance (will need credentialValue pushed later)
+    // Scenario 5: TestUserPrime's "Live Rank Badge"
     {
       description: `TestUserPrime receives Live Rank Badge (initial)`,
-      templateTarget: { 
-        slug: `user_${TEST_USER_PRIME_USERNAME}_live_rank`, 
-        ownedByUserId: testUserPrime?.id, 
-        ownedByGuildId: null 
-      },
-      giver: {type: 'USER', username: TEST_USER_PRIME_USERNAME}, // Self-awarded or system awarded
+      templateTarget: { slug: `user_${TEST_USER_PRIME_USERNAME}_live_rank`, ownedByUserId: testUserPrime?.id, ownedByGuildId: null },
+      giver: {type: 'USER', username: TEST_USER_PRIME_USERNAME}, 
       receiver: { type: 'USER', username: TEST_USER_PRIME_USERNAME },
       awardStatus: BadgeAwardStatus.ACCEPTED,
       apiVisible: true,
       message: 'Your rank is being tracked.',
-      credentialValue: 50, // Initial rank
-      // Visuals mostly come from template default or will be overridden when rank changes by instanceData update
-      overrideForegroundValue: '50th', // Example initial text override
-      metadataValues: {
-        rankNameDetail: 'Silver III',
-        lastUpdated: new Date().toISOString(),
-      }
+      credentialValue: 50, 
+      overrideForegroundValue: '50th',
+      metadataValues: { rankNameDetail: 'Silver III', lastUpdated: new Date().toISOString() }
     },
-    // ADDING NEW SCENARIOS FOR GUILD & CLUSTER
-    // Scenario 7: TheNexusHub receives a "Generic Participation Badge" from TestUserPrime
+    // Scenario 7: TheNexusHub receives "Generic Participation" from TestUserPrime
     {
       description: `TheNexusHub receives Generic Participation from ${TEST_USER_PRIME_USERNAME}`,
-      templateTarget: { 
-        slug: 'system_generic_participation', 
-        ownedByUserId: null, 
-        ownedByGuildId: null 
-      },
+      templateTarget: { slug: 'system_generic_participation', ownedByUserId: null, ownedByGuildId: null },
       giver: { type: 'USER', username: TEST_USER_PRIME_USERNAME },
       receiver: { type: 'GUILD', guildName: SPECIAL_GUILD_NAME },
       awardStatus: BadgeAwardStatus.ACCEPTED,
       apiVisible: false,
       message: `${SPECIAL_GUILD_NAME} participated in the 'Annual Community Summit'! Congratulations!`,
-      metadataValues: {
-        eventName: 'Annual Community Summit 2024',
-      },
+      metadataValues: { eventName: 'Annual Community Summit 2024' },
     },
-    // Scenario 8: TheNexusHub receives the "Nexus Visionary" badge (conceptually, from a system or high admin)
-    // Re-using the template, but a guild is receiving it.
+    // Scenario 8: TheNexusHub recognized as "Nexus Visionary"
     {
       description: `${SPECIAL_GUILD_NAME} is recognized as a Visionary Hub (System Award)`,
-      templateTarget: { 
-        slug: `guild_${SPECIAL_GUILD_NAME}_founder`, // Using the template TUP authored but making it a system award to the guild
-        ownedByGuildId: specialGuild?.id, // Still references the guild-owned template
-        ownedByUserId: null 
-      },
-      giver: { type: 'USER', username: TEST_USER_PRIME_USERNAME }, // TestUserPrime acting as a high-level system awarder
+      templateTarget: { slug: `guild_${SPECIAL_GUILD_NAME}_founder`, ownedByGuildId: specialGuild?.id, ownedByUserId: null },
+      giver: { type: 'USER', username: TEST_USER_PRIME_USERNAME }, 
       receiver: { type: 'GUILD', guildName: SPECIAL_GUILD_NAME },
       awardStatus: BadgeAwardStatus.ACCEPTED,
       apiVisible: false,
       message: `Recognizing ${SPECIAL_GUILD_NAME} for its foundational vision and community leadership.`,
-      overrideBorderColor: '#DAA520', // A slightly different gold
-      metadataValues: {
-        foundingDate: '2024-01-01', // This metadata still fits
-      },
+      overrideBorderColor: '#DAA520',
+      metadataValues: { foundingDate: '2024-01-01' },
     },
-    // Scenario 9: TheNexusHub's Primary Cluster receives a badge from TheNexusHub
+    // Scenario 9: Cluster1 receives "Generic Participation" from TheNexusHub
     ...(nexusHubPrimaryCluster && specialGuild ? [{
       description: `${nexusHubPrimaryCluster.name} Cluster receives Generic Participation from ${SPECIAL_GUILD_NAME}`,
       templateTarget: { slug: 'system_generic_participation', ownedByUserId: null, ownedByGuildId: null },
-      giver: { type: 'GUILD', guildName: SPECIAL_GUILD_NAME }, // TheNexusHub gives the badge
+      giver: { type: 'GUILD', guildName: SPECIAL_GUILD_NAME }, 
       receiver: { type: 'CLUSTER', clusterName: nexusHubPrimaryCluster.name },
       awardStatus: BadgeAwardStatus.ACCEPTED,
       apiVisible: false,
-      message: `The ${nexusHubPrimaryCluster.name} cluster actively participated in the inter-cluster design challenge! Well done!`,
-      metadataValues: {
-        eventName: 'Inter-Cluster Design Challenge Q1 2024',
-      },
+      message: `The ${nexusHubPrimaryCluster.name} cluster successfully hosted the regional tech fair, sponsored by ${SPECIAL_GUILD_NAME}!`,
+      metadataValues: { eventName: 'Regional Tech Fair 2024' },
     } as BadgeInstanceSeedEntry] : []),
-     // Scenario 10: TestUserPrime gives TheNexusHub a custom project badge (TUP owns the template)
+    // Scenario 10: TestUserPrime awards "Project Completion" to TheNexusHub
     {
       description: `TestUserPrime awards Project Completion to ${SPECIAL_GUILD_NAME}`,
-      templateTarget: { 
-        slug: `user_${TEST_USER_PRIME_USERNAME}_project_alpha`, 
-        ownedByUserId: testUserPrime?.id, 
-        ownedByGuildId: null 
-      },
+      templateTarget: { slug: `user_${TEST_USER_PRIME_USERNAME}_project_alpha`, ownedByUserId: testUserPrime?.id, ownedByGuildId: null },
       giver: { type: 'USER', username: TEST_USER_PRIME_USERNAME },
       receiver: { type: 'GUILD', guildName: SPECIAL_GUILD_NAME }, 
       awardStatus: BadgeAwardStatus.ACCEPTED,
-      apiVisible: true, // Template defines a credential
+      apiVisible: true, 
       message: `TheNexusHub successfully completed the 'Community Onboarding Module' project!`,
-      credentialValue: 9, // Project difficulty was 9 for this guild effort
-      overrideBackgroundValue: getAssetUrl('BADGE_BACKGROUND_IMAGE_40'), // city scape for a project
+      credentialValue: 9, 
+      overrideBackgroundValue: getAssetUrl('BADGE_BACKGROUND_IMAGE_40'),
       metadataValues: {
         projectName: 'Community Onboarding Module',
         completionDate: faker.date.recent({days: 5}).toISOString().split('T')[0],
-        hoursSpent: '150', // Team effort
+        hoursSpent: '150',
       },
+    },
+    // Scenario 11: TheNexusHub awards "Lore Master" to TestUserPrime
+    {
+      description: `TheNexusHub awards Lore Master to TestUserPrime`,
+      templateTarget: { slug: `guild_${SPECIAL_GUILD_NAME}_lore_master`, ownedByGuildId: specialGuild?.id, ownedByUserId: null },
+      giver: { type: 'GUILD', guildName: SPECIAL_GUILD_NAME },
+      receiver: { type: 'USER', username: TEST_USER_PRIME_USERNAME },
+      awardStatus: BadgeAwardStatus.ACCEPTED,
+      apiVisible: false,
+      message: 'Your knowledge of our history is unparalleled, TestUserPrime!',
+      metadataValues: { knownTopic: 'The Founding Era and Ancient Artifacts', sourceVerification: 'Guild Archives, Elder Council Confirmation' },
+    },
+    // Scenario 12: ArtisanCrafters awards TestUserPrime "Bronze Craftsmanship"
+    {
+      description: `ArtisanCrafters Guild awards Bronze Craftsmanship to TestUserPrime`,
+      templateTarget: { slug: 'guild_ArtisanCrafters_bronze_craft', ownedByGuildId: artisanCraftersGuild?.id || null, ownedByUserId: null },
+      giver: { type: 'GUILD', guildName: 'ArtisanCrafters' }, 
+      receiver: { type: 'USER', username: TEST_USER_PRIME_USERNAME },
+      awardStatus: BadgeAwardStatus.ACCEPTED,
+      apiVisible: false,
+      message: 'TestUserPrime, your dedication to the craft is commendable!',
+      metadataValues: { craftType: 'Digital Sculpting' },
+    },
+    // Scenario 13: TestUserPrime awards "Generic Participation" to TheNexusHub (Meetup)
+    {
+      description: `TestUserPrime awards Generic Participation to TheNexusHub`,
+      templateTarget: { slug: 'system_generic_participation', ownedByUserId: null, ownedByGuildId: null },
+      giver: { type: 'USER', username: TEST_USER_PRIME_USERNAME },
+      receiver: { type: 'GUILD', guildName: SPECIAL_GUILD_NAME },
+      awardStatus: BadgeAwardStatus.ACCEPTED,
+      apiVisible: false,
+      message: 'Thank you, TheNexusHub, for hosting the regional design meetup!',
+      overrideBadgeName: 'Meetup Host 2024',
+      metadataValues: { eventName: 'Regional Design Meetup Q1 2024' },
+    },
+    // Scenario 14: TestUserPrime self-awards another "Project Completion" (Accepted)
+    {
+      description: `TestUserPrime self-awards another Project Completion (Accepted)`,
+      templateTarget: { slug: `user_${TEST_USER_PRIME_USERNAME}_project_alpha`, ownedByUserId: testUserPrime?.id, ownedByGuildId: null },
+      giver: { type: 'USER', username: TEST_USER_PRIME_USERNAME },
+      receiver: { type: 'USER', username: TEST_USER_PRIME_USERNAME }, 
+      awardStatus: BadgeAwardStatus.ACCEPTED, 
+      apiVisible: true, 
+      message: 'Just wrapped up Project Beta!',
+      credentialValue: 5, 
+      metadataValues: {
+        projectName: 'Project Beta - API Documentation Portal',
+        completionDate: new Date().toISOString().split('T')[0],
+        hoursSpent: '75',
+      },
+    },
+    // Scenario 15: TheNexusHub awards "Nexus Contributor" to Cluster1
+    ...(nexusHubPrimaryCluster && specialGuild ? [{
+      description: `${SPECIAL_GUILD_NAME} awards Nexus Contributor to ${nexusHubPrimaryCluster.name}`,
+      templateTarget: { slug: `guild_${SPECIAL_GUILD_NAME}_contributor`, ownedByGuildId: specialGuild.id, ownedByUserId: null },
+      giver: { type: 'GUILD', guildName: SPECIAL_GUILD_NAME },
+      receiver: { type: 'CLUSTER', clusterName: nexusHubPrimaryCluster.name },
+      awardStatus: BadgeAwardStatus.ACCEPTED,
+      apiVisible: false,
+      message: `The ${nexusHubPrimaryCluster.name} cluster has shown exemplary inter-guild collaboration this cycle.`,
+      metadataValues: {
+        contributionType: 'Inter-Guild Collaboration Events',
+        contributionDate: faker.date.recent({days: 3}).toISOString().split('T')[0],
+      }
+    } as BadgeInstanceSeedEntry] : []),
+    // Scenario 16: Random User 1 awards "Site Pioneer" to Random User 2
+    {
+      description: 'Random User 1 awards Site Pioneer to Random User 2',
+      templateTarget: { slug: 'system_site_pioneer', ownedByUserId: null, ownedByGuildId: null },
+      giver: { type: 'USER', id: otherUsers[1]?.id || users[1]?.id }, 
+      receiver: { type: 'USER', id: otherUsers[2]?.id || users[2]?.id },
+      awardStatus: BadgeAwardStatus.ACCEPTED,
+      apiVisible: false, 
+      message: 'Recognizing your early presence!',
+      metadataValues: {
+        joinDate: faker.date.past({years: 1, refDate: '2023-01-01'}).toISOString().split('T')[0],
+        userNumber: faker.number.int({min: 101, max: 200}).toString(),
+      },
+    },
+    // Scenario 17: TheNexusHub awards "Lore Master" to another member
+    {
+      description: `${SPECIAL_GUILD_NAME} awards Lore Master to another member`,
+      templateTarget: { slug: `guild_${SPECIAL_GUILD_NAME}_lore_master`, ownedByGuildId: specialGuild?.id, ownedByUserId: null },
+      giver: { type: 'GUILD', guildName: SPECIAL_GUILD_NAME },
+      receiver: { type: 'USER', id: otherUsers[3]?.id || users[3]?.id },
+      awardStatus: BadgeAwardStatus.ACCEPTED,
+      apiVisible: false,
+      message: 'Your dedication to the archives is noted!',
+      metadataValues: { knownTopic: 'The Second Age Narratives', sourceVerification: 'Cross-referenced with the Elder Scrolls (in-game joke)' },
+    },
+    // Scenario 18: TestUserPrime's "Live Rank Badge" for another user
+    {
+      description: `TestUserPrime sets Live Rank Badge for another user`,
+      templateTarget: { slug: `user_${TEST_USER_PRIME_USERNAME}_live_rank`, ownedByUserId: testUserPrime?.id, ownedByGuildId: null },
+      giver: {type: 'USER', username: TEST_USER_PRIME_USERNAME}, 
+      receiver: { type: 'USER', id: otherUsers[4]?.id || users[4]?.id },
+      awardStatus: BadgeAwardStatus.ACCEPTED,
+      apiVisible: true,
+      message: 'Current ranking status.',
+      credentialValue: 25,
+      overrideForegroundValue: '25th',
+      metadataValues: { rankNameDetail: 'Gold I', lastUpdated: new Date().toISOString() }
+    },
+    // Scenario 19: Cluster2 receives "Generic Participation" from TheNexusHub
+    ...(secondCluster && specialGuild ? [{
+      description: `${secondCluster.name} Cluster receives Generic Participation from ${SPECIAL_GUILD_NAME} for a different event`,
+      templateTarget: { slug: 'system_generic_participation', ownedByUserId: null, ownedByGuildId: null },
+      giver: { type: 'GUILD', guildName: SPECIAL_GUILD_NAME },
+      receiver: { type: 'CLUSTER', clusterName: secondCluster.name },
+      awardStatus: BadgeAwardStatus.ACCEPTED,
+      apiVisible: false,
+      message: `The ${secondCluster.name} cluster launched a successful community initiative, supported by ${SPECIAL_GUILD_NAME}!`,
+      metadataValues: { eventName: 'Community Initiative Launch 2024' },
+    } as BadgeInstanceSeedEntry] : []),
+    // Scenario 20: TheNexusHub receives badge from External Guild (Accepted)
+    {
+      description: `External Guild 'ChampionsLeague' awards badge to ${SPECIAL_GUILD_NAME} (Accepted)`,
+      templateTarget: { slug: 'system_generic_participation', ownedByUserId: null, ownedByGuildId: null },
+      giver: { type: 'GUILD', guildName: otherGuilds[0]?.name || 'ExternalChampions' }, 
+      receiver: { type: 'GUILD', guildName: SPECIAL_GUILD_NAME }, 
+      awardStatus: BadgeAwardStatus.ACCEPTED, 
+      apiVisible: false,
+      message: 'An invitation to the grand tournament! Please accept this token.',
+      metadataValues: { eventName: 'Grand Tournament Invitation' }
     },
   ];
 
-  // --- 3. Seed Logic --- 
+  const dynamicInstanceCount = 50; 
+  const systemTemplates = badgeTemplates.filter(bt => !bt.ownedByGuildId && !bt.ownedByUserId);
+  const userOwnedTemplates = badgeTemplates.filter(bt => bt.ownedByUserId && users.find(u => u.id === bt.ownedByUserId));
+  const guildOwnedTemplates = badgeTemplates.filter(bt => bt.ownedByGuildId && guilds.find(g => g.id === bt.ownedByGuildId));
+  const allAvailableTemplates = [...systemTemplates, ...userOwnedTemplates, ...guildOwnedTemplates];
+
+  if (allAvailableTemplates.length > 0 && users.length > 1 && guilds.length > 0) {
+    for (let i = 0; i < dynamicInstanceCount; i++) {
+      const template = faker.helpers.arrayElement(allAvailableTemplates);
+      let receiver: BadgeInstanceSeedEntry['receiver']; 
+      let giver: BadgeInstanceSeedEntry['giver'] = {} as any; // Initialize giver
+      const receiverType = faker.helpers.arrayElement(['USER', 'GUILD', 'CLUSTER']);
+      const giverType = faker.datatype.boolean() ? 'USER' : 'GUILD';
+
+      if (receiverType === 'USER') {
+        const receivingUser = faker.helpers.arrayElement(users);
+        receiver = { type: 'USER', id: receivingUser.id, username: receivingUser.username };
+      } else if (receiverType === 'GUILD') {
+        const receivingGuild = faker.helpers.arrayElement(guilds);
+        receiver = { type: 'GUILD', id: receivingGuild.id, guildName: receivingGuild.name };
+      } else { 
+        if (clusters.length > 0) {
+          const receivingCluster = faker.helpers.arrayElement(clusters);
+          receiver = { type: 'CLUSTER', id: receivingCluster.id, clusterName: receivingCluster.name };
+        } else { 
+          const receivingUser = faker.helpers.arrayElement(users); 
+          receiver = { type: 'USER', id: receivingUser.id, username: receivingUser.username };
+        }
+      }
+
+      if (giverType === 'USER') {
+        let givingUser = faker.helpers.arrayElement(users);
+        if (receiver.type === 'USER' && givingUser.id === receiver.id && template.ownedByUserId !== givingUser.id) {
+          const otherPossibleGivers = users.filter(u => u.id !== receiver.id);
+          if (otherPossibleGivers.length > 0) {
+            givingUser = faker.helpers.arrayElement(otherPossibleGivers);
+          } else { 
+            const fallbackGiverGuild = faker.helpers.arrayElement(guilds);
+            if (!fallbackGiverGuild) continue; 
+            giver = { type: 'GUILD', id: fallbackGiverGuild.id, guildName: fallbackGiverGuild.name };
+          }
+        }
+        if (!giver.type) giver = { type: 'USER', id: givingUser.id, username: givingUser.username }; 
+      } else { 
+        let givingGuild = faker.helpers.arrayElement(guilds);
+        if (receiver.type === 'GUILD' && givingGuild.id === receiver.id && template.ownedByGuildId !== givingGuild.id) {
+          const otherPossibleGivers = guilds.filter(g => g.id !== receiver.id);
+          if (otherPossibleGivers.length > 0) {
+            givingGuild = faker.helpers.arrayElement(otherPossibleGivers);
+          } else { 
+            const fallbackGiverUser = faker.helpers.arrayElement(users);
+            if (!fallbackGiverUser) continue;
+            giver = { type: 'USER', id: fallbackGiverUser.id, username: fallbackGiverUser.username };
+          }
+        }
+        if (!giver.type) giver = { type: 'GUILD', id: givingGuild.id, guildName: givingGuild.name }; 
+      }
+
+      const metadataValues: Record<string, string> = {};
+      if (template.metadataFieldDefinitions && template.metadataFieldDefinitions.length > 0) {
+        template.metadataFieldDefinitions.forEach(def => {
+          metadataValues[def.fieldKeyForInstanceData] = faker.lorem.words(faker.number.int({ min: 1, max: 3 }));
+        });
+      }
+
+      instancesToSeed.push({
+        description: `Dynamic Badge: ${template.defaultBadgeName} from ${giver.type} ${giver.username || giver.guildName} to ${receiver.type} ${receiver.username || receiver.guildName || receiver.clusterName}`,
+        templateTarget: {
+          slug: template.templateSlug,
+          ownedByUserId: template.ownedByUserId,
+          ownedByGuildId: template.ownedByGuildId,
+        },
+        giver,
+        receiver,
+        awardStatus: BadgeAwardStatus.ACCEPTED,
+        apiVisible: template.definesCredential,
+        message: `A special award for ${receiver.type === 'USER' ? receiver.username : (receiver.type === 'GUILD' ? receiver.guildName : receiver.clusterName)}: ${faker.lorem.sentence()}`,
+        metadataValues,
+        credentialValue: template.definesCredential ? faker.number.int({ min: 1, max: (template.credentialBest ?? 10) }) : undefined,
+      });
+    }
+    console.log(`   Added ${dynamicInstanceCount} dynamically generated accepted badge instances.`);
+  } else {
+      console.warn('   Could not dynamically generate additional badge instances due to lack of templates, users, or guilds.');
+  }
+
+  const createTargetedInstances = (
+    targetReceiver: { type: 'USER' | 'GUILD' | 'CLUSTER'; id?: string; username?: string; guildName?: string; clusterName?: string },
+    receiverName: string,
+    count: number,
+    descriptionPrefix: string
+  ) => {
+    if (!targetReceiver.id && !targetReceiver.username && !targetReceiver.guildName && !targetReceiver.clusterName) {
+      console.warn(`   Target receiver ${receiverName} is not defined, skipping targeted badge seeding.`);
+      return;
+    }
+    if (allAvailableTemplates.length === 0) {
+        console.warn(`   No templates available to award to ${receiverName}.`);
+        return;
+    }
+    console.log(`   Targeting ${count} additional accepted badges for ${receiverName}...`);
+    let createdForTarget = 0;
+    for (let i = 0; i < count; i++) {
+      const template = faker.helpers.arrayElement(allAvailableTemplates);
+      let giver: BadgeInstanceSeedEntry['giver'];
+      const giverType = faker.datatype.boolean() ? 'USER' : 'GUILD';
+
+      if (giverType === 'USER') {
+        const possibleGivers = users.filter(u => targetReceiver.type !== 'USER' || u.id !== targetReceiver.id);
+        const givingUser = possibleGivers.length > 0 ? faker.helpers.arrayElement(possibleGivers) : faker.helpers.arrayElement(users); 
+        giver = { type: 'USER', id: givingUser.id, username: givingUser.username };
+      } else {
+        const possibleGivers = guilds.filter(g => targetReceiver.type !== 'GUILD' || g.id !== targetReceiver.id);
+        const givingGuild = possibleGivers.length > 0 ? faker.helpers.arrayElement(possibleGivers) : faker.helpers.arrayElement(guilds);
+        giver = { type: 'GUILD', id: givingGuild.id, guildName: givingGuild.name };
+      }
+
+      const metadataValues: Record<string, string> = {};
+      if (template.metadataFieldDefinitions && template.metadataFieldDefinitions.length > 0) {
+        template.metadataFieldDefinitions.forEach(def => {
+          metadataValues[def.fieldKeyForInstanceData] = faker.lorem.words(faker.number.int({ min: 1, max: 3 }));
+        });
+      }
+
+      instancesToSeed.push({
+        description: `${descriptionPrefix}: ${template.defaultBadgeName} from ${giver.type} ${giver.username || giver.guildName}`,
+        templateTarget: {
+          slug: template.templateSlug,
+          ownedByUserId: template.ownedByUserId,
+          ownedByGuildId: template.ownedByGuildId,
+        },
+        giver,
+        receiver: targetReceiver,
+        awardStatus: BadgeAwardStatus.ACCEPTED,
+        apiVisible: template.definesCredential,
+        message: `A special award for ${receiverName}: ${faker.lorem.sentence()}`,
+        metadataValues,
+        credentialValue: template.definesCredential ? faker.number.int({ min: 1, max: (template.credentialBest ?? 10) }) : undefined,
+      });
+      createdForTarget++;
+    }
+    console.log(`   Added ${createdForTarget} targeted accepted badges for ${receiverName}.`);
+  };
+
+  if (testUserPrime) {
+    createTargetedInstances({ type: 'USER', id: testUserPrime.id, username: testUserPrime.username }, TEST_USER_PRIME_USERNAME, 20, 'TUP Targeted');
+  }
+  if (specialGuild) {
+    createTargetedInstances({ type: 'GUILD', id: specialGuild.id, guildName: specialGuild.name }, SPECIAL_GUILD_NAME, 20, 'NexusHub Targeted');
+  }
+  if (nexusHubPrimaryCluster) {
+    createTargetedInstances({ type: 'CLUSTER', id: nexusHubPrimaryCluster.id, clusterName: nexusHubPrimaryCluster.name }, nexusHubPrimaryCluster.name, 15, 'Cluster1 Targeted');
+  }
+
   console.log(`   Preparing to seed ${instancesToSeed.length} badge instances.`);
   let createdInstanceCount = 0;
   let createdMetadataValuesCount = 0;
 
-  // Optional: Clear existing instances for a clean seed (be careful with relations like badge case items)
-  // await prisma.instanceMetadataValue.deleteMany({});
-  // await prisma.badgeInstance.deleteMany({});
-  // console.log('   Cleared existing badge instances and metadata values.');
-
   for (const instanceEntry of instancesToSeed) {
-    // Define a more specific type for what we expect from badgeTemplates elements
     type TemplateWithMetadataDefs = typeof badgeTemplates[0];
-
     let foundTemplate: TemplateWithMetadataDefs | undefined;
 
     if (instanceEntry.templateTarget.ownedByUserId) {
       foundTemplate = badgeTemplates.find(t => 
         t.templateSlug === instanceEntry.templateTarget.slug && 
         t.ownedByUserId === instanceEntry.templateTarget.ownedByUserId
-      ) as TemplateWithMetadataDefs | undefined; // Type assertion might be needed if find doesn't preserve full type
+      ) as TemplateWithMetadataDefs | undefined;
     } else if (instanceEntry.templateTarget.ownedByGuildId) {
       foundTemplate = badgeTemplates.find(t => 
         t.templateSlug === instanceEntry.templateTarget.slug && 
         t.ownedByGuildId === instanceEntry.templateTarget.ownedByGuildId
       ) as TemplateWithMetadataDefs | undefined;
-    } else { // System template
+    } else { 
       foundTemplate = badgeTemplates.find(t => 
         t.templateSlug === instanceEntry.templateTarget.slug && 
         !t.ownedByUserId && !t.ownedByGuildId
@@ -323,7 +553,7 @@ export async function seedBadgeInstances(prisma: PrismaClient) {
       console.warn(`   Skipping instance "${instanceEntry.description}": Template with slug "${instanceEntry.templateTarget.slug}" (owner context: U:${instanceEntry.templateTarget.ownedByUserId || 'N/A'} G:${instanceEntry.templateTarget.ownedByGuildId || 'N/A'}) not found.`);
       continue;
     }
-    const template = foundTemplate; // For type safety hereafter
+    const template = foundTemplate;
 
     const giverUserId = instanceEntry.giver.type === 'USER' ? getEntityId(instanceEntry.giver, 'USER') : null;
     const giverGuildId = instanceEntry.giver.type === 'GUILD' ? getEntityId(instanceEntry.giver, 'GUILD') : null;
@@ -336,8 +566,8 @@ export async function seedBadgeInstances(prisma: PrismaClient) {
     }
     if ((instanceEntry.receiver.type === 'USER' && !receiverUserId) || 
         (instanceEntry.receiver.type === 'GUILD' && !receiverGuildId) || 
-        (instanceEntry.receiver.type === 'CLUSTER' && !receiverClusterId && instanceEntry.receiver.type === 'CLUSTER') ) { // Ensure clusterId is only required if type is CLUSTER
-        console.warn(`   Skipping instance "${instanceEntry.description}": Receiver not found.`); continue;
+        (instanceEntry.receiver.type === 'CLUSTER' && !receiverClusterId && instanceEntry.receiver.type === 'CLUSTER') ) { 
+        console.warn(`   Skipping instance "${instanceEntry.description}": Receiver not found (Type: ${instanceEntry.receiver.type}, U:${receiverUserId}, G:${receiverGuildId}, C:${receiverClusterId}).`); continue;
     }
     
     try {
@@ -352,7 +582,7 @@ export async function seedBadgeInstances(prisma: PrismaClient) {
         apiVisible: instanceEntry.apiVisible !== undefined 
             ? instanceEntry.apiVisible 
             : (template.definesCredential && 
-              (instanceEntry.awardStatus === BadgeAwardStatus.ACCEPTED || instanceEntry.awardStatus === undefined)
+              ((instanceEntry.awardStatus || BadgeAwardStatus.ACCEPTED) === BadgeAwardStatus.ACCEPTED) 
               ? true : false),
         message: instanceEntry.message,
         revokedAt: instanceEntry.revokedAt,
@@ -371,11 +601,8 @@ export async function seedBadgeInstances(prisma: PrismaClient) {
         credentialValue: instanceEntry.credentialValue,
       };
       
-      // Prisma doesn't like undefined for nullable fields that are not explicitly set.
-      // So, ensure optional fields are truly absent if null/undefined in instanceEntry
       for (const key in createData) {
         if (createData[key] === undefined || createData[key] === null) {
-          // For boolean, false is a valid value, null/undefined means not set for optional field
           if (typeof createData[key] !== 'boolean' && createData[key] !== 0) {
              delete createData[key];
           }
@@ -385,7 +612,6 @@ export async function seedBadgeInstances(prisma: PrismaClient) {
       const createdInstance = await prisma.badgeInstance.create({ data: createData });
       createdInstanceCount++;
 
-      // Create InstanceMetadataValue records
       if (instanceEntry.metadataValues && template.metadataFieldDefinitions.length > 0) {
         const metadataToCreate = [];
         for (const def of template.metadataFieldDefinitions) {
@@ -400,12 +626,11 @@ export async function seedBadgeInstances(prisma: PrismaClient) {
         if (metadataToCreate.length > 0) {
           await prisma.instanceMetadataValue.createMany({
             data: metadataToCreate,
-            skipDuplicates: true, // Should be fine as keys are unique per instance by schema
+            skipDuplicates: true, 
           });
           createdMetadataValuesCount += metadataToCreate.length;
         }
       }
-    //   console.log(`   Created instance: "${instanceEntry.description}"`);
     } catch (error) {
       console.error(`Error creating instance "${instanceEntry.description}":`, error);
     }
