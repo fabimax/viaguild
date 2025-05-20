@@ -56,7 +56,7 @@ const CreateGuildPage = () => {
           <li>Choose a unique, memorable name for your guild</li>
           <li>Write a clear description explaining your guild's purpose</li>
           <li>Consider whether you want an open guild or invitation-only</li>
-          <li>As the creator, you'll automatically become the guild owner</li>
+          <li>As the creator, you'll automatically become the guild Founder</li>
           <li>You can invite members and assign roles after creation</li>
         </ul>
       </div>

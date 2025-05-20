@@ -15,7 +15,7 @@ This document summarizes the key discussion points, design evolution, and propos
 *   Ambiguity: `creatorUserId` implied personal ownership if `ownedByGuildId` was null, leading to potentially confusing queries for "created" vs. "personally owned" templates.
 
 ### B. Refined Ownership Model (for Clarity):
-*   **`actualCreatorUserId: String?`**: Tracks the user who physically designed/inputted the template. Nullable.
+*   **`createdByUserId: String?`**: Tracks the user who physically designed/inputted the template. Nullable.
 *   **`ownedByUserId: String?`**: Explicitly indicates a user directly owns this template.
 *   **`ownedByGuildId: String?`**: Explicitly indicates a guild directly owns this template.
 *   **Constraint**: `ownedByUserId` and `ownedByGuildId` are mutually exclusive (enforced by application logic). System templates have both as null.
@@ -23,9 +23,9 @@ This document summarizes the key discussion points, design evolution, and propos
 
 ### C. `BadgeTemplate` Lifecycle & Management:
 *   **Soft Deletion/Archiving**:
-    *   Implemented via an `isActive: Boolean @default(true)` field on `BadgeTemplate`.
-    *   "Deleting" a template sets `isActive = false`.
-    *   Awarding new badges only uses `isActive: true` templates.
+    *   Implemented via an `isArchived: Boolean @default(false)` field on `BadgeTemplate`.
+    *   "Deleting" a template sets `isArchived = true`.
+    *   Awarding new badges only uses `isArchived: false` templates.
     *   Existing `BadgeInstance`s still render correctly using the (now inactive) template, as they are protected by `onDelete: Restrict`.
 *   **Deleting Owners (Users/Guilds) of Templates**:
     *   **Goal**: Owner deletion should always succeed. In-use templates become ownerless; unused templates get deleted.
@@ -109,7 +109,7 @@ This was a major discussion point, evolving through several ideas:
 
 ## VII. Final Schema Changes (Conceptual Outline)
 
-*   **`BadgeTemplate`**: Updated ownership (`actualCreatorUserId`, `ownedByUserId`, `ownedByGuildId`), `isActive`, `isModifiableByIssuer`, `dynamicDisplayConfig: Json?`.
+*   **`BadgeTemplate`**: Updated ownership (`createdByUserId`, `ownedByUserId`, `ownedByGuildId`), `isArchived`, `isModifiableByIssuer`, `dynamicDisplayConfig: Json?`.
 *   **`BadgeInstance`**: Added `instanceData: Json?`. Ensured `template` relation has `onDelete: Restrict`.
 *   **`User` & `Guild`**: Updated relation names for badge templates to match new ownership fields.
 *   **New `UploadedAsset` model**: To manage all uploaded images, including fields like `hostedUrl` and `storageIdentifier`.

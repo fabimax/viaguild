@@ -3,67 +3,90 @@ import { PrismaClient } from '@prisma/client';
 /**
  * Seeds the database with essential system-level roles.
  * These roles are global (guildId: null) and marked as system roles.
- * This script is designed to be idempotent, meaning it can be run multiple times
- * without creating duplicate system roles.
+ * This script is designed to be idempotent.
  */
 export async function seedSystemRoles(prisma: PrismaClient) {
-  console.log('🌱 Seeding system roles...');
+  console.log('🌱 Seeding system roles (FOUNDER, ADMIN, MODERATOR, MEMBER)...');
 
   const systemRolesData = [
     {
-      name: 'CREATOR',
-      description: 'Full control over a guild. Typically the user who created the guild.',
+      name: 'FOUNDER',
+      description: 'Full control over a guild. Typically the user who founded the guild.',
       isSystemRole: true,
-      isDefaultRole: false, // Not assigned by default to new members, but to the creator on guild creation
+      isDefaultRole: false,
     },
     {
       name: 'ADMIN',
-      description: 'Grants broad administrative permissions within a guild, but less than Owner.',
+      description: 'Grants broad administrative permissions within a guild, but less than Founder.',
       isSystemRole: true,
       isDefaultRole: false,
-      guildId: null, // Global system role
     },
     {
       name: 'MODERATOR',
       description: 'Can manage content and members within specific guidelines, less than Admin.',
       isSystemRole: true,
       isDefaultRole: false,
-      guildId: null, // Global system role
     },
     {
       name: 'MEMBER',
       description: 'Basic membership role for a guild. Typically assigned to new members.',
       isSystemRole: true,
-      isDefaultRole: true, // Often the default for new members joining a guild
-      guildId: null, // Global system role
+      isDefaultRole: true,
     },
   ];
 
-  for (const roleData of systemRolesData) {
-    const existingRole = await prisma.role.findFirst({
-      where: {
-        name: roleData.name,
-        isSystemRole: true,
-        guildId: null, // Ensure we are checking for the global system role
-      },
-    });
+  let createdCount = 0;
+  let updatedCount = 0;
 
-    if (!existingRole) {
-      await prisma.role.create({
-        data: roleData,
+  for (const roleData of systemRolesData) {
+    try {
+      const existingRole = await prisma.role.findFirst({
+        where: {
+          name: roleData.name,
+          guildId: null, // System roles have null guildId
+          isSystemRole: true,
+        },
       });
-      console.log(`   Created system role: ${roleData.name}`);
-    } else {
-      console.log(`   System role ${roleData.name} already exists, skipping.`);
+
+      if (existingRole) {
+        // Update if necessary (e.g., if description changed)
+        if (existingRole.description !== roleData.description || existingRole.isDefaultRole !== roleData.isDefaultRole) {
+          await prisma.role.update({
+            where: { id: existingRole.id },
+            data: {
+              description: roleData.description,
+              isDefaultRole: roleData.isDefaultRole,
+            },
+          });
+          console.log(`   Updated system role: ${roleData.name}`);
+          updatedCount++;
+        } else {
+          console.log(`   System role ${roleData.name} already exists and is up-to-date.`);
+        }
+      } else {
+        await prisma.role.create({
+          data: {
+            name: roleData.name,
+            description: roleData.description,
+            isSystemRole: true,
+            isDefaultRole: roleData.isDefaultRole,
+            guildId: null, // Explicitly set guildId to null for system roles
+          },
+        });
+        console.log(`   Created system role: ${roleData.name}`);
+        createdCount++;
+      }
+    } catch (error) {
+      console.error(`Error processing system role ${roleData.name}:`, error);
     }
   }
 
-  console.log('✅ System roles seeded successfully (or already existed).');
+  console.log(`✅ System roles seeding finished. ${createdCount} created, ${updatedCount} updated.`);
 }
 
 // If you want to run this script directly using `ts-node server/prisma/seeds/system/systemRoles.ts`
-// uncomment the following lines:
-
+// (ensure you have ts-node and necessary configs or use `npx prisma db seed` which handles it)
+/*
 async function main() {
   const prisma = new PrismaClient();
   try {
@@ -76,4 +99,5 @@ async function main() {
   }
 }
 
-main(); 
+// main();
+*/ 

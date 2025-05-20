@@ -91,12 +91,12 @@ model BadgeTemplate {
 
   // --- Programmatic Credential Configuration (Formerly in BadgeDisplayConfig, now embedded) ---
   definesCredential           Boolean @default(false) // Does this template type utilize BadgeInstance.credentialValue?
-  credentialLabel             String? // Renamed from credentialDisplayName; e.g., "Rank", "Security Level"
-  credentialBest              Float?  // Renamed from credentialBestValue
-  credentialWorst             Float?  // Renamed from credentialWorstValue
+  credentialLabel             String? // How to label this metric if shown, e.g., "Rank", "Security Level"
+  credentialBest              Float?  // Numeric value representing the best possible score/rank/etc
+  credentialWorst             Float?  // Numeric value representing the worst possible score/rank/etc
   // (Interpretation: if credentialWorst > credentialBest, lower is better; if credentialBest > credentialWorst, higher is better)
-  credentialNotes             String? // Renamed from credentialInterpretationNotes; e.g., "Lower is better, range 1-100"
-  credentialIsNormalizable    Boolean @default(false) // Renamed from credentialCanBeNormalized
+  credentialNotes             String? // e.g. the credentialValue represents xyz and is calculated in such and such way
+  credentialIsNormalizable    Boolean @default(false) // Hints if the credentialValue can be normalized from 0 to 1
 
   // --- Definitions for Instance-Specific DISPLAYABLE METADATA Fields ---
   metadataFieldDefinitions MetadataFieldDefinition[]
@@ -165,7 +165,7 @@ model BadgeInstance {
   // --- Link to Instance-Specific DISPLAYABLE METADATA Values ---
   metadataValues InstanceMetadataValue[] // Stores values for fields defined in MetadataFieldDefinition
 
-  @@index([credentialValue]) // Updated index from metricValue
+  @@index([credentialValue])
 }
 
 // Stores the actual key-value pairs for DISPLAYABLE textual metadata for a specific BadgeInstance

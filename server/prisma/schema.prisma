@@ -530,7 +530,7 @@ model BadgeInstance {
   userGiver    User?   @relation("UserGivenBadges", fields: [userGiverId], references: [id], onDelete: SetNull)
   guildGiverId String?
   guildGiver   Guild?  @relation("GuildGivenBadges", fields: [guildGiverId], references: [id], onDelete: SetNull)
-  
+
   // --- Receiver (Polymorphic: User or Guild or Cluster) ---
   userReceiverId    String?
   userReceiver      User?     @relation("UserReceivedBadges", fields: [userReceiverId], references: [id], onDelete: Cascade)

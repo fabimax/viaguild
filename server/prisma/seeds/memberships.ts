@@ -50,21 +50,13 @@ export async function seedMemberships(prisma: PrismaClient) {
   const testUserPrime = users.find(u => u.username === TEST_USER_PRIME_USERNAME);
   const specialGuild = guilds.find(g => g.name === SPECIAL_GUILD_NAME);
   
-  const creatorSystemRole = await prisma.role.findFirst({ where: { name: 'CREATOR', isSystemRole: true, guildId: null }, select: {id: true} });
+  const founderSystemRole = await prisma.role.findFirst({ where: { name: 'FOUNDER', isSystemRole: true, guildId: null }, select: {id: true} });
   const adminSystemRole = await prisma.role.findFirst({ where: { name: 'ADMIN', isSystemRole: true, guildId: null }, select: {id: true} });
   const moderatorSystemRole = await prisma.role.findFirst({ where: { name: 'MODERATOR', isSystemRole: true, guildId: null }, select: {id: true} });
   const memberSystemRole = await prisma.role.findFirst({ where: { name: 'MEMBER', isSystemRole: true, guildId: null }, select: {id: true} });
 
-  if (users.length === 0) {
-    console.warn('⚠️ No users found. Skipping membership seeding.');
-    return;
-  }
-  if (guilds.length === 0) {
-    console.warn('⚠️ No guilds found. Skipping membership seeding.');
-    return;
-  }
-  if (!creatorSystemRole || !adminSystemRole || !moderatorSystemRole || !memberSystemRole) {
-    console.error('❌ Critical system roles (CREATOR, ADMIN, MODERATOR, MEMBER) not found. Cannot seed effectively.');
+  if (users.length === 0 || guilds.length === 0 || !founderSystemRole || !adminSystemRole || !moderatorSystemRole || !memberSystemRole) {
+    console.error('❌ Prerequisites not met (users, guilds, or critical system roles [FOUNDER, ADMIN, MODERATOR, MEMBER] missing). Skipping membership seeding.');
     return;
   }
   // Warnings for missing special user/guild are fine, logic will try to adapt.
@@ -91,14 +83,14 @@ export async function seedMemberships(prisma: PrismaClient) {
     }
   };
 
-  // 1. Guild creators get CREATOR role
+  // 1. Guild creators get FOUNDER role
   for (const guild of guilds) {
     if (users.find(u => u.id === guild.createdById)) {
         const key = `${guild.createdById}-${guild.id}`;
         ensureMembershipCore(guild.createdById, guild.id);
-        roleIntents.push({ userId: guild.createdById, guildId: guild.id, roleId: creatorSystemRole.id });
+        roleIntents.push({ userId: guild.createdById, guildId: guild.id, roleId: founderSystemRole.id });
     } else {
-        console.warn(`Creator user ID ${guild.createdById} for guild ${guild.name} not found.`);
+        console.warn(`Creator user ID ${guild.createdById} for guild ${guild.name} not found or not set.`);
     }
     
     // Assign Admins
@@ -129,7 +121,7 @@ export async function seedMemberships(prisma: PrismaClient) {
     }
   }
   
-  // Explicitly ensure TestUserPrime is CREATOR of TheNexusHub if both exist
+  // Explicitly ensure TestUserPrime is FOUNDER of TheNexusHub if both exist
   if (testUserPrime && specialGuild) {
     const key = `${testUserPrime.id}-${specialGuild.id}`;
     ensureMembershipCore(testUserPrime.id, specialGuild.id, 'S');
@@ -139,8 +131,8 @@ export async function seedMemberships(prisma: PrismaClient) {
             roleIntents.splice(i, 1);
         }
     }
-    roleIntents.push({ userId: testUserPrime.id, guildId: specialGuild.id, roleId: creatorSystemRole.id });
-    console.log(`   Ensured ${testUserPrime.username} is set for CREATOR role in ${specialGuild.name}.`);
+    roleIntents.push({ userId: testUserPrime.id, guildId: specialGuild.id, roleId: founderSystemRole.id });
+    console.log(`   Ensured ${testUserPrime.username} is set for FOUNDER role in ${specialGuild.name}.`);
   }
 
   // 2. Fulfill specific membership counts (add as MEMBER)

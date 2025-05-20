@@ -5,11 +5,11 @@ import { PrismaClient } from '@prisma/client';
  * This script is idempotent.
  */
 export async function seedRolePermissions(prisma: PrismaClient) {
-  console.log('🔗 Seeding default role permissions for system roles...');
+  console.log('🔗 Seeding default role permissions for system roles (FOUNDER, ADMIN, MODERATOR, MEMBER)...');
 
   const rolesWithPermissions: Array<{ roleName: string; permissionKeys: string[] }> = [
     {
-      roleName: 'CREATOR',
+      roleName: 'FOUNDER',
       permissionKeys: [
         'GUILD_VIEW_SETTINGS', 'GUILD_EDIT_DETAILS', 'GUILD_MANAGE_RELATIONSHIPS', 'GUILD_MANAGE_CONTACTS', 'GUILD_DISBAND', 'GUILD_VIEW_AUDIT_LOG',
         'GUILD_INVITE_MEMBER', 'GUILD_MANAGE_JOIN_REQUESTS', 'GUILD_REVOKE_DIRECT_INVITATION', 'GUILD_CREATE_INVITATION_LINK', 'GUILD_MANAGE_INVITATION_LINKS', 'GUILD_KICK_MEMBER', 'GUILD_BAN_MEMBER', 'GUILD_VIEW_MEMBERSHIP_DETAILS',

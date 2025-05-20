@@ -89,10 +89,10 @@ export async function seedGuilds(prisma: PrismaClient) {
       const existingContacts = await prisma.guildContact.count({ where: { guildId: guild.id } });
       if (existingContacts === 0) { // Only seed contacts if none exist, to avoid duplicates on re-run
         const numberOfContacts = faker.number.int({ min: 1, max: 3 });
-        for (let j = 0; j < numberOfContacts; j++) {
+      for (let j = 0; j < numberOfContacts; j++) {
           const contactType = faker.helpers.arrayElement(contactTypes.filter(ct => ct !== 'CUSTOM')); // Avoid too many custom for now
-          let value = '';
-          switch (contactType) {
+        let value = '';
+        switch (contactType) {
             case 'EMAIL': value = faker.internet.email(); break;
             case 'WEBSITE': value = faker.internet.url(); break;
             case 'DISCORD': value = `https://discord.gg/${faker.string.alphanumeric(7)}`; break;
@@ -100,16 +100,16 @@ export async function seedGuilds(prisma: PrismaClient) {
             case 'GITHUB': value = `https://github.com/${faker.internet.userName().replace(/[^a-zA-Z0-9_]/g, '')}`; break;
             // Add BLUESKY, TWITCH, LINKEDIN if specific formats are desired, otherwise they use default
             default: value = faker.lorem.slug(); // Generic value for other types like BLUESKY, TWITCH, LINKEDIN
-          }
-          await prisma.guildContact.create({
-            data: {
-              guildId: guild.id,
-              type: contactType,
-              value: value,
+        }
+        await prisma.guildContact.create({
+          data: {
+            guildId: guild.id,
+            type: contactType,
+            value: value,
               label: undefined, // Since CUSTOM type is filtered out, label will always be undefined for these random ones
-              displayOrder: j,
-            },
-          });
+            displayOrder: j,
+          },
+        });
         }
       }
     } catch (e: any) {
