@@ -144,7 +144,7 @@ export async function seedMemberships(prisma: PrismaClient) {
 
     const membersInGuildSoFar = new Set<string>();
     membershipCoreMap.forEach((val, key) => { if (key.endsWith(`-${guild.id}`)) membersInGuildSoFar.add(val.userId); });
-    
+
     let membersNeeded = targetMemberCount - membersInGuildSoFar.size;
     if (membersNeeded <= 0) continue;
 
@@ -256,7 +256,7 @@ export async function seedMemberships(prisma: PrismaClient) {
           }
       } else {
           console.warn(`   Could not find created GuildMembership for key ${key} to assign role ${intent.roleId}.`);
-      }
+   }
   }
 
   if (userGuildRolesToCreate.length > 0) {
@@ -329,20 +329,20 @@ export async function seedMemberships(prisma: PrismaClient) {
                         });
                         assignedUserCategoryCombo.add(key);
                     }
-                }
-            }
+        }
+    }
         }
     }
     
     if (userCategoryPrimaryDataToUpsert.length > 0) {
       let upsertedUCPGCount = 0;
       for (const data of userCategoryPrimaryDataToUpsert) {
-        try {
+      try {
             await prisma.userCategoryPrimaryGuild.upsert({
                 where: { userId_categoryId: { userId: data.userId, categoryId: data.categoryId } },
                 update: { guildId: data.guildId, setAt: data.setAt }, 
                 create: data,
-            });
+        });
             upsertedUCPGCount++;
         } catch (e) {
             console.error(`Error upserting UserCategoryPrimaryGuild for user ${data.userId}, category ${data.categoryId}:`, e);

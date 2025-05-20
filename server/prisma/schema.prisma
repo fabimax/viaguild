@@ -145,6 +145,14 @@ enum ClusterJoinRequestStatus {
   REJECTED
 }
 
+// --- NEW ENUM for Badge Instance Acceptance Status ---
+enum BadgeAwardStatus {
+  PENDING_ACCEPTANCE // Newly awarded, receiver hasn't acknowledged/accepted
+  ACCEPTED           // Receiver has accepted the badge into their collection
+  REJECTED           // Receiver has explicitly rejected the badge
+}
+
+
 // --- CORE MODELS ---
 
 model User {
@@ -257,8 +265,9 @@ model Guild {
 
   // Relationships - Members & Structure
   memberships GuildMembership[]
-  roles       Role[]            @relation("GuildCustomRoles") // Custom roles defined for this guild
+  roles       Role[]            @relation("GuildCustomRoles") // Custom roles defined for THIS guild
   contacts    GuildContact[]
+  roleDisplayPreferences GuildRoleDisplayPreference[] // For guild-specific role display order
 
   // --- BADGE SYSTEM RELATIONS (Updated) ---
   givenBadgesAsGuild    BadgeInstance[] @relation("GuildGivenBadges") // Badges given by this guild as an entity
@@ -316,21 +325,27 @@ model Permission {
 
 model Role {
   id            String   @id @default(cuid())
-  name          String // e.g., "Owner", "Admin", "Member", "Treasurer", "SuperAdmin"
+  name          String // e.g., "Founder", "Admin", "Member", "Treasurer", "SuperAdmin"
   description   String?
   guildId       String? // If null, it's a system-level role. If set, it's a custom role for that specific guild.
-  isSystemRole  Boolean  @default(false) // True for ViaGuild predefined roles (Owner, Admin, Member, SuperAdmin)
+  isSystemRole  Boolean  @default(false) // True for ViaGuild predefined roles (Founder, Admin, Member, SuperAdmin)
   isDefaultRole Boolean  @default(false) // e.g., new guild members get this role by default for their guild
+  
+  displayColor String?  @default("##20C3D5") @map("display_color") // Default to #20C3D5. Optional: Hex color code (e.g., "#FF5733") for this role
+  apiVisible   Boolean  @default(false) @map("api_visible") // If true, this role assignment can be queried by APIs.
+
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
   guild            Guild?            @relation("GuildCustomRoles", fields: [guildId], references: [id], onDelete: Cascade)
   permissions      RolePermission[]
-  assignedUserGuildRoles UserGuildRole[]   // NEW: Relation to the new join table
+  assignedUserGuildRoles UserGuildRole[]   // Relation to the join table
   systemUsers      UserSystemRole[]
+  guildDisplayPreferences GuildRoleDisplayPreference[] // NEW: Back-relation
 
   @@unique([name, guildId])
   @@index([guildId])
+  @@index([apiVisible]) // Index for the new flag
 }
 
 model RolePermission {
@@ -560,6 +575,10 @@ model BadgeInstance {
   // --- Dedicated Field for Programmatic Credential Value ---
   credentialValue          Float? // This value is the metric used for programmatic checks.
 
+  // --- Instance Status & API Visibility ---
+  awardStatus              BadgeAwardStatus @default(PENDING_ACCEPTANCE) // Status of the badge award itself
+  apiVisible               Boolean          @default(false) // Receiver-controlled: if true, this badge is visible to API/programmatic checks. Set to true upon acceptance, can be toggled by receiver.
+
   // --- Link to Instance-Specific DISPLAYABLE METADATA Values ---
   metadataValues InstanceMetadataValue[] // Stores values for fields defined in MetadataFieldDefinition
 
@@ -584,6 +603,8 @@ model BadgeInstance {
   @@index([guildReceiverId])
   @@index([clusterReceiverId])
   @@index([credentialValue])
+  @@index([awardStatus])
+  @@index([apiVisible])
 }
 
 // Stores the actual key-value pairs for DISPLAYABLE textual metadata for a specific BadgeInstance
@@ -1108,4 +1129,21 @@ model GuildRelationshipProposal {
   @@index([status])
   @@index([proposedByUserId])
   @@index([resolvedByUserId])
+}
+
+// NEW MODEL: For guild-specific display order/preference of roles
+model GuildRoleDisplayPreference {
+  id              String  @id @default(cuid())
+  guildId         String
+  roleId          String  // Can be an ID of a system role OR a custom role for this guild
+  displayPriority Int     // Lower number means higher priority (displays first)
+
+  guild Guild @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  role  Role  @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@map("guild_role_display_preferences") // Map table name to plural
+  @@unique([guildId, roleId]) // A role can only have one display preference per guild
+  @@unique([guildId, displayPriority]) // Priority should be unique within a guild
+  @@index([guildId, displayPriority]) // For fetching ordered roles for a guild
+  @@index([roleId]) // For finding all guilds where a specific role has a preference
 }
