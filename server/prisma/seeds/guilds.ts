@@ -96,8 +96,8 @@ export async function seedGuilds(prisma: PrismaClient) {
             case 'EMAIL': value = faker.internet.email(); break;
             case 'WEBSITE': value = faker.internet.url(); break;
             case 'DISCORD': value = `https://discord.gg/${faker.string.alphanumeric(7)}`; break;
-            case 'TWITTER': value = `https://twitter.com/${faker.internet.userName().replace(/[^a-zA-Z0-9_]/g, '')}`; break;
-            case 'GITHUB': value = `https://github.com/${faker.internet.userName().replace(/[^a-zA-Z0-9_]/g, '')}`; break;
+            case 'TWITTER': value = `https://twitter.com/${faker.internet.username().replace(/[^a-zA-Z0-9_]/g, '')}`; break;
+            case 'GITHUB': value = `https://github.com/${faker.internet.username().replace(/[^a-zA-Z0-9_]/g, '')}`; break;
             // Add BLUESKY, TWITCH, LINKEDIN if specific formats are desired, otherwise they use default
             default: value = faker.lorem.slug(); // Generic value for other types like BLUESKY, TWITCH, LINKEDIN
         }

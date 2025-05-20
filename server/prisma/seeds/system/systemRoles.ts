@@ -48,13 +48,13 @@ export async function seedSystemRoles(prisma: PrismaClient) {
 
   for (const roleData of systemRolesData) {
     try {
-      const existingRole = await prisma.role.findFirst({
-        where: {
-          name: roleData.name,
+    const existingRole = await prisma.role.findFirst({
+      where: {
+        name: roleData.name,
           guildId: null, // System roles have null guildId
           isSystemRole: true, // Ensure we are matching a system role
-        },
-      });
+      },
+    });
 
       if (existingRole) {
         // Check if an update is needed for any relevant field
@@ -80,7 +80,7 @@ export async function seedSystemRoles(prisma: PrismaClient) {
           console.log(`   System role ${roleData.name} already exists and is up-to-date.`);
         }
       } else {
-        await prisma.role.create({
+      await prisma.role.create({
           data: {
             name: roleData.name,
             description: roleData.description,
@@ -90,8 +90,8 @@ export async function seedSystemRoles(prisma: PrismaClient) {
             apiVisible: roleData.apiVisible,
             guildId: null, // Explicitly set guildId to null for system roles
           },
-        });
-        console.log(`   Created system role: ${roleData.name}`);
+      });
+      console.log(`   Created system role: ${roleData.name}`);
         createdCount++;
       }
     } catch (error) {

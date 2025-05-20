@@ -462,6 +462,7 @@ model GuildContact {
 
 model BadgeTemplate {
   id                          String  @id @default(uuid())
+  templateSlug                String  // NEW: Immutable, machine-friendly unique key for this template type, scoped by owner.
   internalNotes               String? @db.Text // Internal notes about template purpose
 
   // Ownership and Creation (of the template)
@@ -516,6 +517,13 @@ model BadgeTemplate {
   @@index([isModifiableByIssuer])
   @@index([allowsPushedInstanceUpdates])
   @@index([inherentTier])
+
+  @@unique([ownedByUserId, templateSlug], name: "unique_user_template_slug")
+  @@unique([ownedByGuildId, templateSlug], name: "unique_guild_template_slug")
+  // Note: For system templates (ownedByUserId=null, ownedByGuildId=null), 
+  // uniqueness of templateSlug needs to be ensured by application/seeding logic (e.g. prefixing with "system_")
+  // or by making templateSlug globally @unique if preferred (but then requires globally unique names from users/guilds too).
+  // The current setup with scoped uniques is generally more flexible for user/guild created templates.
 }
 
 // Defines a slot for DISPLAYABLE instance-specific textual metadata

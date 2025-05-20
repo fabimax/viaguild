@@ -1,0 +1,519 @@
+import { 
+  PrismaClient, 
+  User, 
+  Guild, 
+  SystemIcon, 
+  UploadedAsset, 
+  BadgeTemplate, 
+  MetadataFieldDefinition,
+  BadgeShape,
+  BadgeTier,
+  BackgroundContentType,
+  ForegroundContentType,
+  Prisma
+} from '@prisma/client';
+import { faker } from '@faker-js/faker';
+import { TEST_USER_PRIME_USERNAME } from './users';
+import { SPECIAL_GUILD_NAME } from './guilds';
+import { seededUploadedAssets } from './uploadedAssets'; // Assuming this exports the Map
+import { systemIconSeedData } from './system/systemIcons'; // Assuming this exports the array of icon data (we'll need their names or IDs)
+
+// Helper to get a specific seeded asset URL by its key used in uploadedAssets.ts
+function getAssetUrl(key: string): string {
+  const asset = seededUploadedAssets.get(key);
+  if (!asset) {
+    console.warn(`⚠️ Seeded asset with key "${key}" not found. Using placeholder.`);
+    // Fallback to a generic Picsum URL if a specific asset isn't found
+    return `https://picsum.photos/seed/${key.replace(/[^a-zA-Z0-9]/g, '')}/200/200`;
+  }
+  return asset.hostedUrl;
+}
+
+// Helper to get a system icon ID by its unique name
+// This assumes systemIconSeedData contains objects with at least { id: string, name: string }
+// If systemIconSeedData only contains data for creation (without ID), we'd fetch from DB instead.
+function getSystemIconId(name: string, allSystemIcons: SystemIcon[]): string {
+    const icon = allSystemIcons.find(i => i.name === name);
+    if (!icon) {
+        console.warn(`⚠️ System icon with name "${name}" not found. Using a default or placeholder ID.`);
+        // Fallback to the first available system icon or a known placeholder ID
+        return allSystemIcons[0]?.id || 'sysicon_placeholder'; 
+    }
+    return icon.id;
+}
+
+
+interface BadgeTemplateSeedData extends Omit<BadgeTemplate, 'id' | 'createdAt' | 'updatedAt' | 'instances' | 'metadataFieldDefinitions'> {
+  templateSlug: string; // Changed from uniqueKey. This will be used for upserting.
+  metadataFields?: Omit<MetadataFieldDefinition, 'id' | 'badgeTemplateId' | 'badgeTemplate'>[];
+}
+
+export async function seedBadgeTemplates(prisma: PrismaClient) {
+  console.log('🌱 Seeding badge templates...');
+
+  const users = await prisma.user.findMany({ select: { id: true, username: true } });
+  const guilds = await prisma.guild.findMany({ select: { id: true, name: true } });
+  const allSystemIcons = await prisma.systemIcon.findMany(); // Fetch all seeded system icons
+
+  const testUserPrime = users.find(u => u.username === TEST_USER_PRIME_USERNAME);
+  const specialGuild = guilds.find(g => g.name === SPECIAL_GUILD_NAME);
+  const systemDesignerUser = users[0]; // Fallback or a designated system content creator user
+
+  if (!testUserPrime) {
+    console.warn(`⚠️ TestUserPrime not found. Some templates might not be correctly authored/owned.`);
+  }
+  if (!specialGuild) {
+    console.warn(`⚠️ Special Guild ${SPECIAL_GUILD_NAME} not found. Some templates might not be correctly owned.`);
+  }
+  if (allSystemIcons.length === 0) {
+    console.warn('⚠️ No system icons found. Foreground icons for templates might be missing.');
+  }
+   if (seededUploadedAssets.size === 0) {
+    console.warn('⚠️ No uploaded assets found from seeder. Image backgrounds/icons might be missing.');
+  }
+
+  const badgeTemplatesData: BadgeTemplateSeedData[] = [
+    // Template 1: "Site Pioneer" (Static, System Owned, Gold Tier, basic metadata)
+    {
+      templateSlug: 'system_site_pioneer',
+      internalNotes: 'Awarded to the first 100 users who joined ViaGuild.',
+      authoredByUserId: systemDesignerUser?.id || null,
+      ownedByUserId: null,
+      ownedByGuildId: null,
+      isArchived: false,
+      isModifiableByIssuer: false,
+      allowsPushedInstanceUpdates: false,
+      inherentTier: BadgeTier.GOLD,
+      defaultBadgeName: 'Site Pioneer',
+      defaultSubtitleText: 'Early Adopter',
+      defaultOuterShape: BadgeShape.HEXAGON,
+      defaultBorderColor: '#FFD700',
+      defaultBackgroundType: BackgroundContentType.SOLID_COLOR,
+      defaultBackgroundValue: '#4A0404',
+      defaultForegroundType: ForegroundContentType.SYSTEM_ICON,
+      defaultForegroundValue: getSystemIconId('Glowing Star', allSystemIcons),
+      defaultForegroundColor: '#FFD700',
+      defaultTextFont: null,
+      defaultTextSize: null,
+      defaultDisplayDescription: 'This badge is awarded to users who joined ViaGuild in its very early days, recognizing their foundational support.',
+      definesCredential: false,
+      credentialLabel: null,
+      credentialBest: null,
+      credentialWorst: null,
+      credentialNotes: null,
+      credentialIsNormalizable: false,
+      metadataFields: [
+        {
+          fieldKeyForInstanceData: 'joinDate',
+          label: 'Joined On:',
+          prefix: null, 
+          suffix: null, 
+          style: 'METADATA_DATE',
+          displayOrder: 0,
+        },
+        {
+          fieldKeyForInstanceData: 'userNumber',
+          label: 'Pioneer #:',
+          prefix: null,
+          suffix: null,
+          style: 'METADATA_NUMBER',
+          displayOrder: 1,
+        },
+      ],
+    },
+
+    // Template 2: "TheNexusHub Founder" (Static, Owned by TheNexusHub, TestUserPrime author, special styling)
+    {
+      templateSlug: `guild_${SPECIAL_GUILD_NAME}_founder`,
+      internalNotes: 'Awarded to the founder of TheNexusHub.',
+      authoredByUserId: testUserPrime?.id || systemDesignerUser?.id,
+      ownedByUserId: null,
+      ownedByGuildId: specialGuild?.id || null,
+      isArchived: false,
+      isModifiableByIssuer: false,
+      allowsPushedInstanceUpdates: false,
+      inherentTier: BadgeTier.GOLD,
+      defaultBadgeName: 'Nexus Visionary',
+      defaultSubtitleText: `Founder of ${SPECIAL_GUILD_NAME}`,
+      defaultOuterShape: BadgeShape.SQUARE,
+      defaultBorderColor: '#C0C0C0',
+      defaultBackgroundType: BackgroundContentType.HOSTED_IMAGE,
+      defaultBackgroundValue: getAssetUrl('BADGE_BACKGROUND_IMAGE_10'), 
+      defaultForegroundType: ForegroundContentType.SYSTEM_ICON,
+      defaultForegroundValue: getSystemIconId('Shield', allSystemIcons),
+      defaultForegroundColor: '#FFFFFF',
+      defaultTextFont: null,
+      defaultTextSize: null,
+      defaultDisplayDescription: `Awarded to the esteemed founder of ${SPECIAL_GUILD_NAME}, for their vision and leadership.`,
+      definesCredential: false,
+      credentialLabel: null,
+      credentialBest: null,
+      credentialWorst: null,
+      credentialNotes: null,
+      credentialIsNormalizable: false,
+      metadataFields: [
+        {
+          fieldKeyForInstanceData: 'foundingDate',
+          label: 'Established:',
+          prefix: null,
+          suffix: null,
+          style: 'METADATA_INFO',
+          displayOrder: 0,
+        },
+      ],
+    },
+
+    // Template 3: "TestUserPrime's Project Completion" (Modifiable, Owned by TUP, uses credential)
+    {
+        templateSlug: `user_${TEST_USER_PRIME_USERNAME}_project_alpha`,
+        internalNotes: 'A badge TestUserPrime can award for completing their personal projects.',
+        authoredByUserId: testUserPrime?.id || systemDesignerUser?.id,
+        ownedByUserId: testUserPrime?.id || null,
+        ownedByGuildId: null,
+        isArchived: false,
+        isModifiableByIssuer: true,
+        allowsPushedInstanceUpdates: true,
+        inherentTier: BadgeTier.SILVER,
+        defaultBadgeName: 'Project Complete',
+        defaultSubtitleText: 'Milestone Achieved',
+        defaultOuterShape: BadgeShape.CIRCLE,
+        defaultBorderColor: '#0284c7',
+        defaultBackgroundType: BackgroundContentType.SOLID_COLOR,
+        defaultBackgroundValue: '#e0f2fe',
+        defaultForegroundType: ForegroundContentType.SYSTEM_ICON,
+        defaultForegroundValue: getSystemIconId('Checkmark Seal', allSystemIcons),
+        defaultForegroundColor: '#0284c7',
+        defaultTextFont: null,
+        defaultTextSize: null,
+        defaultDisplayDescription: 'Awarded upon successful completion of a significant project phase or the entire project.',
+        definesCredential: true,
+        credentialLabel: 'Project Difficulty',
+        credentialBest: 10,
+        credentialWorst: 1,
+        credentialNotes: 'Difficulty scale from 1 (easy) to 10 (very hard).',
+        credentialIsNormalizable: true,
+        metadataFields: [
+          {
+            fieldKeyForInstanceData: 'projectName',
+            label: 'Project:',
+            prefix: null,
+            suffix: null,
+            style: 'METADATA_HEADER',
+            displayOrder: 0,
+          },
+          {
+            fieldKeyForInstanceData: 'completionDate',
+            label: 'Completed On:',
+            prefix: null,
+            suffix: null,
+            style: 'METADATA_DATE',
+            displayOrder: 1,
+          },
+          {
+            fieldKeyForInstanceData: 'hoursSpent',
+            label: 'Effort (hrs):',
+            prefix: null,
+            suffix: null,
+            style: 'METADATA_NUMBER',
+            displayOrder: 2,
+          },
+        ],
+    },
+    // Template 4: "Nexus Hub Contributor" (Guild-owned by TheNexusHub, Silver tier, modifiable content)
+    {
+      templateSlug: `guild_${SPECIAL_GUILD_NAME}_contributor`,
+      internalNotes: 'Recognizes consistent and valuable contributions to TheNexusHub.',
+      authoredByUserId: testUserPrime?.id || systemDesignerUser?.id, // Authored by TUP or system admin
+      ownedByUserId: null,
+      ownedByGuildId: specialGuild?.id || null,
+      isArchived: false,
+      isModifiableByIssuer: true, // Guild admins can update the look/description of this badge type
+      allowsPushedInstanceUpdates: false, // Instance data (metadata) is set at award, not typically live-updated by issuer
+      inherentTier: BadgeTier.SILVER,
+      defaultBadgeName: 'Nexus Contributor',
+      defaultSubtitleText: 'Valued Member',
+      defaultOuterShape: BadgeShape.HEART,
+      defaultBorderColor: '#A0A0A0', // Silver-ish
+      defaultBackgroundType: BackgroundContentType.SOLID_COLOR,
+      defaultBackgroundValue: '#E9E9E9', // Light Gray
+      defaultForegroundType: ForegroundContentType.SYSTEM_ICON,
+      defaultForegroundValue: getSystemIconId('Filled Heart', allSystemIcons),
+      defaultForegroundColor: '#CD7F32', // Bronze-like color for the heart on silver
+      defaultTextFont: null,
+      defaultTextSize: null,
+      defaultDisplayDescription: 'Awarded to members who consistently make positive contributions to The Nexus Hub community, discussions, or projects.',
+      definesCredential: false,
+      credentialLabel: null, 
+      credentialBest: null,    
+      credentialWorst: null,   
+      credentialNotes: null,   
+      credentialIsNormalizable: false, 
+      metadataFields: [
+        {
+          fieldKeyForInstanceData: 'contributionType',
+          label: 'Area:',
+          prefix: null, suffix: null,
+          style: 'METADATA_CATEGORY',
+          displayOrder: 0,
+        },
+        {
+          fieldKeyForInstanceData: 'contributionDate',
+          label: 'Date:',
+          prefix: null, suffix: null,
+          style: 'METADATA_DATE',
+          displayOrder: 1,
+        },
+      ],
+    },
+    // Template 5: "Generic Participation Badge" (System template, no tier, very basic)
+    {
+      templateSlug: 'system_generic_participation',
+      internalNotes: 'A simple badge to acknowledge participation in any event or activity.',
+      authoredByUserId: systemDesignerUser?.id || null,
+      ownedByUserId: null,
+      ownedByGuildId: null, // System template
+      isArchived: false,
+      isModifiableByIssuer: false,
+      allowsPushedInstanceUpdates: false,
+      inherentTier: null, // No specific tier
+      defaultBadgeName: 'Participant',
+      defaultSubtitleText: 'Thank You!',
+      defaultOuterShape: BadgeShape.CIRCLE,
+      defaultBorderColor: '#6B7280', // Gray-500
+      defaultBackgroundType: BackgroundContentType.SOLID_COLOR,
+      defaultBackgroundValue: '#F3F4F6', // Gray-100
+      defaultForegroundType: ForegroundContentType.SYSTEM_ICON,
+      defaultForegroundValue: getSystemIconId('Checkmark Seal', allSystemIcons), // Generic check/success icon
+      defaultForegroundColor: '#4B5563', // Gray-600
+      defaultTextFont: null,
+      defaultTextSize: null,
+      defaultDisplayDescription: 'This badge acknowledges participation in an event or activity.',
+      definesCredential: false,
+      credentialLabel: null, 
+      credentialBest: null,    
+      credentialWorst: null,   
+      credentialNotes: null,   
+      credentialIsNormalizable: false, 
+      metadataFields: [
+        {
+          fieldKeyForInstanceData: 'eventName',
+          label: 'Event:',
+          prefix: null, suffix: null,
+          style: 'METADATA_EVENT_NAME',
+          displayOrder: 0,
+        },
+      ],
+    },
+    // Template 6: "TestUserPrime's Live Rank Badge" (User-owned by TUP, allows pushed instance updates for credentialValue)
+    {
+      templateSlug: `user_${TEST_USER_PRIME_USERNAME}_live_rank`,
+      internalNotes: 'A badge TestUserPrime uses to show a live-updated rank or score.',
+      authoredByUserId: testUserPrime?.id || systemDesignerUser?.id,
+      ownedByUserId: testUserPrime?.id || null,
+      ownedByGuildId: null,
+      isArchived: false,
+      isModifiableByIssuer: true, // TUP might change the base look of their rank badge
+      allowsPushedInstanceUpdates: true, // Crucial: TUP's system will push updates to credentialValue
+      inherentTier: null, // Rank itself is the value, not tied to G/S/B allocation
+      defaultBadgeName: 'Current Rank',
+      defaultSubtitleText: 'Player Standing',
+      defaultOuterShape: BadgeShape.SQUARE,
+      defaultBorderColor: '#3B82F6', // Blue
+      defaultBackgroundType: BackgroundContentType.HOSTED_IMAGE,
+      defaultBackgroundValue: getAssetUrl('BADGE_BACKGROUND_IMAGE_20'), // Dynamic-looking background
+      defaultForegroundType: ForegroundContentType.TEXT, // Will be overridden by instance typically, or shows a placeholder
+      defaultForegroundValue: '-', // Placeholder for rank number/tier name if instanceData is missing override
+      defaultForegroundColor: '#FFFFFF',
+      defaultTextFont: 'Impact_Approved', // Example chunky font for rank
+      defaultTextSize: 24,
+      defaultDisplayDescription: 'Displays the current competitive ranking, updated periodically.',
+      definesCredential: true,
+      credentialLabel: 'Rank Tier',
+      credentialBest: 1,    // Lower is better for rank
+      credentialWorst: 100, // e.g. 100 ranks
+      credentialNotes: 'Player rank, where 1 is the highest. Updated by external system.',
+      credentialIsNormalizable: true,
+      metadataFields: [
+        {
+          fieldKeyForInstanceData: 'rankNameDetail',
+          label: 'Tier:',
+          prefix: null, suffix: null,
+          style: 'METADATA_INFO',
+          displayOrder: 0,
+        },
+        {
+          fieldKeyForInstanceData: 'lastUpdated',
+          label: 'As of:',
+          prefix: null, suffix: null,
+          style: 'METADATA_TIMESTAMP',
+          displayOrder: 1,
+        },
+      ],
+    },
+    // Template 7: "Artisan Guild - Bronze Achievement" (Owned by another guild, Bronze, static)
+    {
+      templateSlug: 'guild_ArtisanCrafters_bronze_craft', // Changed from uniqueKey
+      internalNotes: 'Standard bronze crafting achievement for the Artisan Crafters guild.',
+      authoredByUserId: systemDesignerUser?.id, // Or a member of that guild
+      ownedByUserId: null,
+      ownedByGuildId: guilds.find(g => g.name === 'ArtisanCrafters')?.id || guilds[1]?.id || null, // Assign to a faker guild if specific one not found
+      isArchived: false,
+      isModifiableByIssuer: false,
+      allowsPushedInstanceUpdates: false,
+      inherentTier: BadgeTier.BRONZE,
+      defaultBadgeName: 'Bronze Craftsmanship',
+      defaultSubtitleText: 'Artisan Guild Award',
+      defaultOuterShape: BadgeShape.HEXAGON,
+      defaultBorderColor: '#CD7F32', // Bronze
+      defaultBackgroundType: BackgroundContentType.SOLID_COLOR,
+      defaultBackgroundValue: '#6B4226', // Darker Brown
+      defaultForegroundType: ForegroundContentType.SYSTEM_ICON,
+      defaultForegroundValue: getSystemIconId('Ribbon Award', allSystemIcons),
+      defaultForegroundColor: '#CD7F32', // Bronze icon
+      defaultTextFont: null,
+      defaultTextSize: null,
+      defaultDisplayDescription: 'Recognizes foundational skill and dedication in craftsmanship within the Artisan Guild.',
+      definesCredential: false,
+      credentialLabel: null, 
+      credentialBest: null,    
+      credentialWorst: null,   
+      credentialNotes: null,   
+      credentialIsNormalizable: false, 
+      metadataFields: [
+        {
+          fieldKeyForInstanceData: 'craftType',
+          label: 'Specialty:',
+          prefix: null, suffix: null,
+          style: 'METADATA_TAG',
+          displayOrder: 0,
+        },
+      ],
+    },
+    // Template 8: "Lore Master" (Owned by TheNexusHub, text-based foreground, detailed metadata)
+    {
+      templateSlug: `guild_${SPECIAL_GUILD_NAME}_lore_master`,
+      internalNotes: 'For members who demonstrate exceptional knowledge of TheNexusHub lore.',
+      authoredByUserId: testUserPrime?.id || systemDesignerUser?.id,
+      ownedByUserId: null,
+      ownedByGuildId: specialGuild?.id || null,
+      isArchived: false,
+      isModifiableByIssuer: false,
+      allowsPushedInstanceUpdates: false,
+      inherentTier: BadgeTier.SILVER,
+      defaultBadgeName: 'Lore Keeper',
+      defaultSubtitleText: 'Hub Historian',
+      defaultOuterShape: BadgeShape.CIRCLE,
+      defaultBorderColor: '#71717a', // Zinc 500
+      defaultBackgroundType: BackgroundContentType.HOSTED_IMAGE,
+      defaultBackgroundValue: getAssetUrl('BADGE_BACKGROUND_IMAGE_30'), // e.g., an old paper/scroll texture
+      defaultForegroundType: ForegroundContentType.TEXT,
+      defaultForegroundValue: 'LORE', // Prominent text
+      defaultForegroundColor: '#27272a', // Zinc 800
+      defaultTextFont: 'Georgia_Approved', // Serif font
+      defaultTextSize: 22,
+      defaultDisplayDescription: 'Bestowed upon those who have delved deep into the annals of TheNexusHub, preserving its history and tales.',
+      definesCredential: false,
+      credentialLabel: null, 
+      credentialBest: null,    
+      credentialWorst: null,   
+      credentialNotes: null,   
+      credentialIsNormalizable: false, 
+      metadataFields: [
+        {
+          fieldKeyForInstanceData: 'knownTopic',
+          label: 'Area of Expertise:',
+          prefix: null, suffix: null,
+          style: 'METADATA_LONGTEXT',
+          displayOrder: 0
+        },
+        {
+          fieldKeyForInstanceData: 'sourceVerification',
+          label: 'Verified By:',
+          prefix: null, suffix: null,
+          style: 'METADATA_AUTHORITY',
+          displayOrder: 1
+        }
+      ]
+    }
+  ];
+
+  let createdTemplateCount = 0;
+  let updatedTemplateCount = 0;
+  let createdMetadataFieldsCount = 0;
+
+  for (const templateData of badgeTemplatesData) {
+    const { metadataFields, templateSlug, ...badgeTemplateCoreData } = templateData;
+
+    let whereInput: Prisma.BadgeTemplateWhereInput;
+
+    if (badgeTemplateCoreData.ownedByUserId) {
+      whereInput = { 
+        ownedByUserId: badgeTemplateCoreData.ownedByUserId,
+        templateSlug: templateSlug
+        // Using direct fields for findFirst as named unique constraint keys might not be direct inputs for BadgeTemplateWhereInput
+      };
+    } else if (badgeTemplateCoreData.ownedByGuildId) {
+      whereInput = { 
+        ownedByGuildId: badgeTemplateCoreData.ownedByGuildId,
+        templateSlug: templateSlug
+      };
+    } else {
+      // System template: find by templateSlug where owner fields are null.
+      whereInput = { 
+        templateSlug: templateSlug, 
+        ownedByUserId: null, 
+        ownedByGuildId: null 
+      };
+    }
+
+    let existingTemplate = await prisma.badgeTemplate.findFirst({ 
+        where: whereInput 
+    });
+
+    let upsertedTemplate: BadgeTemplate;
+
+    try {
+      const dataPayload = {
+        ...badgeTemplateCoreData,
+        templateSlug: templateSlug, // Ensure templateSlug is part of the data for create
+      };
+
+      if (existingTemplate) {
+        upsertedTemplate = await prisma.badgeTemplate.update({
+          where: { id: existingTemplate.id },
+          // Do not update templateSlug on existing records, as it should be immutable.
+          // Only update other fields from badgeTemplateCoreData.
+          data: badgeTemplateCoreData, 
+        });
+        updatedTemplateCount++;
+      } else {
+        upsertedTemplate = await prisma.badgeTemplate.create({
+          data: dataPayload,
+        });
+        createdTemplateCount++;
+      }
+
+      if (metadataFields && metadataFields.length > 0) {
+        await prisma.metadataFieldDefinition.deleteMany({
+          where: { badgeTemplateId: upsertedTemplate.id },
+        });
+        const definitionsToCreate = metadataFields.map(mdf => ({ ...mdf, badgeTemplateId: upsertedTemplate.id }));
+        await prisma.metadataFieldDefinition.createMany({
+          data: definitionsToCreate,
+          skipDuplicates: true, 
+        });
+        createdMetadataFieldsCount += definitionsToCreate.length;
+      }
+
+    } catch (error) {
+      console.error(`Error processing badge template (templateSlug: ${templateSlug}):`, error);
+    }
+  }
+
+  console.log(`✅ Badge templates seeding finished.`);
+  console.log(`   ${createdTemplateCount} templates created, ${updatedTemplateCount} templates updated.`);
+  console.log(`   ${createdMetadataFieldsCount} metadata field definitions created.`);
+}
+
+// To call this, ensure you pass the prisma client, and potentially the fetched users, guilds, etc.
+// if you don't want to fetch them inside this function every time. 
