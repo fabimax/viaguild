@@ -29,17 +29,23 @@ export async function seedClusterSystemRoles(prisma: PrismaClient) {
   ];
 
   for (const roleData of clusterSystemRolesData) {
+    const nameCi = roleData.name.toLowerCase();
     let systemClusterRole = await prisma.clusterRole.findFirst({
-        where: { name: roleData.name, isSystemRole: true, clusterId: null },
+        where: { 
+          name_ci: nameCi,
+          isSystemRole: true,
+          clusterId: null
+        },
     });
 
     if (!systemClusterRole) {
         systemClusterRole = await prisma.clusterRole.create({
             data: {
                 name: roleData.name,
+                name_ci: nameCi,
                 description: roleData.description,
                 isSystemRole: true,
-                // clusterId is null for system role templates
+                clusterId: null, //System roles are global (clusterId: null)
             },
         });
         console.log(`   Created cluster system role definition: ${systemClusterRole.name}`);

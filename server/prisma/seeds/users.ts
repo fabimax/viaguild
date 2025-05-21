@@ -12,10 +12,10 @@ export async function seedUsers(prisma: PrismaClient) {
   const primePasswordHash = await bcrypt.hash('passwordPrime123', 10);
   try {
     const testUserPrime = await prisma.user.upsert({
-      where: { username: TEST_USER_PRIME_USERNAME },
+      where: { username_ci: TEST_USER_PRIME_USERNAME.toLowerCase() },
       update: { 
-        // Ensure critical fields are as expected if user somehow exists with this username
         email: TEST_USER_PRIME_EMAIL, 
+        email_ci: TEST_USER_PRIME_EMAIL.toLowerCase(),
         displayName: 'Test User Prime',
         bio: 'The primary user for testing all ViaGuild features, especially badges!',
         avatar: `https://picsum.photos/id/142/128/128`, // Consistent avatar
@@ -23,7 +23,9 @@ export async function seedUsers(prisma: PrismaClient) {
       },
       create: {
         username: TEST_USER_PRIME_USERNAME,
+        username_ci: TEST_USER_PRIME_USERNAME.toLowerCase(),
         email: TEST_USER_PRIME_EMAIL,
+        email_ci: TEST_USER_PRIME_EMAIL.toLowerCase(),
         displayName: 'Test User Prime',
         passwordHash: primePasswordHash,
         bio: 'The primary user for testing all ViaGuild features, especially badges!',
@@ -39,8 +41,8 @@ export async function seedUsers(prisma: PrismaClient) {
         const existingByEmail = await prisma.user.findUnique({where: {email: TEST_USER_PRIME_EMAIL}});
         if(existingByEmail && existingByEmail.username !== TEST_USER_PRIME_USERNAME){
             console.error(`CRITICAL: TestUserPrime email (${TEST_USER_PRIME_EMAIL}) is taken by another user (${existingByEmail.username}). Manual intervention needed.`)
-        } else if (existingByEmail && existingByEmail.username === TEST_USER_PRIME_USERNAME) {
-            console.log('TestUserPrime already exists with the correct username and email.');
+        } else if (existingByEmail && existingByEmail.username_ci === TEST_USER_PRIME_USERNAME.toLowerCase()) {
+            console.log('TestUserPrime already exists with the correct username_ci and email_ci.');
         } else {
             console.error(`CRITICAL: TestUserPrime could not be reliably upserted due to email unique constraint. Error: ${e.message}`);
         }
@@ -84,7 +86,9 @@ export async function seedUsers(prisma: PrismaClient) {
       const user = await prisma.user.create({
         data: {
           username,
+          username_ci: username.toLowerCase(),
           email,
+          email_ci: email.toLowerCase(),
           displayName: faker.person.fullName(),
           passwordHash,
           bio: faker.lorem.sentence(),

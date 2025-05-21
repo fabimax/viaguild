@@ -43,11 +43,30 @@ export async function seedClusters(prisma: PrismaClient) {
     },
   ];
 
-  for (const data of clusterData) {
+  for (const currentClusterData of clusterData) {
+    const nameCi = currentClusterData.name.toLowerCase();
+    const creatorId = currentClusterData.createdById;
+
     const cluster = await prisma.cluster.upsert({
-      where: { name: data.name },
-      update: { avatar: data.avatar, description: data.description, isOpen: data.isOpen, displayName: data.displayName },
-      create: data,
+      where: { name_ci: nameCi },
+      update: { 
+        displayName: currentClusterData.displayName,
+        description: currentClusterData.description,
+        avatar: currentClusterData.avatar,
+        isOpen: currentClusterData.isOpen,
+        // creator is not typically updated after creation via this type of seed logic
+      },
+      create: {
+        name: currentClusterData.name,
+        name_ci: nameCi,
+        displayName: currentClusterData.displayName,
+        description: currentClusterData.description,
+        avatar: currentClusterData.avatar,
+        isOpen: currentClusterData.isOpen,
+        creator: { 
+          connect: { id: creatorId }
+        }
+      },
     });
     console.log(`Upserted cluster: ${cluster.displayName} (ID: ${cluster.id})`);
 

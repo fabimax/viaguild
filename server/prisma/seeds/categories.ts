@@ -25,10 +25,21 @@ export async function seedCategories(prisma: PrismaClient) {
   ];
 
   for (const data of categoryData) {
+    const nameCi = data.name.toLowerCase();
     const category = await prisma.category.upsert({
-      where: { name: data.name },
-      update: { description: data.description }, // Update description if it already exists
-      create: data,
+      where: { name_ci: nameCi },
+      update: { 
+        description: data.description,
+        isSystemCategory: data.isSystemCategory,
+        allowsGuildPrimary: data.allowsGuildPrimary
+      }, 
+      create: {
+        name: data.name,
+        name_ci: nameCi,
+        description: data.description,
+        isSystemCategory: data.isSystemCategory,
+        allowsGuildPrimary: data.allowsGuildPrimary,
+      },
     });
     console.log(`Upserted category: ${category.name} (ID: ${category.id})`);
   }

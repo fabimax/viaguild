@@ -47,12 +47,13 @@ export async function seedSystemRoles(prisma: PrismaClient) {
   let updatedCount = 0;
 
   for (const roleData of systemRolesData) {
+    const nameCi = roleData.name.toLowerCase();
     try {
     const existingRole = await prisma.role.findFirst({
       where: {
-        name: roleData.name,
-          guildId: null, // System roles have null guildId
-          isSystemRole: true, // Ensure we are matching a system role
+        name_ci: nameCi,
+        guildId: null, //System roles are global (guildId: null)
+        isSystemRole: true,
       },
     });
 
@@ -83,12 +84,13 @@ export async function seedSystemRoles(prisma: PrismaClient) {
       await prisma.role.create({
           data: {
             name: roleData.name,
+            name_ci: nameCi,
             description: roleData.description,
             isSystemRole: true,
             isDefaultRole: roleData.isDefaultRole,
             displayColor: roleData.displayColor,
             apiVisible: roleData.apiVisible,
-            guildId: null, // Explicitly set guildId to null for system roles
+            guildId: null, //System roles are global (guildId: null)
           },
       });
       console.log(`   Created system role: ${roleData.name}`);

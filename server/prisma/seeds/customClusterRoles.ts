@@ -45,14 +45,21 @@ export async function seedCustomClusterRoles(prisma: PrismaClient) {
     const numberOfCustomRolesToCreate = faker.number.int({ min: 1, max: 2 });
     for (let i = 0; i < numberOfCustomRolesToCreate; i++) {
       const roleName = `Cluster ${cluster.name} ${faker.person.jobTitle()} ${i + 1}`.replace(/[^a-zA-Z0-9_\s-]/g, '').substring(0,50);
+      const roleNameCi = roleName.toLowerCase();
       try {
         const customRole = await prisma.clusterRole.upsert({
-          where: { name_clusterId: { name: roleName, clusterId: cluster.id } }, // Assumes @@unique([name, clusterId]) on ClusterRole
+          where: { 
+            unique_cluster_role_name_ci: {
+                clusterId: cluster.id, 
+                name_ci: roleNameCi 
+            }
+          }, 
           update: {
             description: `Custom role for ${cluster.name}: ${faker.lorem.sentence()}`,
           },
           create: {
             name: roleName,
+            name_ci: roleNameCi,
             description: `Custom role for ${cluster.name}: ${faker.lorem.sentence()}`,
             clusterId: cluster.id,
             isSystemRole: false,
@@ -141,4 +148,4 @@ export async function seedCustomClusterRoles(prisma: PrismaClient) {
   }
 
   console.log(`✅ Custom cluster roles & permissions seeding finished. ${customClusterRolesCreated.length} distinct custom roles in target clusters considered, ${usersAssignedCustomClusterRolesCount} user assignments made.`);
-} 
+}

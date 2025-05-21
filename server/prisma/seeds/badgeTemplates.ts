@@ -43,8 +43,11 @@ function getSystemIconId(name: string, allSystemIcons: SystemIcon[]): string {
 }
 
 
-interface BadgeTemplateSeedData extends Omit<BadgeTemplate, 'id' | 'createdAt' | 'updatedAt' | 'instances' | 'metadataFieldDefinitions'> {
-  templateSlug: string; // Changed from uniqueKey. This will be used for upserting.
+interface BadgeTemplateSeedData extends Omit<BadgeTemplate, 'id' | 'createdAt' | 'updatedAt' | 'instances' | 'metadataFieldDefinitions' | 'templateSlug_ci' | 'authoredByUser' | 'ownedByUser' | 'ownedByGuild'> { 
+  templateSlug: string;
+  authoredByUserId: string | null;
+  ownedByUserId: string | null;
+  ownedByGuildId: string | null;
   metadataFields?: Omit<MetadataFieldDefinition, 'id' | 'badgeTemplateId' | 'badgeTemplate'>[];
 }
 
@@ -447,52 +450,83 @@ export async function seedBadgeTemplates(prisma: PrismaClient) {
 
   for (const templateData of badgeTemplatesData) {
     const { metadataFields, templateSlug, ...badgeTemplateCoreData } = templateData;
-
-    let whereInput: Prisma.BadgeTemplateWhereInput;
-
-    if (badgeTemplateCoreData.ownedByUserId) {
-      whereInput = { 
-        ownedByUserId: badgeTemplateCoreData.ownedByUserId,
-        templateSlug: templateSlug
-        // Using direct fields for findFirst as named unique constraint keys might not be direct inputs for BadgeTemplateWhereInput
-      };
-    } else if (badgeTemplateCoreData.ownedByGuildId) {
-      whereInput = { 
-        ownedByGuildId: badgeTemplateCoreData.ownedByGuildId,
-        templateSlug: templateSlug
-      };
-    } else {
-      // System template: find by templateSlug where owner fields are null.
-      whereInput = { 
-        templateSlug: templateSlug, 
-        ownedByUserId: null, 
-        ownedByGuildId: null 
-      };
-    }
-
-    let existingTemplate = await prisma.badgeTemplate.findFirst({ 
-        where: whereInput 
-    });
-
-    let upsertedTemplate: BadgeTemplate;
+    const templateSlugCi = templateSlug.toLowerCase();
 
     try {
-      const dataPayload = {
-        ...badgeTemplateCoreData,
-        templateSlug: templateSlug, // Ensure templateSlug is part of the data for create
-      };
+      let existingTemplate: BadgeTemplate | null = null;
+
+      if (badgeTemplateCoreData.ownedByUserId) {
+        existingTemplate = await prisma.badgeTemplate.findUnique({
+            where: { unique_user_template_slug_ci: { ownedByUserId: badgeTemplateCoreData.ownedByUserId, templateSlug_ci: templateSlugCi } }
+        });
+      } else if (badgeTemplateCoreData.ownedByGuildId) {
+        existingTemplate = await prisma.badgeTemplate.findUnique({
+            where: { unique_guild_template_slug_ci: { ownedByGuildId: badgeTemplateCoreData.ownedByGuildId, templateSlug_ci: templateSlugCi } }
+        });
+      } else {
+        // System template (ownedByUserId is null AND ownedByGuildId is null)
+        existingTemplate = await prisma.badgeTemplate.findFirst({
+          where: { 
+            templateSlug_ci: templateSlugCi,
+            ownedByUserId: null,
+            ownedByGuildId: null
+          }
+        });
+      }
+
+      let upsertedTemplate: BadgeTemplate;
 
       if (existingTemplate) {
+        // Prepare update payload: only update non-key fields
+        const { 
+            authoredByUserId, 
+            ownedByUserId,      // Exclude: part of unique key
+            ownedByGuildId,     // Exclude: part of unique key
+            templateSlug: ts,   // Exclude: immutable part of unique key
+            // templateSlug_ci will be derived and is also part of unique key
+            ...updatableCoreData 
+        } = badgeTemplateCoreData as any; // Cast to any to allow destructuring potentially non-existent props if not all are always there
+
+        const updatePayload: Prisma.BadgeTemplateUpdateInput = {
+          ...updatableCoreData,
+        };
+        if (authoredByUserId) {
+          updatePayload.authoredByUser = { connect: { id: authoredByUserId } };
+        }
+
         upsertedTemplate = await prisma.badgeTemplate.update({
           where: { id: existingTemplate.id },
-          // Do not update templateSlug on existing records, as it should be immutable.
-          // Only update other fields from badgeTemplateCoreData.
-          data: badgeTemplateCoreData, 
+          data: updatePayload,
         });
         updatedTemplateCount++;
       } else {
+        // Prepare create payload
+        const { 
+            authoredByUserId, 
+            ownedByUserId, 
+            ownedByGuildId,
+            templateSlug: ts, // already have templateSlug separately
+            ...restOfCoreData 
+        } = badgeTemplateCoreData as any;
+
+        const createPayload: Prisma.BadgeTemplateCreateInput = {
+          ...restOfCoreData, 
+          templateSlug: templateSlug, 
+          templateSlug_ci: templateSlugCi,
+        };
+        
+        if (authoredByUserId) {
+          createPayload.authoredByUser = { connect: { id: authoredByUserId } };
+        }
+        if (ownedByUserId) {
+          createPayload.ownedByUser = { connect: { id: ownedByUserId } };
+        }
+        if (ownedByGuildId) {
+          createPayload.ownedByGuild = { connect: { id: ownedByGuildId } };
+        }
+
         upsertedTemplate = await prisma.badgeTemplate.create({
-          data: dataPayload,
+          data: createPayload,
         });
         createdTemplateCount++;
       }

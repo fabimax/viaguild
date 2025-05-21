@@ -38,9 +38,17 @@ export async function seedCustomGuildRoles(prisma: PrismaClient) {
   for (let i = 0; i < guildsUsedForGeneralRoles.length; i++) {
     const guild = guildsUsedForGeneralRoles[i];
     const roleName = `Custom ${faker.person.jobTitle()} Gen${i + 1}`;
+    const roleNameCi = roleName.toLowerCase();
     try {
       const customRole = await prisma.role.create({
-        data: { name: roleName, description: `A custom role for ${guild.name}: ${faker.lorem.sentence()}`, guildId: guild.id, isSystemRole: false, isDefaultRole: false },
+        data: { 
+            name: roleName, 
+            name_ci: roleNameCi,
+            description: `A custom role for ${guild.name}: ${faker.lorem.sentence()}`, 
+            guildId: guild.id, 
+            isSystemRole: false, 
+            isDefaultRole: false 
+        },
       });
       customRolesCreated.push(customRole); console.log(`Created general custom role: ${customRole.name} for guild ${guild.name}`);
       // Assign some random permissions (e.g., 2-3)
@@ -63,9 +71,17 @@ export async function seedCustomGuildRoles(prisma: PrismaClient) {
     ];
     const assigner = faker.helpers.arrayElement(users);
     for (const roleDetail of specialRoleNamesAndPerms) {
+      const roleNameCi = roleDetail.name.toLowerCase();
       try {
         const customRole = await prisma.role.create({
-          data: { name: roleDetail.name, description: `A special role for ${specialGuild.name}`, guildId: specialGuild.id, isSystemRole: false, isDefaultRole: false },
+          data: { 
+            name: roleDetail.name, 
+            name_ci: roleNameCi,
+            description: `A special role for ${specialGuild.name}`, 
+            guildId: specialGuild.id, 
+            isSystemRole: false, 
+            isDefaultRole: false 
+        },
         });
         customRolesCreated.push(customRole); console.log(`Created SPECIAL custom role: ${customRole.name} for guild ${specialGuild.name}`);
         const permissionsForSpecialRole = allPermissions.filter(p => roleDetail.perms.includes(p.key));
@@ -89,12 +105,21 @@ export async function seedCustomGuildRoles(prisma: PrismaClient) {
     const rolesToCreateForThisGuild = faker.helpers.arrayElements(customRolesCreated, faker.number.int({ min: 1, max: 2 }));
 
     for (const roleDef of rolesToCreateForThisGuild) {
+      const roleDefNameCi = roleDef.name.toLowerCase();
       try {
         const customRole = await prisma.role.upsert({
-          where: { name_guildId: { name: roleDef.name, guildId: guild.id } }, // Assumes @@unique([name, guildId]) on Role
-          update: { description: roleDef.description },
+          where: { 
+            unique_guild_role_name_ci: {
+                guildId: guild.id, 
+                name_ci: roleDefNameCi 
+            }
+          }, 
+          update: { 
+            description: roleDef.description 
+          },
           create: {
             name: roleDef.name,
+            name_ci: roleDefNameCi,
             description: roleDef.description,
             guildId: guild.id,
             isSystemRole: false,

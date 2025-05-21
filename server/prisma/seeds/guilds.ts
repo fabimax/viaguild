@@ -50,22 +50,23 @@ export async function seedGuilds(prisma: PrismaClient) {
 
     try {
       const guild = await prisma.guild.upsert({
-        where: { name: predefinedGuild.name },
+        where: { name_ci: predefinedGuild.name.toLowerCase() },
         update: {
           displayName: predefinedGuild.displayName,
           description: predefinedGuild.description,
           avatar: getRandomPicsumUrl(128, 128),
           isOpen: predefinedGuild.isSpecial ? true : faker.datatype.boolean(),
-          updatedById: creator.id,
+          updatedBy: { connect: { id: creator.id } },
         },
         create: {
           name: predefinedGuild.name,
+          name_ci: predefinedGuild.name.toLowerCase(),
           displayName: predefinedGuild.displayName,
           description: predefinedGuild.description,
           avatar: getRandomPicsumUrl(128, 128),
           isOpen: predefinedGuild.isSpecial ? true : faker.datatype.boolean(),
-          createdById: creator.id,
-          updatedById: creator.id,
+          creator: { connect: { id: creator.id } },
+          updatedBy: { connect: { id: creator.id } },
         },
       });
       createdGuilds.push(guild);
@@ -83,7 +84,7 @@ export async function seedGuilds(prisma: PrismaClient) {
             case 'DISCORD': value = `https://discord.gg/${faker.string.alphanumeric(7)}`; break;
             case 'TWITTER': value = `https://twitter.com/${faker.internet.username().replace(/[^a-zA-Z0-9_]/g, '')}`; break;
             case 'GITHUB': value = `https://github.com/${faker.internet.username().replace(/[^a-zA-Z0-9_]/g, '')}`; break;
-            default: value = faker.lorem.slug();
+            default: value = faker.lorem.slug(); // Ensure default has a value
           }
           await prisma.guildContact.create({
             data: { guildId: guild.id, type: contactType, value: value, label: undefined, displayOrder: j },
@@ -101,10 +102,10 @@ export async function seedGuilds(prisma: PrismaClient) {
   for (let i = 0; i < remainingGuildsToCreate; i++) {
     let guildName = faker.company.name().replace(/[^a-zA-Z0-9_]/g, '') + faker.string.alphanumeric(3);
     let attempt = 0;
-    let existingGuildByName = await prisma.guild.findUnique({where: {name: guildName}});
+    let existingGuildByName = await prisma.guild.findUnique({where: {name_ci: guildName.toLowerCase()}});
     while(existingGuildByName && attempt < 5) {
         guildName = faker.company.name().replace(/[^a-zA-Z0-9_]/g, '') + faker.string.alphanumeric(3+attempt);
-        existingGuildByName = await prisma.guild.findUnique({where: {name: guildName}});
+        existingGuildByName = await prisma.guild.findUnique({where: {name_ci: guildName.toLowerCase()}});
         attempt++;
     }
     if(existingGuildByName) continue; // Skip if still can't find unique name
@@ -117,15 +118,16 @@ export async function seedGuilds(prisma: PrismaClient) {
     if(!randomCreator) {console.error("No user found for random guild creation"); continue; }
 
     try {
-      const guild = await prisma.guild.create({ // Using create for these as name is now more reliably unique
+      const guild = await prisma.guild.create({ 
         data: {
           name: guildName,
+          name_ci: guildName.toLowerCase(), 
           displayName: displayName,
           description: description,
           avatar: getRandomPicsumUrl(128, 128),
           isOpen: faker.datatype.boolean(),
-          createdById: randomCreator.id,
-          updatedById: randomCreator.id,
+          creator: { connect: { id: randomCreator.id } }, 
+          updatedBy: { connect: { id: randomCreator.id } }, 
         },
       });
       createdGuilds.push(guild);
@@ -141,7 +143,7 @@ export async function seedGuilds(prisma: PrismaClient) {
           case 'DISCORD': value = `https://discord.gg/${faker.string.alphanumeric(7)}`; break;
           case 'TWITTER': value = `https://twitter.com/${faker.internet.username().replace(/[^a-zA-Z0-9_]/g, '')}`; break;
           case 'GITHUB': value = `https://github.com/${faker.internet.username().replace(/[^a-zA-Z0-9_]/g, '')}`; break;
-          default: value = faker.lorem.slug();
+          default: value = faker.lorem.slug(); // Ensure default has a value
         }
         await prisma.guildContact.create({
           data: { guildId: guild.id, type: contactType, value: value, label: undefined, displayOrder: j },
@@ -155,50 +157,6 @@ export async function seedGuilds(prisma: PrismaClient) {
       }
     }
   }
-  // console.log(`✅ Guilds seeding finished. ${createdGuilds.length} total guilds in this run (predefined + faker).`);
-  // Final count should be done by counting actual guilds in DB or based on upsert results
   const totalGuilds = await prisma.guild.count();
   console.log(`✅ Guilds seeding finished. Total guilds in DB: ${totalGuilds}. Guilds processed in this run: ${createdGuilds.length}.`);
 }
-
-// Example of how this might have looked before for context:
-// export async function seedGuilds(prisma: PrismaClient) {
-//   console.log('Seeding guilds...');
-
-//   // Ensure users are seeded first or handle user creation here
-//   // For simplicity, assuming users exist. Fetch one to be a creator.
-//   const user = await prisma.user.findFirst();
-//   if (!user) {
-//     console.error('No users found to be guild creators. Please seed users first.');
-//     return;
-//   }
-
-//   const guildData = [
-//     {
-//       name: 'TheAdventurersPact',
-//       displayName: 'The Adventurer\'s Pact',
-//       description: 'A guild for brave adventurers seeking quests and camaraderie.',
-//       createdById: user.id, // Assign a creator
-//       isOpen: true,
-//     },
-//     {
-//       name: 'ArtisansCollective',
-//       displayName: 'Artisans Collective',
-//       description: 'A place for craftsmen and artists to share their work.',
-//       createdById: user.id, // Assign a creator
-//       isOpen: false,
-//     },
-//     // Add more guilds as needed
-//   ];
-
-//   for (const data of guildData) {
-//     const guild = await prisma.guild.upsert({
-//       where: { name: data.name },
-//       update: {},
-//       create: data,
-//     });
-//     console.log(`Upserted guild: ${guild.displayName} (ID: ${guild.id})`);
-//   }
-
-//   console.log('Guilds seeded.');
-// } 
