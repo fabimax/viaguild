@@ -13,58 +13,68 @@ class GuildService {
    */
   async createGuild(guildData, userId) {
     try {
-      // Validate input
       if (!guildData.name || !guildData.description) {
         throw new Error('Guild name and description are required');
       }
 
-      // Create guild
+      const guildName = guildData.name; // Original casing
+      // The name_ci field will be populated by the database trigger
+
       const guild = await prisma.guild.create({
         data: {
-          name: guildData.name,
-          displayName: guildData.displayName || guildData.name, // Use name as fallback
+          name: guildName,
+          displayName: guildData.displayName || guildName,
           description: guildData.description,
           avatar: guildData.avatar,
           isOpen: guildData.isOpen || false,
-          createdById: userId,
-          updatedById: userId
-        }
+          allowJoinRequests: guildData.allowJoinRequests !== undefined ? guildData.allowJoinRequests : true,
+          creator: { connect: { id: userId } },
+          updatedBy: { connect: { id: userId } },
+          // name_ci is handled by DB trigger
+        },
       });
 
-      // Fetch the system OWNER role ID
-      const ownerRole = await prisma.appRole.findFirst({
+      const founderSystemRole = await prisma.role.findFirst({ // MODIFIED: AppRole -> Role
         where: {
-          name: 'OWNER',
+          name_ci: 'founder', // MODIFIED: Use name_ci and lowercase 'founder'
           isSystemRole: true,
-          guildId: null, // Ensure it's a global system role
+          guildId: null,
         },
         select: { id: true },
       });
 
-      if (!ownerRole) {
-        // This should ideally not happen if system roles were seeded correctly.
-        // In a real app, you might have a more robust way to get these IDs (e.g., constants or cache).
-        throw new Error('System OWNER role not found. Please ensure system roles are seeded.');
+      if (!founderSystemRole) {
+        console.error('CRITICAL: System FOUNDER role not found. Cannot assign initial ownership.');
+        throw new Error('System FOUNDER role not found.');
       }
 
-      // Create membership for creator as OWNER
-      await prisma.guildMembership.create({
+      // Create membership for creator
+      const membership = await prisma.guildMembership.create({
         data: {
           userId,
           guildId: guild.id,
-          roleId: ownerRole.id, // Assign the roleId of the fetched OWNER AppRole
-          // If user has no primary guild yet, make this one primary
-          isPrimary: await this.shouldBeSetAsPrimary(userId)
-        }
+          // roleId is removed from GuildMembership, roles are now managed by UserGuildRole
+          isPrimary: await this.shouldBeSetAsPrimary(userId),
+          primarySetAt: await this.shouldBeSetAsPrimary(userId) ? new Date() : null,
+          // rank can be set to a default or a specific founder rank if desired, e.g., rank: GuildMemberRank.S 
+        },
+      });
+
+      // Assign FOUNDER role via UserGuildRole
+      await prisma.userGuildRole.create({
+        data: {
+          guildMembershipId: membership.id,
+          roleId: founderSystemRole.id,
+        },
       });
 
       return guild;
     } catch (error) {
-      // Handle unique constraint violations
-      if (error.code === 'P2002') {
+      if (error.code === 'P2002' && error.meta?.target?.includes('name_ci')) { // MODIFIED: check name_ci
         throw new Error('A guild with this name already exists');
       }
-      throw error;
+      console.error('Error in createGuild:', error); // It's good to log the actual error on the server
+      throw error; // Re-throw the original error or a new one
     }
   }
 
@@ -81,12 +91,16 @@ class GuildService {
           select: {
             id: true,
             username: true,
-            // avatar: true // Keep or remove depending on whether guild.avatar is the primary source
+            // avatar: true // User avatar if needed, guild.avatar is separate
           }
         },
-        memberships: { // Still useful for other potential checks, but not for count if _count is used
-          // select: { userId: true, role: true } // Example: select only what's needed if memberships array is large
+        updatedBy: { // ADDED: Include who last updated the guild
+          select: {
+            id: true,
+            username: true,
+          }
         },
+        // memberships: {}, // Can be removed if only _count is used and no other logic here needs it.
         _count: {
           select: { memberships: true }
         }
@@ -97,22 +111,21 @@ class GuildService {
       throw new Error('Guild not found');
     }
 
-    // Structure the response
     return {
       id: guild.id,
-      name: guild.name,
+      name: guild.name, // This is the unique name/slug
+      displayName: guild.displayName, // ADDED: explicitly return displayName
       description: guild.description,
-      avatar: guild.avatar, // Prioritize guild's own avatar
+      avatar: guild.avatar,
       isOpen: guild.isOpen,
-      createdById: guild.createdById,
-      updatedById: guild.updatedById,
+      allowJoinRequests: guild.allowJoinRequests, // ADDED: explicitly return allowJoinRequests
+      // createdById: guild.createdById, // creator object is now preferred
+      // updatedById: guild.updatedById, // updatedBy object is now preferred
       createdAt: guild.createdAt,
       updatedAt: guild.updatedAt,
-      creator: guild.creator, // Contains creator's id and username
+      creator: guild.creator, 
+      updatedBy: guild.updatedBy, // ADDED: return updatedBy user info
       memberCount: guild._count.memberships
-      // Optionally, include a limited set of members if needed for an overview,
-      // but the plan specifies a separate endpoint for detailed member listing.
-      // memberships: guild.memberships (if still needed and selected appropriately)
     };
   }
 
@@ -120,81 +133,156 @@ class GuildService {
    * Update guild
    * @param {string} guildId - Guild ID
    * @param {Object} guildData - New guild data
-   * @param {string} userId - ID of the user updating the guild
+   * @param {string} actorUserId - ID of the user performing the update
    * @returns {Promise<Object>} Updated guild
    */
-  async updateGuild(guildId, guildData, userId) {
-    // Check if guild exists
-    const guild = await prisma.guild.findUnique({
+  async updateGuild(guildId, guildData, actorUserId) {
+    // Check if guild exists first
+    const existingGuild = await prisma.guild.findUnique({ 
       where: { id: guildId },
-      // Include memberships AND the role object within each membership for permission check
-      include: {
-        memberships: {
-          where: { userId }, // Optimization: only fetch the relevant user's membership
-          include: {
-            role: true, // Include the AppRole object associated with the membership
-          },
-        },
-      },
+      select: { id: true } // Select minimal field to check existence
     });
-
-    if (!guild) {
+    if (!existingGuild) {
       throw new Error('Guild not found');
     }
 
-    // Since we filtered memberships to the specific userId, we can take the first (and only) one.
-    const membership = guild.memberships[0];
+    // Permission Check: Fetch actor's roles and permissions for this guild
+    const actorMembership = await prisma.guildMembership.findUnique({
+      where: { 
+        uniqueUserGuildMembership: { userId: actorUserId, guildId: guildId }
+      },
+      include: {
+        assignedRoles: {
+          include: {
+            role: {
+              include: {
+                permissions: {
+                  include: {
+                    permission: { select: { key: true } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    });
 
-    if (!membership || !membership.role || (membership.role.name !== 'OWNER' && membership.role.name !== 'ADMIN')) {
+    if (!actorMembership) {
+      throw new Error('Actor is not a member of this guild.');
+    }
+
+    const actorPermissions = actorMembership.assignedRoles.flatMap(
+      ar => ar.role.permissions.map(p => p.permission.key)
+    );
+
+    // Define the required permission for updating guild details
+    const REQUIRED_PERMISSION = 'GUILD_EDIT_DETAILS'; 
+    if (!actorPermissions.includes(REQUIRED_PERMISSION)) {
       throw new Error('You do not have permission to update this guild');
     }
 
-    // Update guild
-    return prisma.guild.update({
-      where: { id: guildId },
-      data: {
-        name: guildData.name,
-        displayName: guildData.displayName || guildData.name, // Use name as fallback
-        description: guildData.description,
-        avatar: guildData.avatar,
-        isOpen: guildData.isOpen,
-        updatedById: userId
+    // Construct updateData carefully to only include provided fields
+    const updateData = {};
+    if (guildData.name !== undefined) updateData.name = guildData.name; // name_ci will be updated by trigger
+    if (guildData.displayName !== undefined) updateData.displayName = guildData.displayName;
+    if (guildData.description !== undefined) updateData.description = guildData.description;
+    if (guildData.avatar !== undefined) updateData.avatar = guildData.avatar;
+    if (guildData.isOpen !== undefined) updateData.isOpen = guildData.isOpen;
+    if (guildData.allowJoinRequests !== undefined) updateData.allowJoinRequests = guildData.allowJoinRequests;
+    
+    // Always update the updatedBy field
+    updateData.updatedBy = { connect: { id: actorUserId } };
+
+    if (Object.keys(updateData).length <= 1 && !updateData.updatedBy) { // only updatedBy is not enough if nothing else changed
+        // Or if only updatedBy, but no other actual data changes, Prisma might optimize and not run an update.
+        // However, if an update call is made with just updatedBy, it should still update the timestamp.
+        // If no actual guild data fields are being changed, we might return the existing guild or throw an error.
+        // For now, let's assume if the call is made, an update is intended at least for `updatedAt` and `updatedBy`.
+        if (Object.keys(updateData).length === 1 && updateData.updatedBy) {
+             // This means only updatedBy was set, which is always true. If no other fields are in guildData, throw error.
+             if (Object.keys(guildData).length === 0) {
+                 throw new Error("No update data provided.");
+             }
+        }
+    }
+
+    try {
+      return await prisma.guild.update({
+        where: { id: guildId },
+        data: updateData,
+      });
+    } catch (error) {
+      if (error.code === 'P2002' && error.meta?.target?.includes('name_ci')) {
+        throw new Error('A guild with this name already exists');
       }
-    });
+      console.error('Error in updateGuild:', error);
+      throw error;
+    }
   }
 
   /**
    * Delete guild
    * @param {string} guildId - Guild ID
-   * @param {string} userId - ID of the user deleting the guild
+   * @param {string} actorUserId - ID of the user deleting the guild
    * @returns {Promise<Object>} Deleted guild
    */
-  async deleteGuild(guildId, userId) {
-    // Check if guild exists
-    const guild = await prisma.guild.findUnique({
+  async deleteGuild(guildId, actorUserId) {
+    // Check if guild exists first
+    const existingGuild = await prisma.guild.findUnique({ 
       where: { id: guildId },
-      include: {
-        memberships: {
-          where: { userId }, // Optimization: only fetch the relevant user's membership
-          include: {
-            role: true, // Include the AppRole object
-          },
-        },
-      },
+      select: { id: true, createdById: true } // Also get createdById for sole founder check potentially
     });
-
-    if (!guild) {
+    if (!existingGuild) {
       throw new Error('Guild not found');
     }
 
-    const membership = guild.memberships[0]; // User's specific membership
+    // Permission Check: Fetch actor's roles and permissions for this guild
+    const actorMembership = await prisma.guildMembership.findUnique({
+      where: { 
+        uniqueUserGuildMembership: { userId: actorUserId, guildId: guildId }
+      },
+      include: {
+        assignedRoles: {
+          include: {
+            role: {
+              include: {
+                permissions: {
+                  include: {
+                    permission: { select: { key: true } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    });
 
-    // Check if user has permission (only OWNER can delete)
-    if (!membership || !membership.role || membership.role.name !== 'OWNER') {
-      throw new Error('Only the guild owner can delete this guild');
+    if (!actorMembership) {
+      // This case implies the user might not even be a member, or a deeper issue.
+      throw new Error('You do not have a valid membership in this guild to perform this action.');
     }
 
-    // Delete guild
+    const actorPermissions = actorMembership.assignedRoles.flatMap(
+      ar => ar.role.permissions.map(p => p.permission.key)
+    );
+
+    const REQUIRED_PERMISSION = 'GUILD_DISBAND'; 
+    if (!actorPermissions.includes(REQUIRED_PERMISSION)) {
+      throw new Error('You do not have permission to delete this guild');
+    }
+
+    // Optional: Add a check if the user is the creator (original founder)
+    // and if there are other founders or if ownership transfer is required.
+    // This example assumes the GUILD_DISBAND permission is sufficient.
+    // For instance, if only the original creator can disband:
+    // if (existingGuild.createdById !== actorUserId) {
+    //   throw new Error('Only the original guild creator can delete this guild.');
+    // }
+
+    // Delete guild - Prisma will handle cascading deletes based on schema relations
+    // (e.g., memberships, roles, contacts linked to this guild with onDelete: Cascade)
     return prisma.guild.delete({
       where: { id: guildId }
     });
@@ -215,7 +303,13 @@ class GuildService {
               select: {
                 id: true,
                 username: true,
-                avatar: true
+                // avatar: true // User avatar if needed
+              }
+            },
+            updatedBy: { // Good to include who last updated the guild
+              select: {
+                id: true,
+                username: true,
               }
             },
             _count: {
@@ -223,17 +317,46 @@ class GuildService {
             }
           }
         },
+        assignedRoles: { // MODIFIED: Fetch assigned roles
+          include: {
         role: {
-          select: { name: true }
+              select: { 
+                id: true, 
+                name: true, 
+                displayColor: true, // Include color for UI
+                apiVisible: true // Include visibility flag
+              }
+            }
+          }
         }
       }
     });
 
     return memberships.map(membership => ({
-      ...membership.guild,
-      role: membership.role ? membership.role.name : null,
+      // Spread guild details first, then add membership-specific info
+      id: membership.guild.id,
+      name: membership.guild.name,
+      displayName: membership.guild.displayName,
+      description: membership.guild.description,
+      avatar: membership.guild.avatar,
+      isOpen: membership.guild.isOpen,
+      allowJoinRequests: membership.guild.allowJoinRequests,
+      creator: membership.guild.creator,
+      updatedBy: membership.guild.updatedBy,
+      createdAt: membership.guild.createdAt,
+      updatedAt: membership.guild.updatedAt,
+      memberCount: membership.guild._count.memberships,
+      // Membership specific details for this user in this guild:
+      userGuildMembershipId: membership.id, // The ID of the GuildMembership record itself
+      roles: membership.assignedRoles.map(ar => ({
+        id: ar.role.id,
+        name: ar.role.name,
+        displayColor: ar.role.displayColor,
+        apiVisible: ar.role.apiVisible
+      })), 
       isPrimary: membership.isPrimary,
-      memberCount: membership.guild._count.memberships
+      rank: membership.rank, // Include member's rank in this guild
+      joinedAt: membership.joinedAt // Include when the user joined this guild
     }));
   }
 
@@ -245,36 +368,46 @@ class GuildService {
    */
   async searchGuilds(query, filters = {}) {
     const { isOpen } = filters;
+    const lowercasedQuery = query ? query.toLowerCase() : "";
     
-    const where = {
-      OR: [
-        { name: { contains: query, mode: 'insensitive' } },
-        { description: { contains: query, mode: 'insensitive' } }
-      ]
-    };
+    const whereConditions = [];
+    if (query) {
+        whereConditions.push(
+            { name_ci: { contains: lowercasedQuery } }, // Search against the lowercase name_ci field
+            { description: { contains: query, mode: 'insensitive' } } // Keep description search as is (can be case-insensitive)
+        );
+    }
 
-    // Add isOpen filter if specified
+    const whereClause = {};
+    if (whereConditions.length > 0) {
+        whereClause.OR = whereConditions;
+    }
+
     if (typeof isOpen === 'boolean') {
-      where.isOpen = isOpen;
+      whereClause.isOpen = isOpen;
     }
 
     return prisma.guild.findMany({
-      where,
+      where: whereClause,
       include: {
         creator: {
           select: {
             id: true,
             username: true,
-            avatar: true
+            // avatar: true // User avatar if needed
           }
         },
-        memberships: {
+        updatedBy: { // Include who last updated, consistent with getGuildById
           select: {
-            _count: true
+                id: true,
+                username: true,
           }
+        },
+        _count: { // Correct way to get counts
+          select: { memberships: true }
         }
       },
-      take: 20
+      take: 20 // Keep pagination limit
     });
   }
 
@@ -285,27 +418,18 @@ class GuildService {
    * @returns {Promise<Object>} Guild membership
    */
   async joinGuild(guildId, userId) {
-    // Check if guild exists
     const guild = await prisma.guild.findUnique({
-      where: { id: guildId }
+      where: { id: guildId },
+      select: { id: true, name: true, isOpen: true, allowJoinRequests: true } // Select necessary fields
     });
 
     if (!guild) {
       throw new Error('Guild not found');
     }
 
-    // Check if guild is open for joining
-    if (!guild.isOpen) {
-      throw new Error('This guild requires an invitation to join');
-    }
-
-    // Check if user is already a member
     const existingMembership = await prisma.guildMembership.findUnique({
       where: {
-        userId_guildId: {
-          userId,
-          guildId
-        }
+        uniqueUserGuildMembership: { userId, guildId } // MODIFIED: Use named unique constraint
       }
     });
 
@@ -313,30 +437,68 @@ class GuildService {
       throw new Error('You are already a member of this guild');
     }
 
-    // Fetch the system MEMBER role ID
-    const memberRole = await prisma.appRole.findFirst({
+    if (guild.isOpen) {
+      // Guild is open, create membership and assign default role(s)
+      const memberSystemRole = await prisma.role.findFirst({ // MODIFIED: AppRole -> Role
       where: {
-        name: 'MEMBER',
+          name_ci: 'member', // MODIFIED: use name_ci and lowercase
         isSystemRole: true,
-        guildId: null, // Ensure it's a global system role
+          guildId: null,
       },
       select: { id: true },
     });
 
-    if (!memberRole) {
-      // This should ideally not happen if system roles were seeded correctly.
-      throw new Error('System MEMBER role not found. Please ensure system roles are seeded.');
-    }
-
-    // Create membership
-    return prisma.guildMembership.create({
+      if (!memberSystemRole) {
+        console.error('CRITICAL: System MEMBER role not found. Cannot assign default member role.');
+        throw new Error('System MEMBER role not found.');
+      }
+      
+      const shouldBePrimary = await this.shouldBeSetAsPrimary(userId);
+      const newMembership = await prisma.guildMembership.create({
       data: {
         userId,
         guildId,
-        roleId: memberRole.id, // Assign the roleId of the fetched MEMBER AppRole
-        isPrimary: await this.shouldBeSetAsPrimary(userId)
+          isPrimary: shouldBePrimary,
+          primarySetAt: shouldBePrimary ? new Date() : null,
+          // rank: default rank, e.g. GuildMemberRank.E - handled by schema default
+        }
+      });
+
+      await prisma.userGuildRole.create({
+        data: {
+          guildMembershipId: newMembership.id,
+          roleId: memberSystemRole.id,
+        }
+      });
+      // TODO: Add logic to assign guild-specific default roles if any are defined
+
+      return { ...newMembership, guildName: guild.name, status: 'JOINED' }; // Return membership and status
+
+    } else if (guild.allowJoinRequests) {
+      // Guild is not open, but allows join requests
+      // Check if a join request already exists
+      const existingRequest = await prisma.guildJoinRequest.findUnique({
+        where: { guildId_userId: { guildId, userId } }
+      });
+      if (existingRequest && existingRequest.status === 'PENDING') {
+        throw new Error('You already have a pending join request for this guild.');
+      } else if (existingRequest && existingRequest.status === 'REJECTED') {
+        throw new Error('Your previous join request was rejected. Please contact an admin.');
       }
-    });
+
+      await prisma.guildJoinRequest.create({
+        data: {
+          guildId,
+          userId,
+          // message can be added from controller if provided
+        }
+      });
+      return { message: 'Your request to join has been submitted.', status: 'REQUESTED' };
+
+    } else {
+      // Guild is private and does not allow join requests
+      throw new Error('This guild is private and requires an invitation to join.');
+    }
   }
 
   /**
@@ -346,26 +508,25 @@ class GuildService {
    * @returns {Promise<Object>} Deleted membership
    */
   async leaveGuild(guildId, userId) {
-    // Check if guild exists
     const guild = await prisma.guild.findUnique({
       where: { id: guildId },
-      // We don't need all memberships initially, just confirm guild exists
+      select: { id: true, name: true } // Select necessary fields
     });
 
     if (!guild) {
       throw new Error('Guild not found');
     }
 
-    // Check if user is a member and get their role
     const membership = await prisma.guildMembership.findUnique({
       where: {
-        userId_guildId: { // Assuming the @@unique([userId, guildId], name: "uniqueUserGuild") exists
-          userId,
-          guildId,
-        },
+        uniqueUserGuildMembership: { userId, guildId } // MODIFIED: Use named unique constraint
       },
       include: {
-        role: { select: { name: true } }, // Include the role name
+        assignedRoles: { // MODIFIED: Include assignedRoles to check for FOUNDER
+          include: {
+            role: { select: { id: true, name_ci: true } } // name_ci for 'founder' check
+          }
+        }
       },
     });
 
@@ -373,20 +534,44 @@ class GuildService {
       throw new Error('You are not a member of this guild');
     }
 
-    // Check if user is the owner
-    if (membership.role && membership.role.name === 'OWNER') {
-      throw new Error('The owner cannot leave the guild. Transfer ownership first or delete the guild');
-    }
+    const isFounder = membership.assignedRoles.some(ar => ar.role.name_ci === 'founder');
 
-    // Delete membership
-    return prisma.guildMembership.delete({
+    if (isFounder) {
+      // Check if they are the sole founder
+      const founderSystemRole = await prisma.role.findFirst({
+        where: { name_ci: 'founder', isSystemRole: true, guildId: null },
+        select: { id: true }
+      });
+
+      if (founderSystemRole) { // Should always exist if seeds are correct
+        const otherFoundersCount = await prisma.guildMembership.count({
       where: {
-        userId_guildId: {
-          userId,
-          guildId
+            guildId: guildId,
+            NOT: { userId: userId }, // Exclude the current user
+            assignedRoles: {
+              some: { roleId: founderSystemRole.id }
         }
       }
     });
+
+        if (otherFoundersCount === 0) {
+          throw new Error('As the sole founder, you cannot leave the guild. Please transfer ownership or delete the guild.');
+        }
+      } else {
+        // This is a critical setup error if the FOUNDER role doesn't exist
+        console.error('CRITICAL: System FOUNDER role not found during leaveGuild check.');
+        throw new Error('Cannot process leave request due to system role configuration error.');
+      }
+    }
+
+    // Delete membership - Prisma will cascade delete UserGuildRole entries if schema is set up correctly
+    await prisma.guildMembership.delete({
+      where: {
+        id: membership.id // MODIFIED: Delete by membership's own unique ID for safety
+      }
+    });
+    // Return a confirmation or the deleted membership id, or nothing (204 No Content from controller)
+    return { message: `Successfully left guild: ${guild.name}` };
   }
 
   /**
@@ -398,35 +583,153 @@ class GuildService {
    * @returns {Promise<Object>} Updated membership
    */
   async updateMemberRole(guildId, targetUserId, newRoleId, actorUserId) {
-    // Fetch guild and include actor's and target's memberships with their roles
-    const guild = await prisma.guild.findUnique({
-      where: { id: guildId },
+    // THIS METHOD IS DEPRECATED due to schema changes to UserGuildRole for multiple roles.
+    // It should be replaced by assignRoleToMember and removeRoleFromMember.
+    // Keeping it here temporarily to avoid breaking controller, but it will throw an error.
+    throw new Error("updateMemberRole is deprecated. Use assignRoleToMember or removeRoleFromMember.");
+  }
+
+  /**
+   * Assign a role to a guild member.
+   * @param {string} guildId - Guild ID
+   * @param {string} targetUserId - ID of the user to assign the role to
+   * @param {string} roleToAssignId - ID of the Role to assign
+   * @param {string} actorUserId - ID of the user performing the assignment
+   * @returns {Promise<Object>} The new UserGuildRole record
+   */
+  async assignRoleToMember(guildId, targetUserId, roleToAssignId, actorUserId) {
+    // 1. Permission Check for actorUserId
+    const actorMembershipPerms = await prisma.guildMembership.findUnique({
+      where: { uniqueUserGuildMembership: { userId: actorUserId, guildId: guildId } },
       include: {
-        memberships: {
-          where: {
-            OR: [{ userId: actorUserId }, { userId: targetUserId }],
-          },
+        assignedRoles: {
           include: {
-            role: { select: { id: true, name: true } }, // Include role id and name
-          },
-        },
+            role: {
+              include: {
+                permissions: { include: { permission: { select: { key: true } } } }
+              }
+            }
+          }
+        }
+      }
+    });
+    if (!actorMembershipPerms) throw new Error('Actor not a member or guild not found.');
+    const actorPermissions = actorMembershipPerms.assignedRoles.flatMap(ar => ar.role.permissions.map(p => p.permission.key));
+    if (!actorPermissions.includes('GUILD_ROLE_ASSIGN')) {
+      throw new Error('Actor does not have permission to assign roles in this guild.');
+    }
+
+    // 2. Validate target user is a member
+    const targetMembership = await prisma.guildMembership.findUnique({
+      where: { uniqueUserGuildMembership: { userId: targetUserId, guildId: guildId } },
+      select: { id: true } // Need the membership ID
+    });
+    if (!targetMembership) {
+      throw new Error('Target user is not a member of this guild.');
+    }
+
+    // 3. Validate the role to be assigned
+    const roleToAssign = await prisma.role.findUnique({
+      where: { id: roleToAssignId },
+      select: { id: true, name: true, guildId: true, isSystemRole: true }
+    });
+    if (!roleToAssign) {
+      throw new Error('Role to assign not found.');
+    }
+    // Check if the role is either a system role (guildId is null) or a custom role for THIS guild
+    if (roleToAssign.guildId !== null && roleToAssign.guildId !== guildId) {
+      throw new Error('Cannot assign a custom role from another guild.');
+    }
+
+    // 4. Check if user already has this role
+    const existingUserGuildRole = await prisma.userGuildRole.findUnique({
+      where: {
+        guildMembershipId_roleId: {
+          guildMembershipId: targetMembership.id,
+          roleId: roleToAssign.id
+        }
+      }
+    });
+    if (existingUserGuildRole) {
+      throw new Error(`User already has the role: ${roleToAssign.name}`);
+    }
+    
+    // Special handling if assigning FOUNDER role (simplified: assumes only one founder typically)
+    // More robust logic would involve checking if others are founder and demoting them, or ensuring only one person gets it if that's the rule.
+    // For now, this simplified version allows assigning founder. A dedicated "transfer ownership" function is better.
+    if (roleToAssign.name.toUpperCase() === 'FOUNDER' && roleToAssign.isSystemRole) {
+        // Consider implications: should this automatically demote other founders?
+        // This simplified version does not handle demotion of other founders.
+        console.warn(`Assigning FOUNDER role to user ${targetUserId} in guild ${guildId}. Ensure ownership transfer rules are handled if necessary.`);
+    }
+
+    // 5. Create UserGuildRole
+    const newUserGuildRole = await prisma.userGuildRole.create({
+      data: {
+        guildMembershipId: targetMembership.id,
+        roleId: roleToAssign.id,
+        // assignedByUserId: actorUserId, // If you add this field to UserGuildRole schema for audit
       },
+      include: { // Include details for the response
+        role: { select: { name: true } },
+        guildMembership: { select: { userId: true, guildId: true } }
+      }
     });
 
-    if (!guild) {
-      throw new Error('Guild not found');
+    return newUserGuildRole;
+  }
+
+  /**
+   * Remove a role from a guild member.
+   * @param {string} guildId - Guild ID
+   * @param {string} targetUserId - ID of the user to remove the role from
+   * @param {string} roleToRevokeId - ID of the Role to revoke
+   * @param {string} actorUserId - ID of the user performing the revocation
+   * @returns {Promise<Object>} Confirmation message or deleted record
+   */
+  async removeRoleFromMember(guildId, targetUserId, roleToRevokeId, actorUserId) {
+    // 1. Permission Check for actorUserId (similar to assignRoleToMember - can use GUILD_ROLE_ASSIGN or a specific GUILD_ROLE_REVOKE)
+    const actorMembershipPerms = await prisma.guildMembership.findUnique({
+      where: { uniqueUserGuildMembership: { userId: actorUserId, guildId: guildId } },
+      include: {
+        assignedRoles: {
+          include: {
+            role: {
+              include: {
+                permissions: { include: { permission: { select: { key: true } } } }
+              }
+            }
+          }
+        }
+      }
+    });
+    if (!actorMembershipPerms) throw new Error('Actor not a member or guild not found.');
+    const actorPermissions = actorMembershipPerms.assignedRoles.flatMap(ar => ar.role.permissions.map(p => p.permission.key));
+    // Assuming GUILD_ROLE_ASSIGN also covers removal for simplicity, or use a new perm like GUILD_ROLE_REVOKE
+    if (!actorPermissions.includes('GUILD_ROLE_ASSIGN')) { 
+      throw new Error('Actor does not have permission to manage roles in this guild.');
     }
 
-    const actorMembership = guild.memberships.find(m => m.userId === actorUserId);
-    const targetMembership = guild.memberships.find(m => m.userId === targetUserId);
-
-    // Check if actor has permission (must be OWNER)
-    if (!actorMembership || !actorMembership.role || actorMembership.role.name !== 'OWNER') {
-      throw new Error('Only the guild owner can update member roles');
-    }
-
+    // 2. Validate target user is a member
+    const targetMembership = await prisma.guildMembership.findUnique({
+      where: { uniqueUserGuildMembership: { userId: targetUserId, guildId: guildId } },
+      select: { 
+        id: true, 
+        assignedRoles: { 
+          where: {roleId: roleToRevokeId }, 
+          select: { 
+            role: { // Corrected this inner select
+              select: { 
+                name: true, // Was 'select Name: true'
+                isSystemRole: true 
+              } 
+            } 
+          } 
+        } 
+      } 
+    });
     if (!targetMembership) {
-      throw new Error('User is not a member of this guild');
+      throw new Error('Target user is not a member of this guild.');
     }
 
     // Validate the newRoleId exists as an AppRole (either system or custom for this guild)
@@ -606,43 +909,66 @@ class GuildService {
    * @returns {Promise<Object>} Paginated list of members and pagination metadata
    */
   async getGuildMembers(guildId, { page = 1, limit = 10 }) {
-    // Ensure guild exists
-    const guild = await prisma.guild.findUnique({ where: { id: guildId } });
+    const guild = await prisma.guild.findUnique({ 
+        where: { id: guildId }, 
+        select: { id: true } // Minimal select to check existence
+    });
     if (!guild) {
       throw new Error('Guild not found');
     }
 
     const offset = (page - 1) * limit;
 
-    const [memberships, totalMembers] = await prisma.$transaction([
+    const [membershipsData, totalMembers] = await prisma.$transaction([
       prisma.guildMembership.findMany({
         where: { guildId },
         take: limit,
         skip: offset,
-        orderBy: { joinedAt: 'asc' }, // Or by role, then joinedAt, etc.
+        orderBy: { joinedAt: 'asc' }, 
         include: {
           user: {
             select: {
               id: true,
               username: true,
+              displayName: true,
               avatar: true,
             },
           },
-          role: { // Include the AppRole object
-            select: { name: true }, // Select only the name
-          },
+          assignedRoles: { // MODIFIED: Include assigned roles
+            include: {
+              role: {
+                select: { 
+                    id: true, 
+                    name: true, 
+                    displayColor: true, 
+                    apiVisible: true 
+                }
+              }
+            }
+          }
+          // rank is a direct field on GuildMembership, no need to include separately if selecting all scalar fields
         },
+        // Select scalar fields from GuildMembership explicitly if not all are needed by default
+        // This ensures `rank` and `joinedAt` are fetched.
+        // If no specific select is here, all scalar fields are fetched by default with an include.
       }),
       prisma.guildMembership.count({
         where: { guildId },
       }),
     ]);
 
-    const members = memberships.map(m => ({
+    const members = membershipsData.map(m => ({
       userId: m.user.id,
       username: m.user.username,
+      displayName: m.user.displayName,
       avatar: m.user.avatar,
-      role: m.role ? m.role.name : null, // Use the role name
+      roles: m.assignedRoles.map(ar => ({
+        id: ar.role.id,
+        name: ar.role.name,
+        displayColor: ar.role.displayColor,
+        apiVisible: ar.role.apiVisible
+      })), 
+      rank: m.rank, // ADDED: Include rank
       joinedAt: m.joinedAt
     }));
 
@@ -664,45 +990,71 @@ class GuildService {
    * @returns {Promise<Object>} User's role and permissions within the guild
    */
   async getMyGuildPermissions(guildId, userId) {
-    const guild = await prisma.guild.findUnique({ where: { id: guildId } });
+    const guild = await prisma.guild.findUnique({ 
+        where: { id: guildId }, 
+        select: { id: true } // Minimal select to check existence
+    });
     if (!guild) {
       throw new Error('Guild not found');
     }
 
     const membership = await prisma.guildMembership.findUnique({
       where: {
-        userId_guildId: { // Using the compound unique key name from schema.prisma
-          userId,
-          guildId,
-        },
+        uniqueUserGuildMembership: { userId, guildId } // MODIFIED: Use named unique constraint
       },
       include: {
-        role: { select: { name: true } }, // Include the AppRole name
+        assignedRoles: { // MODIFIED: Fetch assigned roles with their permissions
+          include: {
+            role: {
+              select: { // Select role details needed for the response
+                id: true,
+                name: true,
+                name_ci: true, // For internal checks if needed, though name is usually for display
+                isSystemRole: true,
+                displayColor: true,
+                apiVisible: true,
+                permissions: { // MODIFIED: Include permissions for each role
+                  include: {
+                    permission: { // MODIFIED: Include the actual permission details
+                      select: { key: true } // We only need the permission key string
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
       },
     });
 
     if (!membership) {
-      // Or, instead of throwing, one could return a default object indicating no membership/permissions
-      // For now, throwing an error aligns with typical API behavior for unauthorized access/not found resources.
       throw new Error('User not a member of this guild');
     }
 
-    const roleName = membership.role ? membership.role.name : null;
-    const isOwnerOrAdmin = roleName === 'OWNER' || roleName === 'ADMIN';
+    // Aggregate all permission keys from all assigned roles
+    const allPermissionKeys = new Set();
+    membership.assignedRoles.forEach(assignedRole => {
+      assignedRole.role.permissions.forEach(rolePermission => {
+        allPermissionKeys.add(rolePermission.permission.key);
+      });
+    });
 
-    const permissions = {
-      canEditGuildDetails: isOwnerOrAdmin,
-      canManageMembers: isOwnerOrAdmin,
-      canManageInvitations: isOwnerOrAdmin, // For future Phase 3 functionality
-      canManageGuildBadges: isOwnerOrAdmin, // For MVP: viewing guild's received badges, managing trophy case
-      canManageSettings: isOwnerOrAdmin,
-    };
+    // Prepare the roles data for the response
+    const userRoles = membership.assignedRoles.map(ar => ({
+        id: ar.role.id,
+        name: ar.role.name, // Display name
+        isSystemRole: ar.role.isSystemRole,
+        displayColor: ar.role.displayColor,
+        apiVisible: ar.role.apiVisible
+    }));
 
     return {
       guildId,
       userId,
-      role: roleName, // Return the role name
-      permissions,
+      roles: userRoles, // Return the list of role objects user has
+      permissions: Array.from(allPermissionKeys), // Return the aggregated list of permission keys
+      rank: membership.rank, // Also include the member's rank
+      guildMembershipId: membership.id // And their membership ID
     };
   }
 

@@ -148,4 +148,4 @@ export async function seedCustomClusterRoles(prisma: PrismaClient) {
   }
 
   console.log(`✅ Custom cluster roles & permissions seeding finished. ${customClusterRolesCreated.length} distinct custom roles in target clusters considered, ${usersAssignedCustomClusterRolesCount} user assignments made.`);
-}
+} 
