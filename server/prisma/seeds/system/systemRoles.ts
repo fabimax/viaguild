@@ -38,7 +38,7 @@ export async function seedSystemRoles(prisma: PrismaClient) {
       description: 'Basic membership role for a guild. Typically assigned to new members.',
       isSystemRole: true,
       isDefaultRole: true,
-      displayColor: '#20C3D5', // Default custom role color / a distinct member color
+      displayColor: '#64748b', // Gray -- a distinct member color
       apiVisible: true, // Typically member role might be queryable
     },
   ];
