@@ -337,7 +337,7 @@ model Role {
   isSystemRole  Boolean  @default(false) // True for ViaGuild predefined roles (Founder, Admin, Member, SuperAdmin)
   isDefaultRole Boolean  @default(false) // e.g., new guild members get this role by default for their guild
   
-  displayColor String?  @default("##20C3D5") @map("display_color") // Default to #20C3D5. Optional: Hex color code (e.g., "#FF5733") for this role
+  displayColor String?  @default("#07AABC") @map("display_color") // Default to #07AABC. Optional: Hex color code (e.g., "#FF5733") for this role
   apiVisible   Boolean  @default(false) @map("api_visible") // If true, this role assignment can be queried by APIs.
 
   createdAt     DateTime @default(now())
