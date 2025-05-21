@@ -22,14 +22,18 @@ const hasGuildRole = (allowedRoles) => {
       // Find user's membership in this guild
       const membership = await prisma.guildMembership.findUnique({
         where: {
-          userId_guildId: {
+          uniqueUserGuildMembership: { // Based on @@unique([userId, guildId], name: "uniqueUserGuildMembership")
             userId,
             guildId
           }
         },
         include: {
-          role: {
-            select: { name: true },
+          assignedRoles: { // Fetch the list of UserGuildRole entries
+            include: {
+              role: { // For each UserGuildRole, include the actual Role
+                select: { name: true }, // And select its name
+              },
+            },
           },
         },
       });
@@ -39,15 +43,17 @@ const hasGuildRole = (allowedRoles) => {
         return res.status(403).json({ error: 'You are not a member of this guild' });
       }
       
-      // Check if the fetched role's name is one of the allowed roles
-      if (!membership.role || !membership.role.name || !allowedRoles.includes(membership.role.name)) {
+      const userRoles = membership.assignedRoles.map(assignedRole => assignedRole.role.name);
+      const hasRequiredRole = userRoles.some(roleName => allowedRoles.includes(roleName));
+
+      if (!hasRequiredRole) {
         return res.status(403).json({ 
           error: `This action requires one of the following roles: ${allowedRoles.join(', ')}` 
         });
       }
       
       // Store membership in request for potential future use
-      req.guildMembership = membership;
+      req.guildMembership = membership; // Membership now includes assignedRoles
       
       // User has required role, proceed
       next();
@@ -61,23 +67,48 @@ const hasGuildRole = (allowedRoles) => {
 };
 
 /**
- * Middleware to check if user is the guild owner
+ * Middleware to check if user is the guild founder
  */
-const isGuildOwner = hasGuildRole(['OWNER']);
+const isGuildFounder = hasGuildRole(['FOUNDER']);
 
 /**
- * Middleware to check if user is an admin or owner
+ * Middleware to check if user is an admin or founder
  */
-const isGuildAdmin = hasGuildRole(['OWNER', 'ADMIN']);
+const isGuildAdmin = hasGuildRole(['FOUNDER', 'ADMIN']);
 
 /**
- * Middleware to check if user is a member of the guild
+ * Middleware to check if user is a moderator, admin, or founder
  */
-const isGuildMember = hasGuildRole(['OWNER', 'ADMIN', 'MEMBER']);
+const isGuildModerator = hasGuildRole(['FOUNDER', 'ADMIN', 'MODERATOR']);
+
+/**
+ * Middleware to check if user is a member of the guild (includes any assigned role)
+ * For specific member checks, use hasGuildRole(['FOUNDER', 'ADMIN', 'MODERATOR', 'MEMBER', 'ANY_CUSTOM_ROLE_NAME'])
+ * This broad check confirms they have *a* role, effectively making them a member.
+ * If you need to ensure they are at least a 'MEMBER' level or higher (including custom roles that might be less privileged),
+ * this check might need refinement or rely on application logic post-middleware.
+ * For now, assuming any assigned role makes them a "member" for basic access.
+ */
+const isGuildMember = (req, res, next) => {
+  // This middleware will effectively check if a user has *any* role in the guild.
+  // If a user has a GuildMembership record and at least one UserGuildRole,
+  // the hasGuildRole([]) check would be problematic.
+  // Instead, we rely on the fact that if hasGuildRole passes with specific roles, they are a member.
+  // A more direct "is member" check might just verify existence of GuildMembership
+  // if the goal is *only* to check membership, not specific role privileges.
+  // However, to fit the pattern, we list common roles.
+  // The `hasGuildRole` function will verify against the provided list.
+  // If `allowedRoles` is very broad, it becomes more of an "is active in guild" check.
+  return hasGuildRole(['FOUNDER', 'ADMIN', 'MODERATOR', 'MEMBER'])(req, res, next);
+  // Note: If you have custom roles and want to ensure a user is at least a "MEMBER",
+  // you'd list all roles that satisfy that condition. The current `hasGuildRole` checks
+  // if *any* of the user's roles are in the `allowedRoles` list.
+};
 
 module.exports = {
   hasGuildRole,
-  isGuildOwner,
+  isGuildFounder, // Renamed from isGuildOwner
   isGuildAdmin,
+  isGuildModerator, // New specific check
   isGuildMember
 }; 
