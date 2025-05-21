@@ -24,11 +24,12 @@ export async function seedBadgeCases(prisma: PrismaClient) {
   console.log('🌱 Seeding badge cases and their items (expanded)...');
 
   // --- 1. Fetch Prerequisites ---
-  const testUserPrime = await prisma.user.findUnique({ where: { username: TEST_USER_PRIME_USERNAME }, select: {id: true, username: true} });
-  const specialGuild = await prisma.guild.findUnique({ where: { name: SPECIAL_GUILD_NAME }, select: {id: true, name: true} });
+  const testUserPrime = await prisma.user.findUnique({ where: { username_ci: TEST_USER_PRIME_USERNAME.toLowerCase() }, select: {id: true, username: true} });
+  const specialGuild = await prisma.guild.findUnique({ where: { name_ci: SPECIAL_GUILD_NAME.toLowerCase() }, select: {id: true, name: true} });
   
   let nexusHubPrimaryCluster: { id: string, name: string } | null = null; 
-  const cluster1 = await prisma.cluster.findFirst({ where: { name: 'Cluster1'}, select: {id: true, name:true}});
+  const cluster1Name = 'Cluster1'; // Define to easily lowercase
+  const cluster1 = await prisma.cluster.findFirst({ where: { name_ci: cluster1Name.toLowerCase()}, select: {id: true, name:true}});
   if (cluster1) {
     nexusHubPrimaryCluster = cluster1;
   } else if (specialGuild) { 
