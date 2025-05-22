@@ -5,7 +5,7 @@ import { PrismaClient } from '@prisma/client';
  * This script is idempotent.
  */
 export async function seedRolePermissions(prisma: PrismaClient) {
-  console.log('🔗 Seeding default role permissions for system roles (FOUNDER, ADMIN, MODERATOR, MEMBER)...');
+  console.log('🔗 Seeding default guild role permissions for system guild roles (FOUNDER, ADMIN, MODERATOR, MEMBER)...');
 
   const rolesWithPermissions: Array<{ roleName: string; permissionKeys: string[] }> = [
     {
@@ -51,13 +51,13 @@ export async function seedRolePermissions(prisma: PrismaClient) {
   ];
 
   for (const { roleName, permissionKeys } of rolesWithPermissions) {
-    const role = await prisma.role.findFirst({
+    const role = await prisma.guildRole.findFirst({
       where: { name: roleName, isSystemRole: true, guildId: null },
       select: { id: true },
     });
 
     if (!role) {
-      console.warn(`   ⚠️ System role "${roleName}" not found. Skipping permission assignment for it.`);
+      console.warn(`   ⚠️ System guild role "${roleName}" not found. Skipping permission assignment for it.`);
       continue;
     }
 
@@ -69,35 +69,35 @@ export async function seedRolePermissions(prisma: PrismaClient) {
     if (permissions.length !== permissionKeys.length) {
       const foundKeys = permissions.map(p => p.key);
       const missingKeys = permissionKeys.filter(k => !foundKeys.includes(k));
-      console.warn(`   ⚠️ For role "${roleName}", could not find all specified permissions. Missing: ${missingKeys.join(', ')}. Please ensure all permissions are seeded first.`);
+      console.warn(`   ⚠️ For guild role "${roleName}", could not find all specified permissions. Missing: ${missingKeys.join(', ')}. Please ensure all permissions are seeded first.`);
     }
 
     let assignedCount = 0;
     for (const permission of permissions) {
       try {
-        await prisma.rolePermission.upsert({
+        await prisma.guildRolePermission.upsert({
           where: { 
-            roleId_permissionId: { // Ensure your @@unique constraint is named this way or adjust
-              roleId: role.id,
+            guildRoleId_permissionId: { 
+              guildRoleId: role.id,
               permissionId: permission.id,
             }
           },
           create: {
-            roleId: role.id,
+            guildRoleId: role.id,
             permissionId: permission.id,
           },
           update: {},
         });
         assignedCount++;
       } catch (error: any) {
-        console.error(`   Error assigning permission "${permission.key}" to role "${roleName}":`, error);
+        console.error(`   Error assigning permission "${permission.key}" to system guild role "${roleName}":`, error);
       }
     }
     if (assignedCount > 0) {
-        console.log(`   Assigned/verified ${assignedCount} permissions for system role: ${roleName}`);
+        console.log(`   Assigned/verified ${assignedCount} permissions for system guild role: ${roleName}`);
     }
   }
-  console.log('✅ Default role permissions seeding process completed.');
+  console.log('✅ Default guild role permissions seeding process completed.');
 }
 
 // To run this script directly:

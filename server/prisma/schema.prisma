@@ -577,10 +577,10 @@ model BadgeTemplate {
   // (Interpretation: if credentialWorst > credentialBest, lower is better; if credentialBest > credentialWorst, higher is better)
   credentialNotes          String? // e.g. the credentialValue represents xyz and is calculated in such and such way
   credentialIsNormalizable Boolean @default(false) // Hints if the credentialValue can be normalized from 0 to 1
-
+  
   metadataFieldDefinitions MetadataFieldDefinition[] // Defines slots for displayable textual metadata
   instances                BadgeInstance[]
-
+  
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   // Note: For system templates (ownedByUserId=null, ownedByGuildId=null), 
@@ -632,7 +632,7 @@ model BadgeInstance {
   userReceiver      User?    @relation("UserReceivedBadges", fields: [userReceiverId], references: [id], onDelete: Cascade)
   guildReceiverId   String?
   guildReceiver     Guild?   @relation("GuildReceivedBadges", fields: [guildReceiverId], references: [id], onDelete: Cascade)
-  clusterReceiverId String?
+  clusterReceiverId String? 
   clusterReceiver   Cluster? @relation("ClusterReceivedBadges", fields: [clusterReceiverId], references: [id], onDelete: Cascade)
 
   assignedAt DateTime  @default(now())
@@ -781,18 +781,18 @@ model GuildBadgeItem {
 
 model UploadedAsset {
   id                 String       @id @default(cuid())
-  uploaderId         String?
+  uploaderId         String?   
   uploader           User?        @relation("UserUploadedAssets", fields: [uploaderId], references: [id], onDelete: SetNull)
   originalFilename   String?
-  mimeType           String
-  sizeBytes          Int
+  mimeType           String    
+  sizeBytes          Int       
   hostedUrl          String       @unique
   storageIdentifier  String       @unique
-  assetType          String
-  description        String?
+  assetType          String    
+  description        String?   
   createdAt          DateTime     @default(now())
   updatedAt          DateTime     @updatedAt
-  systemIconsAsAsset SystemIcon[]
+  systemIconsAsAsset SystemIcon[] 
 
   @@index([uploaderId])
   @@index([assetType])

@@ -17,6 +17,7 @@ import { seedClusterRolePermissions } from './seeds/system/clusterRolePermission
 import { seedMemberships } from './seeds/memberships';
 import { seedCustomGuildRoles } from './seeds/customGuildRoles';
 import { seedCustomClusterRoles } from './seeds/customClusterRoles';
+import { seedClusterRoleSettings } from './seeds/clusterRoleSettings';
 import { seedGuildBans } from './seeds/guildBans';
 import { seedGuildRelationships } from './seeds/guildRelationships';
 import { seedGuildCategoryAssignments } from './seeds/guildCategoryAssignments';
@@ -43,6 +44,9 @@ async function main() {
   
   // Now seed core entities that might use system roles (like Cluster needing CLUSTER_CREATOR)
   await seedClusters(prisma);
+
+  // Settings for roles within specific clusters
+  await seedClusterRoleSettings(prisma);
 
   // Badge System - Foundational (Templates)
   await seedBadgeTemplates(prisma);

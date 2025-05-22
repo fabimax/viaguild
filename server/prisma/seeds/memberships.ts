@@ -1,4 +1,4 @@
-import { PrismaClient, User, Guild, Role, GuildMemberRank } from '@prisma/client';
+import { PrismaClient, User, Guild, GuildRole, GuildMemberRank } from '@prisma/client';
 import { faker } from '@faker-js/faker';
 import { TEST_USER_PRIME_USERNAME } from './users'; // Import TestUserPrime username
 import { SPECIAL_GUILD_NAME } from './guilds';   // Import Special Guild name
@@ -30,15 +30,15 @@ interface MembershipCoreInput {
 
 // Interface for UserGuildRole data, guildMembershipId will be populated after GuildMembership creation
 interface UserGuildRoleCreateInput {
-  guildMembershipId: string; 
-  roleId: string;
+  guildMembershipId: string;
+  guildRoleId: string;
 }
 
 // Interface for role intents before GuildMembership IDs are known
 interface RoleIntent {
     userId: string;
     guildId: string;
-    roleId: string;
+    guildRoleId: string;
 }
 
 export async function seedMemberships(prisma: PrismaClient) {
@@ -50,13 +50,13 @@ export async function seedMemberships(prisma: PrismaClient) {
   const testUserPrime = users.find(u => u.username === TEST_USER_PRIME_USERNAME);
   const specialGuild = guilds.find(g => g.name === SPECIAL_GUILD_NAME);
   
-  const founderSystemRole = await prisma.role.findFirst({ where: { name: 'FOUNDER', isSystemRole: true, guildId: null }, select: {id: true} });
-  const adminSystemRole = await prisma.role.findFirst({ where: { name: 'ADMIN', isSystemRole: true, guildId: null }, select: {id: true} });
-  const moderatorSystemRole = await prisma.role.findFirst({ where: { name: 'MODERATOR', isSystemRole: true, guildId: null }, select: {id: true} });
-  const memberSystemRole = await prisma.role.findFirst({ where: { name: 'MEMBER', isSystemRole: true, guildId: null }, select: {id: true} });
+  const founderSystemRole = await prisma.guildRole.findFirst({ where: { name: 'FOUNDER', isSystemRole: true, guildId: null }, select: {id: true} });
+  const adminSystemRole = await prisma.guildRole.findFirst({ where: { name: 'ADMIN', isSystemRole: true, guildId: null }, select: {id: true} });
+  const moderatorSystemRole = await prisma.guildRole.findFirst({ where: { name: 'MODERATOR', isSystemRole: true, guildId: null }, select: {id: true} });
+  const memberSystemRole = await prisma.guildRole.findFirst({ where: { name: 'MEMBER', isSystemRole: true, guildId: null }, select: {id: true} });
 
   if (users.length === 0 || guilds.length === 0 || !founderSystemRole || !adminSystemRole || !moderatorSystemRole || !memberSystemRole) {
-    console.error('❌ Prerequisites not met (users, guilds, or critical system roles [FOUNDER, ADMIN, MODERATOR, MEMBER] missing). Skipping membership seeding.');
+    console.error('❌ Prerequisites not met (users, guilds, or critical system guild roles [FOUNDER, ADMIN, MODERATOR, MEMBER] missing). Skipping membership seeding.');
     return;
   }
   // Warnings for missing special user/guild are fine, logic will try to adapt.
@@ -88,7 +88,7 @@ export async function seedMemberships(prisma: PrismaClient) {
     if (users.find(u => u.id === guild.createdById)) {
         const key = `${guild.createdById}-${guild.id}`;
         ensureMembershipCore(guild.createdById, guild.id);
-        roleIntents.push({ userId: guild.createdById, guildId: guild.id, roleId: founderSystemRole.id });
+        roleIntents.push({ userId: guild.createdById, guildId: guild.id, guildRoleId: founderSystemRole.id });
     } else {
         console.warn(`Creator user ID ${guild.createdById} for guild ${guild.name} not found or not set.`);
     }
@@ -101,7 +101,7 @@ export async function seedMemberships(prisma: PrismaClient) {
       const adminUser = shuffledAdmins[i];
       const key = `${adminUser.id}-${guild.id}`;
       ensureMembershipCore(adminUser.id, guild.id);
-      roleIntents.push({ userId: adminUser.id, guildId: guild.id, roleId: adminSystemRole.id });
+      roleIntents.push({ userId: adminUser.id, guildId: guild.id, guildRoleId: adminSystemRole.id });
       adminCount++;
     }
 
@@ -116,7 +116,7 @@ export async function seedMemberships(prisma: PrismaClient) {
       for (const modUser of shuffledMods) {
         const key = `${modUser.id}-${guild.id}`;
         ensureMembershipCore(modUser.id, guild.id);
-        roleIntents.push({ userId: modUser.id, guildId: guild.id, roleId: moderatorSystemRole.id });
+        roleIntents.push({ userId: modUser.id, guildId: guild.id, guildRoleId: moderatorSystemRole.id });
       }
     }
   }
@@ -131,7 +131,7 @@ export async function seedMemberships(prisma: PrismaClient) {
             roleIntents.splice(i, 1);
         }
     }
-    roleIntents.push({ userId: testUserPrime.id, guildId: specialGuild.id, roleId: founderSystemRole.id });
+    roleIntents.push({ userId: testUserPrime.id, guildId: specialGuild.id, guildRoleId: founderSystemRole.id });
     console.log(`   Ensured ${testUserPrime.username} is set for FOUNDER role in ${specialGuild.name}.`);
   }
 
@@ -155,7 +155,7 @@ export async function seedMemberships(prisma: PrismaClient) {
       ensureMembershipCore(userToAdd.id, guild.id);
       // Add as member only if no other specific role intent exists for this user-guild combo yet
       if (!roleIntents.some(ri => ri.userId === userToAdd.id && ri.guildId === guild.id)) {
-        roleIntents.push({ userId: userToAdd.id, guildId: guild.id, roleId: memberSystemRole.id });
+        roleIntents.push({ userId: userToAdd.id, guildId: guild.id, guildRoleId: memberSystemRole.id });
       }
     }
   }
@@ -178,7 +178,7 @@ export async function seedMemberships(prisma: PrismaClient) {
               roleIntents.splice(k, 1);
           }
       }
-      roleIntents.push({ userId: testUserPrime.id, guildId: guild.id, roleId: roleForTestUser });
+      roleIntents.push({ userId: testUserPrime.id, guildId: guild.id, guildRoleId: roleForTestUser });
     }
     console.log(`   Assigned ${TEST_USER_PRIME_USERNAME} to ${guildsForTestUserPrime.length} additional guilds with varied roles.`);
   }
@@ -194,7 +194,7 @@ export async function seedMemberships(prisma: PrismaClient) {
     const key = `${randomUser.id}-${randomGuild.id}`;
     if(!membershipCoreMap.has(key)) {
         ensureMembershipCore(randomUser.id, randomGuild.id);
-        roleIntents.push({ userId: randomUser.id, guildId: randomGuild.id, roleId: memberSystemRole.id });
+        roleIntents.push({ userId: randomUser.id, guildId: randomGuild.id, guildRoleId: memberSystemRole.id });
     }
   }
 
@@ -243,19 +243,19 @@ export async function seedMemberships(prisma: PrismaClient) {
 
   // --- PHASE 3: Prepare and Create UserGuildRole assignments ---
   const userGuildRolesToCreate: UserGuildRoleCreateInput[] = [];
-  const uniqueRoleAssignments = new Set<string>(); // Key: guildMembershipId-roleId
+  const uniqueRoleAssignments = new Set<string>(); // Key: guildMembershipId-guildRoleId
 
   for (const intent of roleIntents) {
       const key = `${intent.userId}-${intent.guildId}`;
       const guildMembershipId = createdMembershipMap.get(key);
       if (guildMembershipId) {
-          const assignmentKey = `${guildMembershipId}-${intent.roleId}`;
+          const assignmentKey = `${guildMembershipId}-${intent.guildRoleId}`;
           if (!uniqueRoleAssignments.has(assignmentKey)) {
-            userGuildRolesToCreate.push({ guildMembershipId, roleId: intent.roleId });
+            userGuildRolesToCreate.push({ guildMembershipId, guildRoleId: intent.guildRoleId });
             uniqueRoleAssignments.add(assignmentKey);
           }
       } else {
-          console.warn(`   Could not find created GuildMembership for key ${key} to assign role ${intent.roleId}.`);
+          console.warn(`   Could not find created GuildMembership for key ${key} to assign role ${intent.guildRoleId}.`);
    }
   }
 
@@ -276,7 +276,7 @@ export async function seedMemberships(prisma: PrismaClient) {
     
     try {
       await prisma.userGuildRole.createMany({
-        data: userGuildRolesToCreate,
+        data: userGuildRolesToCreate.map(item => ({ guildMembershipId: item.guildMembershipId, guildRoleId: item.guildRoleId })),
         skipDuplicates: true, 
       });
       console.log(`   Created/Replaced ${userGuildRolesToCreate.length} UserGuildRole assignments.`);
