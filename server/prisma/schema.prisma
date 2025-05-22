@@ -57,14 +57,14 @@ enum BadgeTier {
 // --- Configuration Enums (for validating badge display properties) ---
 
 enum BackgroundContentType {
-  SOLID_COLOR     // The 'value' will be a hex color string.
-  HOSTED_IMAGE    // The 'value' will be a hostedUrl from an UploadedAsset.
+  SOLID_COLOR // The 'value' will be a hex color string.
+  HOSTED_IMAGE // The 'value' will be a hostedUrl from an UploadedAsset.
 }
 
 enum ForegroundContentType {
-  TEXT            // The 'value' will be a string of text.
-  SYSTEM_ICON     // The 'value' will be an id or unique name referencing a SystemIcon record.
-  UPLOADED_ICON   // The 'value' will be a hostedUrl from an UploadedAsset (typically an SVG or small raster icon).
+  TEXT // The 'value' will be a string of text.
+  SYSTEM_ICON // The 'value' will be an id or unique name referencing a SystemIcon record.
+  UPLOADED_ICON // The 'value' will be a hostedUrl from an UploadedAsset (typically an SVG or small raster icon).
 }
 
 // Optional: Describes a predefined visual style for text elements.
@@ -148,10 +148,9 @@ enum ClusterJoinRequestStatus {
 // --- NEW ENUM for Badge Instance Acceptance Status ---
 enum BadgeAwardStatus {
   PENDING_ACCEPTANCE // Newly awarded, receiver hasn't acknowledged/accepted
-  ACCEPTED           // Receiver has accepted the badge into their collection
-  REJECTED           // Receiver has explicitly rejected the badge
+  ACCEPTED // Receiver has accepted the badge into their collection
+  REJECTED // Receiver has explicitly rejected the badge
 }
-
 
 // --- CORE MODELS ---
 
@@ -169,9 +168,6 @@ model User {
   hiddenAccounts String[] @default([]) // Array of social account IDs to hide
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
-
-  // Relationships - Permissions & Roles
-  systemRoles UserSystemRole[]
 
   // Relationships - Social & Guilds
   socialAccounts   SocialAccount[]
@@ -211,12 +207,15 @@ model User {
   bansIssued   GuildBan[] @relation("BanIssuer")
 
   // Relations for audit trails (who assigned what)
-  rolePermissionsAssigned       RolePermission[]         @relation("RolePermissionAssignedBy")
-  systemRolesAssigned           UserSystemRole[]         @relation("UserSystemRoleAssignedBy")
-  guildBadgeAssignmentsActioned GuildAssignmentDetails[] @relation("GuildAssignmentDetailsAssignedBy")
-  guildCategoriesAssigned       GuildCategory[]          @relation("GuildCategoryAssignedBy")
+  guildRolePermissionsAssignedBy    GuildRolePermission[]        @relation("GuildRolePermissionAssignedBy")
+  platformRoleAssignments           UserPlatformRoleAssignment[] @relation("UserPlatformAssignments")
+  platformRolePermissionsAssignedBy PlatformRolePermission[]     @relation("PlatformRolePermissionAssignedBy")
+  guildRoleSettingsAssignedBy       GuildRoleSetting[]           @relation("GuildRoleSettingAssignedBy")
+  clusterRoleSettingsAssignedBy     ClusterRoleSetting[]         @relation("ClusterRoleSettingAssignedBy")
+  clusterRolePermissionsAssignedBy  ClusterRolePermission[]      @relation("ClusterRolePermissionAssignedBy")
+  guildBadgeAssignmentsActioned     GuildAssignmentDetails[]     @relation("GuildAssignmentDetailsAssignedBy")
+  guildCategoriesAssignedBy         GuildCategory[]              @relation("GuildCategoryAssignedBy")
 
-  // Relationships - Clusters
   createdClusters Cluster[]         @relation("ClusterCreator")
   clusterRoles    UserClusterRole[] // Roles held by the user in various clusters
 
@@ -231,6 +230,8 @@ model User {
   sentClusterDirectInvitations ClusterDirectInvitation[] @relation("ClusterInviter")
   initiatedClusterJoinRequests ClusterJoinRequest[]      @relation("ClusterJoinRequester")
   reviewedClusterJoinRequests  ClusterJoinRequest[]      @relation("ClusterJoinRequestReviewer")
+
+  platformRolesAssignedByUser UserPlatformRoleAssignment[] @relation("PlatformRoleAssignedBy")
 }
 
 model SocialAccount {
@@ -238,7 +239,7 @@ model SocialAccount {
   provider             String // "twitter", "bluesky", "twitch", "discord"
   providerId           String // ID from the provider
   username             String // Username from the provider
-  username_ci          String?  // Case-insensitive version for searching. Nullable to match original if username can be null. Assuming username is not nullable based on usage.
+  username_ci          String? // Case-insensitive version for searching. Nullable to match original if username can be null. Assuming username is not nullable based on usage.
   encryptedCredentials String? // Encrypted app password or OAuth token for future use (e.g. posting on their behalf)
   user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId               String
@@ -269,10 +270,10 @@ model Guild {
   updatedBy User? @relation("GuildUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
 
   // Relationships - Members & Structure
-  memberships GuildMembership[]
-  roles       Role[]            @relation("GuildCustomRoles") // Custom roles defined for THIS guild
-  contacts    GuildContact[]
-  roleDisplayPreferences GuildRoleDisplayPreference[] // For guild-specific role display order
+  memberships  GuildMembership[]
+  customRoles  GuildRole[]        @relation("GuildCustomRoles") // MODIFIED relation name if GuildRole references Guild
+  contacts     GuildContact[]
+  roleSettings GuildRoleSetting[]
 
   // --- BADGE SYSTEM RELATIONS (Updated) ---
   givenBadgesAsGuild    BadgeInstance[] @relation("GuildGivenBadges") // Badges given by this guild as an entity
@@ -322,69 +323,113 @@ model Permission {
   permissionGroup String? // For UI grouping, e.g., "Guild Management", "Badge Administration"
   createdAt       DateTime @default(now())
 
-  rolePermissions        RolePermission[]
-  clusterRolePermissions ClusterRolePermission[]
+  platformRolePermissions PlatformRolePermission[]
+  guildRolePermissions    GuildRolePermission[]
+  clusterRolePermissions  ClusterRolePermission[]
 
   @@index([key])
 }
 
-model Role {
-  id            String   @id @default(cuid())
-  name          String // e.g., "Founder", "Admin", "Member", "Treasurer", "SuperAdmin"
-  name_ci       String   // Case-insensitive version of name
-  description   String?
-  guildId       String? // If null, it's a system-level role. If set, it's a custom role for that specific guild.
-  isSystemRole  Boolean  @default(false) // True for ViaGuild predefined roles (Founder, Admin, Member, SuperAdmin)
-  isDefaultRole Boolean  @default(false) // e.g., new guild members get this role by default for their guild
-  
-  displayColor String?  @default("#07AABC") @map("display_color") // Default to #07AABC. Optional: Hex color code (e.g., "#FF5733") for this role
-  apiVisible   Boolean  @default(false) @map("api_visible") // If true, this role assignment can be queried by APIs.
+// --- Platform Roles (NEW) ---
+model PlatformRole {
+  id              String  @id @default(cuid())
+  name            String  @unique
+  name_ci         String  @unique
+  description     String?
+  isSystemDefined Boolean @default(true)
 
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  permissions     PlatformRolePermission[]
+  userAssignments UserPlatformRoleAssignment[]
 
-  guild            Guild?            @relation("GuildCustomRoles", fields: [guildId], references: [id], onDelete: Cascade)
-  permissions      RolePermission[]
-  assignedUserGuildRoles UserGuildRole[]   // Relation to the join table
-  systemUsers      UserSystemRole[]
-  guildDisplayPreferences GuildRoleDisplayPreference[] // NEW: Back-relation
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  @@unique([guildId, name_ci], name: "unique_guild_role_name_ci")
-  @@index([guildId])
-  @@index([apiVisible]) // Index for the new flag
+  @@map("PlatformRole")
 }
 
-model RolePermission {
+model UserPlatformRoleAssignment {
+  id             String   @id @default(cuid())
+  userId         String
+  platformRoleId String
+  assignedAt     DateTime @default(now())
+  assignedById   String?
+
+  user         User         @relation("UserPlatformAssignments", fields: [userId], references: [id], onDelete: Cascade)
+  platformRole PlatformRole @relation(fields: [platformRoleId], references: [id], onDelete: Cascade)
+  assignedBy   User?        @relation("PlatformRoleAssignedBy", fields: [assignedById], references: [id], onDelete: SetNull)
+
+  @@unique([userId, platformRoleId])
+  @@map("UserPlatformRoleAssignment")
+}
+
+model PlatformRolePermission {
+  id             String   @id @default(cuid())
+  platformRoleId String
+  permissionId   String
+  assignedAt     DateTime @default(now())
+  assignedById   String?
+
+  platformRole PlatformRole @relation(fields: [platformRoleId], references: [id], onDelete: Cascade)
+  permission   Permission   @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  assignedBy   User?        @relation("PlatformRolePermissionAssignedBy", fields: [assignedById], references: [id], onDelete: SetNull)
+
+  @@unique([platformRoleId, permissionId])
+  @@index([platformRoleId])
+  @@index([permissionId])
+  @@map("PlatformRolePermission")
+}
+
+// --- Guild Roles (Formerly Role) ---
+model GuildRole {
+  id            String  @id @default(cuid())
+  name          String
+  name_ci       String
+  description   String?
+  guildId       String? // NULL for system role templates (MEMBER, MODERATOR, ADMIN, FOUNDER), NOT NULL for custom guild roles
+  isSystemRole  Boolean @default(false) // True for templates like MEMBER, FOUNDER, ADMIN, MODERATOR
+  isDefaultRole Boolean @default(false) // True for MEMBER template typically
+
+  displayColor String? @default("#07AABC") @map("display_color")
+  apiVisible   Boolean @default(false) @map("api_visible")
+
+  permissions            GuildRolePermission[] // Permissions this guild role (or template) has
+  assignedToGuildMembers UserGuildRole[] // Instances of this role being assigned
+  guildSettings          GuildRoleSetting[] // Guild-specific settings for this role template or custom role
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // For custom roles, this links to the guild it belongs to. Null for system templates.
+  guild Guild? @relation("GuildCustomRoles", fields: [guildId], references: [id], onDelete: Cascade)
+  // For system templates (guildId is NULL), name_ci should be globally unique.
+  // This requires either a partial index (manual SQL) or application-level enforcement / careful seeding.
+  // Or, if all name_ci must be globally unique regardless of guildId, then name_ci @unique.
+  // For now, relying on seeding for system template name_ci uniqueness.
+
+  @@unique([guildId, name_ci], name: "unique_custom_guild_role_name_ci")
+  @@index([guildId])
+  @@index([apiVisible])
+  @@map("GuildRole")
+}
+
+model GuildRolePermission {
   id           String   @id @default(cuid())
-  roleId       String
+  guildRoleId  String // RENAMED from roleId
   permissionId String
   assignedAt   DateTime @default(now())
-  assignedById String? // User who assigned this permission to the role (for auditing)
+  assignedById String? // for auditing
 
-  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  guildRole  GuildRole  @relation(fields: [guildRoleId], references: [id], onDelete: Cascade)
   permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
-  assignedBy User?      @relation("RolePermissionAssignedBy", fields: [assignedById], references: [id], onDelete: SetNull)
+  assignedBy User?      @relation("GuildRolePermissionAssignedBy", fields: [assignedById], references: [id], onDelete: SetNull)
 
-  @@unique([roleId, permissionId])
-  @@index([roleId])
-  @@index([permissionId])
+  @@unique([guildRoleId, permissionId]) // RENAMED
+  @@index([guildRoleId]) // ADDED
+  @@index([permissionId]) // ADDED
+  @@map("GuildRolePermission")
 }
 
-model UserSystemRole {
-  id           String   @id @default(cuid())
-  userId       String
-  roleId       String // Must be a Role where guildId is null and isSystemRole is true
-  assignedAt   DateTime @default(now())
-  assignedById String? // User who assigned this system role
-
-  user       User  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role       Role  @relation(fields: [roleId], references: [id], onDelete: Cascade) // Should point to a system role
-  assignedBy User? @relation("UserSystemRoleAssignedBy", fields: [assignedById], references: [id], onDelete: SetNull)
-
-  @@unique([userId, roleId])
-  @@index([userId])
-  @@index([roleId])
-}
+// UserSystemRole IS DELETED / REPLACED by UserPlatformRoleAssignment
 
 // --- GUILD STRUCTURE & MEMBERSHIP ---
 model GuildMembership {
@@ -399,11 +444,9 @@ model GuildMembership {
   user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
   guild Guild @relation(fields: [guildId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, guildId], name: "uniqueUserGuildMembership") // Name clarified
-
-  // New relation to the roles this membership holds
   assignedRoles UserGuildRole[]
 
+  @@unique([userId, guildId], name: "uniqueUserGuildMembership")
   @@index([userId])
   @@index([guildId])
   @@index([userId, isPrimary])
@@ -413,18 +456,42 @@ model GuildMembership {
 model UserGuildRole {
   id                String   @id @default(cuid())
   guildMembershipId String
-  roleId            String
+  guildRoleId       String // RENAMED from roleId
   assignedAt        DateTime @default(now())
   // assignedByUserId String? // Optional: User who assigned this specific role to the member
 
   guildMembership GuildMembership @relation(fields: [guildMembershipId], references: [id], onDelete: Cascade)
-  role            Role            @relation(fields: [roleId], references: [id], onDelete: Restrict) // Don't delete Role if in use here
-  // assignedBy   User?        @relation("RoleAssignedToMemberBy", fields: [assignedByUserId], references: [id], onDelete: SetNull)
+  guildRole       GuildRole       @relation(fields: [guildRoleId], references: [id], onDelete: Restrict) // RENAMED
 
-  @@unique([guildMembershipId, roleId]) // A member can only have a specific role once in a guild
+  // assignedBy   User?        @relation("RoleAssignedToMemberBy", fields: [assignedByUserId], references: [id], onDelete: SetNull)
+  @@unique([guildMembershipId, guildRoleId]) // A member can't have the same specific role within a guild more than once
   @@index([guildMembershipId])
-  @@index([roleId])
-  // @@index([assignedByUserId])
+  @@index([guildRoleId]) // RENAMED
+  @@map("UserGuildRole")
+}
+
+model GuildRoleSetting {
+  id          String @id @default(cuid())
+  guildId     String
+  guildRoleId String // RENAMED from roleId
+
+  hierarchyOrder       Int
+  displaySequence      Int?
+  overrideRoleName     String?
+  overrideDisplayColor String?
+  isFeatured           Boolean @default(false)
+
+  assignedById String? // Optional: who configured this setting
+
+  guild      Guild     @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  role       GuildRole @relation(fields: [guildRoleId], references: [id], onDelete: Cascade) // RENAMED relation and type
+  assignedBy User?     @relation("GuildRoleSettingAssignedBy", fields: [assignedById], references: [id], onDelete: SetNull)
+
+  @@unique([guildId, guildRoleId]) // RENAMED roleId      
+  @@index([guildId, hierarchyOrder])
+  @@index([guildId, displaySequence])
+  @@index([guildRoleId]) // RENAMED roleId
+  @@map("GuildRoleSetting")
 }
 
 model GuildRelationship {
@@ -432,7 +499,7 @@ model GuildRelationship {
   sourceGuildId  String
   targetGuildId  String
   type           RelationshipType
-  // createdById   String // User who created the relationship // REMOVED
+  // createdById   String // User who created the relationship
   proposerUserId String? // User who initiated the proposal or unilateral action
   accepterUserId String? // User who accepted a proposal; nullable for unilateral actions
   createdAt      DateTime         @default(now())
@@ -467,18 +534,18 @@ model GuildContact {
 // --- BADGE SYSTEM (REVISED with Tables Solution) ---
 
 model BadgeTemplate {
-  id                          String  @id @default(uuid())
-  templateSlug                String  // NEW: Immutable, machine-friendly unique key for this template type, scoped by owner.
-  templateSlug_ci             String  // Case-insensitive version
-  internalNotes               String? @db.Text // Internal notes about template purpose
+  id              String  @id @default(uuid())
+  templateSlug    String // NEW: Immutable, machine-friendly unique key for this template type, scoped by owner.
+  templateSlug_ci String // Case-insensitive version
+  internalNotes   String? @db.Text // Internal notes about template purpose
 
   // Ownership and Creation (of the template)
-  authoredByUserId            String? 
-  authoredByUser              User?   @relation("AuthoredByRelation", fields: [authoredByUserId], references: [id], onDelete: SetNull)
-  ownedByUserId               String?
-  ownedByUser                 User?   @relation("UserOwnedBadgeTemplates", fields: [ownedByUserId], references: [id], onDelete: SetNull)
-  ownedByGuildId              String?
-  ownedByGuild                Guild?  @relation("GuildOwnedBadgeTemplates", fields: [ownedByGuildId], references: [id], onDelete: SetNull)
+  authoredByUserId String?
+  authoredByUser   User?   @relation("AuthoredByRelation", fields: [authoredByUserId], references: [id], onDelete: SetNull)
+  ownedByUserId    String?
+  ownedByUser      User?   @relation("UserOwnedBadgeTemplates", fields: [ownedByUserId], references: [id], onDelete: SetNull)
+  ownedByGuildId   String?
+  ownedByGuild     Guild?  @relation("GuildOwnedBadgeTemplates", fields: [ownedByGuildId], references: [id], onDelete: SetNull)
 
   // Lifecycle & Behavior
   isArchived                  Boolean @default(false) // Whether the template owner has archived/soft-deleted this template (it is not deleted from the db if there exist awarded badge instances with this template)
@@ -486,37 +553,43 @@ model BadgeTemplate {
   allowsPushedInstanceUpdates Boolean @default(false) // Can the issuer modify individual instances of this badge post-award?
 
   // --- Tier Configuration ---
-  inherentTier                BadgeTier? // Renamed from defaultTier. Optional: The inherent tier of this template, influences allocation use & can enforce/suggest styling (e.g., border color).
+  inherentTier BadgeTier? // Renamed from defaultTier. Optional: The inherent tier of this template, influences allocation use & can enforce/suggest styling (e.g., border color).
 
   // --- Default Display Properties (Effectively the "Display Config" embedded) ---
-  defaultBadgeName              String   // Default display name
-  defaultSubtitleText           String?  // Default subtitle text
-  defaultOuterShape             BadgeShape @default(CIRCLE)
-  defaultBorderColor            String     @default("#000000") // Hex
-  defaultBackgroundType         BackgroundContentType @default(SOLID_COLOR)
-  defaultBackgroundValue        String     // Hex color or HostedAsset.hostedUrl
-  defaultForegroundType         ForegroundContentType @default(SYSTEM_ICON)
-  defaultForegroundValue        String     // Text, SystemIcon.id, or HostedAsset.hostedUrl
-  defaultForegroundColor        String?    // Hex
-  defaultTextFont               String?    // If foreground type is TEXT (from approved list)
-  defaultTextSize               Int?       // If foreground type is TEXT (e.g., in pixels)
-  defaultDisplayDescription     String?    @db.Text // Default user-facing description for this badge type
+  defaultBadgeName          String // Default display name
+  defaultSubtitleText       String? // Default subtitle text
+  defaultOuterShape         BadgeShape            @default(CIRCLE)
+  defaultBorderColor        String                @default("#000000")
+  defaultBackgroundType     BackgroundContentType @default(SOLID_COLOR)
+  defaultBackgroundValue    String // Hex color or HostedAsset.hostedUrl
+  defaultForegroundType     ForegroundContentType @default(SYSTEM_ICON)
+  defaultForegroundValue    String // Text, SystemIcon.id, or HostedAsset.hostedUrl
+  defaultForegroundColor    String? // Hex
+  defaultTextFont           String? // If foreground type is TEXT (from approved list)
+  defaultTextSize           Int? // If foreground type is TEXT (e.g., in pixels)
+  defaultDisplayDescription String?               @db.Text // Default user-facing description for this badge type
 
   // --- Programmatic Credential Configuration ---
-  definesCredential             Boolean @default(false) // Does this template type utilize BadgeInstance.credentialValue?
-  credentialLabel               String? // How to label this metric if shown, e.g., "Rank", "Security Level"
-  credentialBest                Float?  // Numeric value representing the best possible score/rank
-  credentialWorst               Float?  // Numeric value representing the worst possible score/rank
+  definesCredential        Boolean @default(false) // Does this template type utilize BadgeInstance.credentialValue?
+  credentialLabel          String? // How to label this metric if shown, e.g., "Rank", "Security Level"
+  credentialBest           Float? // Numeric value representing the best possible score/rank
+  credentialWorst          Float? // Numeric value representing the worst possible score/rank
   // (Interpretation: if credentialWorst > credentialBest, lower is better; if credentialBest > credentialWorst, higher is better)
-  credentialNotes               String? // e.g. the credentialValue represents xyz and is calculated in such and such way
-  credentialIsNormalizable      Boolean @default(false) // Hints if the credentialValue can be normalized from 0 to 1
-  
+  credentialNotes          String? // e.g. the credentialValue represents xyz and is calculated in such and such way
+  credentialIsNormalizable Boolean @default(false) // Hints if the credentialValue can be normalized from 0 to 1
+
   metadataFieldDefinitions MetadataFieldDefinition[] // Defines slots for displayable textual metadata
   instances                BadgeInstance[]
-  
-  createdAt                DateTime        @default(now())
-  updatedAt                DateTime        @updatedAt
 
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  // Note: For system templates (ownedByUserId=null, ownedByGuildId=null), 
+  // uniqueness of templateSlug needs to be ensured by application/seeding logic (e.g. prefixing with "system_")
+  // or by making templateSlug globally @unique if preferred (but then requires globally unique names from users/guilds too).
+  // The current setup with scoped uniques is generally more flexible for user/guild created templates.
+
+  @@unique([ownedByUserId, templateSlug_ci], name: "unique_user_template_slug_ci")
+  @@unique([ownedByGuildId, templateSlug_ci], name: "unique_guild_template_slug_ci")
   @@index([authoredByUserId])
   @@index([ownedByUserId])
   @@index([ownedByGuildId])
@@ -524,23 +597,16 @@ model BadgeTemplate {
   @@index([isModifiableByIssuer])
   @@index([allowsPushedInstanceUpdates])
   @@index([inherentTier])
-
-  @@unique([ownedByUserId, templateSlug_ci], name: "unique_user_template_slug_ci")
-  @@unique([ownedByGuildId, templateSlug_ci], name: "unique_guild_template_slug_ci")
-  // Note: For system templates (ownedByUserId=null, ownedByGuildId=null), 
-  // uniqueness of templateSlug needs to be ensured by application/seeding logic (e.g. prefixing with "system_")
-  // or by making templateSlug globally @unique if preferred (but then requires globally unique names from users/guilds too).
-  // The current setup with scoped uniques is generally more flexible for user/guild created templates.
 }
 
 // Defines a slot for DISPLAYABLE instance-specific textual metadata
 model MetadataFieldDefinition {
-  id                      String  @id @default(uuid())
-  badgeTemplateId         String  // Foreign key to BadgeTemplate
-  badgeTemplate           BadgeTemplate @relation(fields: [badgeTemplateId], references: [id], onDelete: Cascade)
+  id              String        @id @default(uuid())
+  badgeTemplateId String // Foreign key to BadgeTemplate
+  badgeTemplate   BadgeTemplate @relation(fields: [badgeTemplateId], references: [id], onDelete: Cascade)
 
-  fieldKeyForInstanceData String  // The key used in `InstanceMetadataValue.dataKey`
-  label                   String  // e.g., "Date Achieved:", "Score:"
+  fieldKeyForInstanceData String // The key used in `InstanceMetadataValue.dataKey`
+  label                   String // e.g., "Date Achieved:", "Score:"
   prefix                  String?
   suffix                  String?
   style                   String? // e.g., "METADATA_DEFAULT", maps to CSS/UI styling
@@ -551,7 +617,7 @@ model MetadataFieldDefinition {
 }
 
 model BadgeInstance {
-  id         String    @id @default(uuid())
+  id         String        @id @default(uuid())
   templateId String
   template   BadgeTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict)
 
@@ -563,36 +629,36 @@ model BadgeInstance {
 
   // --- Receiver (Polymorphic: User or Guild or Cluster) ---
   userReceiverId    String?
-  userReceiver      User?     @relation("UserReceivedBadges", fields: [userReceiverId], references: [id], onDelete: Cascade)
+  userReceiver      User?    @relation("UserReceivedBadges", fields: [userReceiverId], references: [id], onDelete: Cascade)
   guildReceiverId   String?
-  guildReceiver     Guild?    @relation("GuildReceivedBadges", fields: [guildReceiverId], references: [id], onDelete: Cascade)
-  clusterReceiverId String? 
-  clusterReceiver   Cluster?  @relation("ClusterReceivedBadges", fields: [clusterReceiverId], references: [id], onDelete: Cascade)
+  guildReceiver     Guild?   @relation("GuildReceivedBadges", fields: [guildReceiverId], references: [id], onDelete: Cascade)
+  clusterReceiverId String?
+  clusterReceiver   Cluster? @relation("ClusterReceivedBadges", fields: [clusterReceiverId], references: [id], onDelete: Cascade)
 
   assignedAt DateTime  @default(now())
   revokedAt  DateTime?
   message    String?   @db.Text
 
   // --- Direct, Typed Fields for Core Visual Overrides (Nullable) ---
-  overrideBadgeName        String?
-  overrideSubtitle         String?
-  overrideOuterShape       BadgeShape?
-  overrideBorderColor      String?    // Hex
-  overrideBackgroundType   BackgroundContentType?
-  overrideBackgroundValue  String?    // Hex or HostedAsset.hostedUrl
-  overrideForegroundType   ForegroundContentType?
-  overrideForegroundValue  String?    // Text, SystemIcon.id, or HostedAsset.hostedUrl
-  overrideForegroundColor  String?    // Hex
-  overrideTextFont         String?
-  overrideTextSize         Int?
-  overrideDisplayDescription String? @db.Text
+  overrideBadgeName          String?
+  overrideSubtitle           String?
+  overrideOuterShape         BadgeShape?
+  overrideBorderColor        String? // Hex
+  overrideBackgroundType     BackgroundContentType?
+  overrideBackgroundValue    String? // Hex or HostedAsset.hostedUrl
+  overrideForegroundType     ForegroundContentType?
+  overrideForegroundValue    String? // Text, SystemIcon.id, or HostedAsset.hostedUrl
+  overrideForegroundColor    String? // Hex
+  overrideTextFont           String?
+  overrideTextSize           Int?
+  overrideDisplayDescription String?                @db.Text
 
   // --- Dedicated Field for Programmatic Credential Value ---
-  credentialValue          Float? // This value is the metric used for programmatic checks.
+  credentialValue Float? // This value is the metric used for programmatic checks.
 
   // --- Instance Status & API Visibility ---
-  awardStatus              BadgeAwardStatus @default(PENDING_ACCEPTANCE) // Status of the badge award itself
-  apiVisible               Boolean          @default(false) // Receiver-controlled: if true, this badge is visible to API/programmatic checks. Set to true upon acceptance, can be toggled by receiver.
+  awardStatus BadgeAwardStatus @default(PENDING_ACCEPTANCE) // Status of the badge award itself
+  apiVisible  Boolean          @default(false) // Receiver-controlled: if true, this badge is visible to API/programmatic checks. Set to true upon acceptance, can be toggled by receiver.
 
   // --- Link to Instance-Specific DISPLAYABLE METADATA Values ---
   metadataValues InstanceMetadataValue[] // Stores values for fields defined in MetadataFieldDefinition
@@ -600,10 +666,9 @@ model BadgeInstance {
   guildAssignmentDetails GuildAssignmentDetails? @relation("BadgeInstanceToGuildAssignmentDetails")
 
   // Links to Badge Case Items
-  userBadgeItem          UserBadgeItem?          // Link to badgecase where this badge instance is displayed
-  guildBadgeItems        GuildBadgeItem[]        // Link to badgecases where this badge instance is displayed
-  clusterBadgeItems      ClusterBadgeItem[]      // Link to badgecases where this badge instance is displayed
-
+  userBadgeItem     UserBadgeItem? // Link to badgecase where this badge instance is displayed
+  guildBadgeItems   GuildBadgeItem[] // Link to badgecases where this badge instance is displayed
+  clusterBadgeItems ClusterBadgeItem[] // Link to badgecases where this badge instance is displayed
 
   // CHECK constraint (conceptual, enforce in application logic):
   // 1. (userGiverId != null XOR guildGiverId != null XOR clusterGiverId != null) // Consider clusterGiver later
@@ -624,31 +689,29 @@ model BadgeInstance {
 
 // Stores the actual key-value pairs for DISPLAYABLE textual metadata for a specific BadgeInstance
 model InstanceMetadataValue {
-  id               String  @id @default(uuid())
-  badgeInstanceId  String
-  badgeInstance    BadgeInstance @relation(fields: [badgeInstanceId], references: [id], onDelete: Cascade)
+  id              String        @id @default(uuid())
+  badgeInstanceId String
+  badgeInstance   BadgeInstance @relation(fields: [badgeInstanceId], references: [id], onDelete: Cascade)
 
   // This `dataKey` MUST match a `fieldKeyForInstanceData` from one of the
   // BadgeInstance's template's associated MetadataFieldDefinitions.
-  dataKey          String  // e.g., "dateAchieved", "playerScore", "reasonForAward"
-  dataValue        String  // Actual metadata value (application logic parses if needed)
+  dataKey   String // e.g., "dateAchieved", "playerScore", "reasonForAward"
+  dataValue String // Actual metadata value (application logic parses if needed)
 
   @@unique([badgeInstanceId, dataKey])
   @@index([badgeInstanceId])
 }
 
 model GuildAssignmentDetails {
-  id              String        @id @default(uuid())
-  badgeInstanceId String        @unique // Link back to the BadgeInstance
-  badgeInstance   BadgeInstance @relation("BadgeInstanceToGuildAssignmentDetails", fields: [badgeInstanceId], references: [id], onDelete: Cascade)
-
-  assignmentMethod String? // e.g., "MEMBER_VOTE", "ADMIN_DECISION", "AUTOMATED_MILESTONE"
-  voteRecordId     String? // If applicable, link to a vote record elsewhere
-  approvalChain    Json? // Store who approved it, if a multi-step process
-  notes            String? @db.Text
-  assignedByUserId String? // User who actioned this guild assignment (if applicable)
-
-  assignedByUser User? @relation("GuildAssignmentDetailsAssignedBy", fields: [assignedByUserId], references: [id], onDelete: SetNull)
+  id               String        @id @default(uuid())
+  badgeInstanceId  String        @unique
+  badgeInstance    BadgeInstance @relation("BadgeInstanceToGuildAssignmentDetails", fields: [badgeInstanceId], references: [id], onDelete: Cascade)
+  assignmentMethod String?
+  voteRecordId     String?
+  approvalChain    Json?
+  notes            String?       @db.Text
+  assignedByUserId String?
+  assignedByUser   User?         @relation("GuildAssignmentDetailsAssignedBy", fields: [assignedByUserId], references: [id], onDelete: SetNull)
 
   @@index([badgeInstanceId])
 }
@@ -659,76 +722,77 @@ model UserBadgeAllocation {
   tier              BadgeTier
   remaining         Int       @default(0)
   lastReplenishedAt DateTime  @default(now())
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@unique([userId, tier])
   @@index([userId])
 }
 
 model UserBadgeCase {
-  id        String   @id @default(uuid())
-  userId    String   @unique
+  id        String          @id @default(uuid())
+  userId    String          @unique
   title     String?
-  isPublic  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  user   User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  badges UserBadgeItem[]
+  isPublic  Boolean         @default(true)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  badges    UserBadgeItem[]
 }
 
 model UserBadgeItem {
-  id              String   @id @default(uuid())
+  id              String        @id @default(uuid())
   badgeCaseId     String
-  badgeInstanceId String   @unique
-  displayOrder    Int      @default(0)
-  addedAt         DateTime @default(now())
-  badgeCase UserBadgeCase @relation(fields: [badgeCaseId], references: [id], onDelete: Cascade)
-  badge     BadgeInstance @relation(fields: [badgeInstanceId], references: [id], onDelete: Cascade)
+  badgeInstanceId String        @unique
+  displayOrder    Int           @default(0)
+  addedAt         DateTime      @default(now())
+  badgeCase       UserBadgeCase @relation(fields: [badgeCaseId], references: [id], onDelete: Cascade)
+  badge           BadgeInstance @relation(fields: [badgeInstanceId], references: [id], onDelete: Cascade)
+
   @@unique([badgeCaseId, badgeInstanceId])
   @@index([badgeCaseId, displayOrder])
 }
 
 model GuildBadgeCase {
-  id              String   @id @default(uuid())
-  guildId         String   @unique
+  id              String           @id @default(uuid())
+  guildId         String           @unique
   title           String?
-  isPublic        Boolean  @default(true)
-  featuredBadgeId String?  @unique // Optional featured badge for special display
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  guild         Guild            @relation(fields: [guildId], references: [id], onDelete: Cascade)
-  badges        GuildBadgeItem[]
-  featuredBadge GuildBadgeItem?  @relation("FeaturedGuildBadgeInCase", fields: [featuredBadgeId], references: [id], onDelete: SetNull)
+  isPublic        Boolean          @default(true)
+  featuredBadgeId String?          @unique // Optional featured badge for special display
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  guild           Guild            @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  badges          GuildBadgeItem[]
+  featuredBadge   GuildBadgeItem?  @relation("FeaturedGuildBadgeInCase", fields: [featuredBadgeId], references: [id], onDelete: SetNull)
 }
 
 model GuildBadgeItem {
-  id              String   @id @default(uuid())
+  id              String          @id @default(uuid())
   badgeCaseId     String
   badgeInstanceId String
-  displayOrder    Int      @default(0)
-  addedAt         DateTime @default(now())
-  badgeCase  GuildBadgeCase  @relation(fields: [badgeCaseId], references: [id], onDelete: Cascade)
-  badge      BadgeInstance   @relation(fields: [badgeInstanceId], references: [id], onDelete: Cascade)
-  featuredIn GuildBadgeCase? @relation("FeaturedGuildBadgeInCase") // Link back if this item is the featured one
+  displayOrder    Int             @default(0)
+  addedAt         DateTime        @default(now())
+  badgeCase       GuildBadgeCase  @relation(fields: [badgeCaseId], references: [id], onDelete: Cascade)
+  badge           BadgeInstance   @relation(fields: [badgeInstanceId], references: [id], onDelete: Cascade)
+  featuredIn      GuildBadgeCase? @relation("FeaturedGuildBadgeInCase")
 
   @@unique([badgeCaseId, badgeInstanceId])
   @@index([badgeCaseId, displayOrder])
 }
 
-// +++ NEW UPLOAD/ICON MODELS (as defined in schema4.prisma) +++
 model UploadedAsset {
-  id                 String    @id @default(cuid())
-  uploaderId         String?   
-  uploader           User?     @relation("UserUploadedAssets", fields: [uploaderId], references: [id], onDelete: SetNull)
+  id                 String       @id @default(cuid())
+  uploaderId         String?
+  uploader           User?        @relation("UserUploadedAssets", fields: [uploaderId], references: [id], onDelete: SetNull)
   originalFilename   String?
-  mimeType           String    
-  sizeBytes          Int       
-  hostedUrl          String    @unique 
-  storageIdentifier  String    @unique 
-  assetType          String    
-  description        String?   
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
-  systemIconsAsAsset SystemIcon[] 
+  mimeType           String
+  sizeBytes          Int
+  hostedUrl          String       @unique
+  storageIdentifier  String       @unique
+  assetType          String
+  description        String?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  systemIconsAsAsset SystemIcon[]
 
   @@index([uploaderId])
   @@index([assetType])
@@ -736,23 +800,22 @@ model UploadedAsset {
 }
 
 model SystemIcon {
-  id           String  @id @default(cuid()) 
-  name         String  @unique              
-  category     String?                     
-  svgContent   String?                     
-  assetId      String? @unique             
-  asset        UploadedAsset? @relation(fields: [assetId], references: [id], onDelete: SetNull) 
-  isAvailable  Boolean @default(true)      
-  description  String?                     
-  tags         String[]                    
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id          String         @id @default(cuid())
+  name        String         @unique
+  category    String?
+  svgContent  String?
+  assetId     String?        @unique
+  asset       UploadedAsset? @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  isAvailable Boolean        @default(true)
+  description String?
+  tags        String[]
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
 
   @@index([name])
   @@index([category])
   @@index([isAvailable])
 }
-// --- END NEW UPLOAD/ICON MODELS ---
 
 // --- GUILD CATEGORIES ---
 model Category {
@@ -796,7 +859,7 @@ model UserCategoryPrimaryGuild {
   userId     String
   categoryId String
   guildId    String // The guild the user has marked as primary for this category
-  setAt DateTime @default(now())
+  setAt      DateTime @default(now())
 
   user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
@@ -877,7 +940,7 @@ model Cluster {
 
   // Relationships - Members & Structure
   guildMemberships ClusterMembership[] // Guilds that are members of this cluster
-  roles            ClusterRole[]       @relation("ClusterCustomRoles") // Custom roles for this cluster
+  customRoles      ClusterRole[]       @relation("ClusterCustomRoles") // Custom roles for this cluster
   userRoles        UserClusterRole[] // New: User roles within this cluster
 
   // Relationships - Primary Designation
@@ -891,6 +954,8 @@ model Cluster {
   // Relationships - Cluster Invitations & Join Requests (as source)
   directInvitationsToGuilds ClusterDirectInvitation[] @relation("InvitingCluster")
   joinRequestsFromGuilds    ClusterJoinRequest[]      @relation("TargetClusterForJoinRequest")
+
+  roleSettings ClusterRoleSetting[] // ADDED Back-relation
 
   @@index([name])
 }
@@ -912,16 +977,18 @@ model ClusterMembership {
 model ClusterRole {
   id           String   @id @default(cuid())
   name         String
-  name_ci      String   // Case-insensitive version
+  name_ci      String // Case-insensitive version
   description  String?
   clusterId    String? // Link to the specific cluster, optional for system roles
   isSystemRole Boolean  @default(false) // e.g., CLUSTER_CREATOR, CLUSTER_ADMIN
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  cluster          Cluster?                @relation("ClusterCustomRoles", fields: [clusterId], references: [id], onDelete: Cascade) // Made Cluster optional
-  permissions      ClusterRolePermission[] // Link to the permissions this cluster role has
-  userClusterRoles UserClusterRole[]
+  cluster                Cluster?                @relation("ClusterCustomRoles", fields: [clusterId], references: [id], onDelete: Cascade) // Made Cluster optional
+  permissions            ClusterRolePermission[] // Link to the permissions this cluster role has
+  assignedToClusterUsers UserClusterRole[]
+
+  clusterSettings ClusterRoleSetting[] // ADDED Back-relation
 
   @@unique([clusterId, name_ci], name: "unique_cluster_role_name_ci")
   @@index([clusterId])
@@ -984,7 +1051,8 @@ model ClusterContact {
   displayOrder Int         @default(0)
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
-  cluster Cluster @relation(fields: [clusterId], references: [id], onDelete: Cascade)
+  cluster      Cluster     @relation(fields: [clusterId], references: [id], onDelete: Cascade)
+
   @@index([clusterId, displayOrder])
 }
 
@@ -993,32 +1061,32 @@ model ClusterRolePermission {
   clusterRoleId String
   permissionId  String
   assignedAt    DateTime @default(now())
-  // assignedById  String?  // Optional: User who assigned this permission to the cluster role (for auditing)
+  assignedById  String? // This field holds the ID of the User who assigned it
 
   clusterRole ClusterRole @relation(fields: [clusterRoleId], references: [id], onDelete: Cascade)
   permission  Permission  @relation(fields: [permissionId], references: [id], onDelete: Cascade)
-  // assignedBy  User?       @relation("ClusterRolePermissionAssignedBy", fields: [assignedById], references: [id], onDelete: SetNull)
+  assignedBy  User?       @relation("ClusterRolePermissionAssignedBy", fields: [assignedById], references: [id], onDelete: SetNull) // This relation uses assignedById
 
   @@unique([clusterRoleId, permissionId])
   @@index([clusterRoleId])
   @@index([permissionId])
+  @@map("ClusterRolePermission")
 }
-
 
 // --- GUILD INVITATION SYSTEM ---
 
 model GuildDirectInvitation {
-  id               String                @id @default(uuid())
-  guildId          String
-  invitedByUserId  String // User who sent the invitation
-  targetUserId     String? // VG user who received the invitation (if they exist in ViaGuild system)
-  targetUserHandle String // The handle/username used for the invitation (e.g. "username123", "user@example.com")
+  id                  String                @id @default(uuid())
+  guildId             String
+  invitedByUserId     String // User who sent the invitation
+  targetUserId        String? // VG user who received the invitation (if they exist in ViaGuild system)
+  targetUserHandle    String // The handle/username used for the invitation (e.g. "username123", "user@example.com")
   targetUserHandle_ci String // Case-insensitive version
-  platform         InvitationPlatform // Platform of the targetUserHandle (e.g. VIAGUILD, TWITTER, DISCORD, etc.)
-  status           GuildInvitationStatus @default(PENDING)
-  createdAt        DateTime              @default(now())
-  updatedAt        DateTime              @updatedAt
-  expiresAt        DateTime? // Optional: For invitations that have a time limit
+  platform            InvitationPlatform // Platform of the targetUserHandle (e.g. VIAGUILD, TWITTER, DISCORD, etc.)
+  status              GuildInvitationStatus @default(PENDING)
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  expiresAt           DateTime? // Optional: For invitations that have a time limit
 
   guild         Guild @relation("InvitedToGuild", fields: [guildId], references: [id], onDelete: Cascade)
   invitedByUser User  @relation("Inviter", fields: [invitedByUserId], references: [id], onDelete: Cascade)
@@ -1142,6 +1210,7 @@ model GuildRelationshipProposal {
   targetGuild    Guild @relation("TargetGuildForRelationship", fields: [targetGuildId], references: [id], onDelete: Cascade)
   proposedByUser User  @relation("ProposedByUser", fields: [proposedByUserId], references: [id], onDelete: Cascade)
   resolvedByUser User? @relation("ResolvedByUser", fields: [resolvedByUserId], references: [id], onDelete: SetNull)
+
   @@unique([proposingGuildId, targetGuildId, proposedType, status], name: "unique_pending__guild_relationship_proposal")
   @@index([proposingGuildId])
   @@index([targetGuildId])
@@ -1150,19 +1219,29 @@ model GuildRelationshipProposal {
   @@index([resolvedByUserId])
 }
 
-// NEW MODEL: For guild-specific display order/preference of roles
-model GuildRoleDisplayPreference {
-  id              String  @id @default(cuid())
-  guildId         String
-  roleId          String  // Can be an ID of a system role OR a custom role for this guild
-  displayPriority Int     // Lower number means higher priority (displays first)
+// ADD THE NEW ClusterRoleSetting MODEL
+model ClusterRoleSetting {
+  id            String @id @default(cuid())
+  clusterId     String
+  clusterRoleId String // Foreign key to ClusterRole table
 
-  guild Guild @relation(fields: [guildId], references: [id], onDelete: Cascade)
-  role  Role  @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  hierarchyOrder  Int // Defines hierarchical power within this cluster, lower is higher
+  displaySequence Int? // Optional: For visual sorting in this cluster's UI
 
-  @@map("guild_role_display_preferences") // Map table name to plural
-  @@unique([guildId, roleId]) // A role can only have one display preference per guild
-  @@unique([guildId, displayPriority]) // Priority should be unique within a guild
-  @@index([guildId, displayPriority]) // For fetching ordered roles for a guild
-  @@index([roleId]) // For finding all guilds where a specific role has a preference
+  overrideRoleName     String? // Cluster-specific display name for this role
+  overrideDisplayColor String? // Cluster-specific color for this role
+
+  isFeatured Boolean @default(false) // If true, this ROLE TYPE is featured in this cluster
+
+  assignedById String? // Optional: who configured this setting
+
+  cluster    Cluster     @relation(fields: [clusterId], references: [id], onDelete: Cascade)
+  role       ClusterRole @relation(fields: [clusterRoleId], references: [id], onDelete: Cascade)
+  assignedBy User?       @relation("ClusterRoleSettingAssignedBy", fields: [assignedById], references: [id], onDelete: SetNull)
+
+  @@unique([clusterId, clusterRoleId])
+  @@index([clusterId, hierarchyOrder])
+  @@index([clusterId, displaySequence])
+  @@index([clusterRoleId])
+  @@map("ClusterRoleSetting")
 }

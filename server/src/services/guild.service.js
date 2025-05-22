@@ -111,6 +111,7 @@ class GuildService {
       throw new Error('Guild not found');
     }
 
+    // Structure the response
     return {
       id: guild.id,
       name: guild.name, // This is the unique name/slug
