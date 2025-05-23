@@ -570,13 +570,15 @@ model BadgeTemplate {
   defaultDisplayDescription String?               @db.Text // Default user-facing description for this badge type
 
   // --- Programmatic Credential Configuration ---
-  definesCredential        Boolean @default(false) // Does this template type utilize BadgeInstance.credentialValue?
-  credentialLabel          String? // How to label this metric if shown, e.g., "Rank", "Security Level"
-  credentialBest           Float? // Numeric value representing the best possible score/rank
-  credentialWorst          Float? // Numeric value representing the worst possible score/rank
-  // (Interpretation: if credentialWorst > credentialBest, lower is better; if credentialBest > credentialWorst, higher is better)
-  credentialNotes          String? // e.g. the credentialValue represents xyz and is calculated in such and such way
-  credentialIsNormalizable Boolean @default(false) // Hints if the credentialValue can be normalized from 0 to 1
+  definesMeasure        Boolean @default(false) // Does this template type utilize BadgeInstance.measureValue?
+  measureLabel          String? // How to label this metric if shown, e.g., "Rank", "Security Level"
+  measureBest           Float? // Numeric value representing the best possible score/rank
+  measureWorst          Float? // Numeric value representing the worst possible score/rank
+  measureNotes          String? // e.g. the measureValue represents xyz and is calculated in such and such way
+  measureIsNormalizable Boolean @default(false) // Hints if the measureValue can be normalized from 0 to 1
+  higherIsBetter        Boolean? // If true, a greater measureValue is considered better; if false, a lesser value is better. Null if definesMeasure is false.
+  measureBestLabel      String? // e.g., "Max Score", "Top Rank"
+  measureWorstLabel     String? // e.g., "Min Score", "Lowest Rank"
   
   metadataFieldDefinitions MetadataFieldDefinition[] // Defines slots for displayable textual metadata
   instances                BadgeInstance[]
@@ -653,8 +655,15 @@ model BadgeInstance {
   overrideTextSize           Int?
   overrideDisplayDescription String?                @db.Text
 
-  // --- Dedicated Field for Programmatic Credential Value ---
-  credentialValue Float? // This value is the metric used for programmatic checks.
+  // Overrides for measure properties from the template
+  overrideMeasureBest           Float? 
+  overrideMeasureWorst          Float? 
+  overrideMeasureIsNormalizable Boolean? 
+  overrideMeasureBestLabel      String?
+  overrideMeasureWorstLabel     String?
+
+  // --- Dedicated Field for Programmatic measure Value ---
+  measureValue Float? // This value is the metric used for programmatic checks.
 
   // --- Instance Status & API Visibility ---
   awardStatus BadgeAwardStatus @default(PENDING_ACCEPTANCE) // Status of the badge award itself
@@ -682,7 +691,7 @@ model BadgeInstance {
   @@index([userReceiverId])
   @@index([guildReceiverId])
   @@index([clusterReceiverId])
-  @@index([credentialValue])
+  @@index([measureValue])
   @@index([awardStatus])
   @@index([apiVisible])
 }

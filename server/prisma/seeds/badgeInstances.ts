@@ -46,8 +46,13 @@ interface BadgeInstanceSeedEntry {
   overrideTextFont?: string | null;
   overrideTextSize?: number | null;
   overrideDisplayDescription?: string | null;
-  // Credential Value
-  credentialValue?: number | null; // Using number for Float compatibility
+  // Measure Value & Overrides
+  measureValue?: number | null; // Using number for Float compatibility
+  overrideMeasureBest?: number | null;
+  overrideMeasureWorst?: number | null;
+  overrideMeasureIsNormalizable?: boolean | null;
+  overrideMeasureBestLabel?: string | null;
+  overrideMeasureWorstLabel?: string | null;
   // Metadata Values: object where keys match MetadataFieldDefinition.fieldKeyForInstanceData
   metadataValues?: Record<string, string>;
 }
@@ -65,10 +70,14 @@ export async function seedBadgeInstances(prisma: PrismaClient) {
       templateSlug: true,
       ownedByUserId: true,
       ownedByGuildId: true,
-      definesCredential: true,
+      definesMeasure: true,
       defaultBadgeName: true, 
-      credentialBest: true, 
-      credentialWorst: true, 
+      measureBest: true, 
+      measureWorst: true,
+      higherIsBetter: true, // Added for logic if needed, though instance overrides are separate
+      // We don't strictly need measureBestLabel/WorstLabel from template for instance seeding 
+      // unless we want to use them as a base for instance overrides IF instance overrides are not present.
+      // For now, instance overrides will be explicit in the seed data if used.
       metadataFieldDefinitions: {
         select: { fieldKeyForInstanceData: true, id: true },
       },
@@ -135,16 +144,21 @@ export async function seedBadgeInstances(prisma: PrismaClient) {
       overrideBorderColor: '#FFD700',
       metadataValues: { foundingDate: '2024-01-01' },
     },
-    // Scenario 3: TestUserPrime awards "Project Completion" to another user
+    // Scenario 3: TestUserPrime awards "Project Completion" to another user (WITH OVERRIDES FOR MEASURE)
     {
-      description: `TestUserPrime awards Project Completion to another user`,
+      description: `TestUserPrime awards Project Completion to another user with measure overrides`,
       templateTarget: { slug: `user_${TEST_USER_PRIME_USERNAME}_project_alpha`, ownedByUserId: testUserPrime?.id, ownedByGuildId: null },
       giver: { type: 'USER', username: TEST_USER_PRIME_USERNAME },
       receiver: { type: 'USER', id: otherUsers[0]?.id || users[0]?.id },
       awardStatus: BadgeAwardStatus.ACCEPTED,
       apiVisible: true,
-      message: 'Great work on completing the Alpha Project!',
-      credentialValue: 8,
+      message: 'Great work on completing the Alpha Project! This one had a special difficulty range.',
+      measureValue: 8,
+      overrideMeasureBest: 12, // Template default is 10
+      overrideMeasureWorst: 2,  // Template default is 1
+      overrideMeasureIsNormalizable: true,
+      overrideMeasureBestLabel: 'Max Special Difficulty',
+      overrideMeasureWorstLabel: 'Min Special Difficulty',
       overrideForegroundValue: getSystemIconIdByName('Glowing Star'),
       overrideForegroundColor: '#f59e0b',
       metadataValues: {
@@ -189,7 +203,7 @@ export async function seedBadgeInstances(prisma: PrismaClient) {
       awardStatus: BadgeAwardStatus.ACCEPTED,
       apiVisible: true,
       message: 'Your rank is being tracked.',
-      credentialValue: 50, 
+      measureValue: 50, 
       overrideForegroundValue: '50th',
       metadataValues: { rankNameDetail: 'Silver III', lastUpdated: new Date().toISOString() }
     },
@@ -236,7 +250,7 @@ export async function seedBadgeInstances(prisma: PrismaClient) {
       awardStatus: BadgeAwardStatus.ACCEPTED,
       apiVisible: true, 
       message: `TheNexusHub successfully completed the 'Community Onboarding Module' project!`,
-      credentialValue: 9, 
+      measureValue: 9, 
       overrideBackgroundValue: getAssetUrl('BADGE_BACKGROUND_IMAGE_40'),
       metadataValues: {
         projectName: 'Community Onboarding Module',
@@ -287,7 +301,7 @@ export async function seedBadgeInstances(prisma: PrismaClient) {
       awardStatus: BadgeAwardStatus.ACCEPTED, 
       apiVisible: true, 
       message: 'Just wrapped up Project Beta!',
-      credentialValue: 5, 
+      measureValue: 5, 
       metadataValues: {
         projectName: 'Project Beta - API Documentation Portal',
         completionDate: new Date().toISOString().split('T')[0],
@@ -342,7 +356,7 @@ export async function seedBadgeInstances(prisma: PrismaClient) {
       awardStatus: BadgeAwardStatus.ACCEPTED,
       apiVisible: true,
       message: 'Current ranking status.',
-      credentialValue: 25,
+      measureValue: 25,
       overrideForegroundValue: '25th',
       metadataValues: { rankNameDetail: 'Gold I', lastUpdated: new Date().toISOString() }
     },
@@ -445,10 +459,10 @@ export async function seedBadgeInstances(prisma: PrismaClient) {
         giver,
         receiver,
         awardStatus: BadgeAwardStatus.ACCEPTED,
-        apiVisible: template.definesCredential,
+        apiVisible: template.definesMeasure,
         message: `A special award for ${receiver.type === 'USER' ? receiver.username : (receiver.type === 'GUILD' ? receiver.guildName : receiver.clusterName)}: ${faker.lorem.sentence()}`,
         metadataValues,
-        credentialValue: template.definesCredential ? faker.number.int({ min: 1, max: (template.credentialBest ?? 10) }) : undefined,
+        measureValue: template.definesMeasure ? faker.number.int({ min: 1, max: (template.measureBest ?? 10) }) : undefined,
       });
     }
     console.log(`   Added ${dynamicInstanceCount} dynamically generated accepted badge instances.`);
@@ -504,10 +518,10 @@ export async function seedBadgeInstances(prisma: PrismaClient) {
         giver,
         receiver: targetReceiver,
         awardStatus: BadgeAwardStatus.ACCEPTED,
-        apiVisible: template.definesCredential,
+        apiVisible: template.definesMeasure,
         message: `A special award for ${receiverName}: ${faker.lorem.sentence()}`,
         metadataValues,
-        credentialValue: template.definesCredential ? faker.number.int({ min: 1, max: (template.credentialBest ?? 10) }) : undefined,
+        measureValue: template.definesMeasure ? faker.number.int({ min: 1, max: (template.measureBest ?? 10) }) : undefined,
       });
       createdForTarget++;
     }
@@ -581,7 +595,7 @@ export async function seedBadgeInstances(prisma: PrismaClient) {
         awardStatus: instanceEntry.awardStatus || BadgeAwardStatus.ACCEPTED,
         apiVisible: instanceEntry.apiVisible !== undefined 
             ? instanceEntry.apiVisible 
-            : (template.definesCredential && 
+            : (template.definesMeasure && 
               ((instanceEntry.awardStatus || BadgeAwardStatus.ACCEPTED) === BadgeAwardStatus.ACCEPTED) 
               ? true : false),
         message: instanceEntry.message,
@@ -598,7 +612,12 @@ export async function seedBadgeInstances(prisma: PrismaClient) {
         overrideTextFont: instanceEntry.overrideTextFont,
         overrideTextSize: instanceEntry.overrideTextSize,
         overrideDisplayDescription: instanceEntry.overrideDisplayDescription,
-        credentialValue: instanceEntry.credentialValue,
+        measureValue: instanceEntry.measureValue,
+        overrideMeasureBest: instanceEntry.overrideMeasureBest,
+        overrideMeasureWorst: instanceEntry.overrideMeasureWorst,
+        overrideMeasureIsNormalizable: instanceEntry.overrideMeasureIsNormalizable,
+        overrideMeasureBestLabel: instanceEntry.overrideMeasureBestLabel,
+        overrideMeasureWorstLabel: instanceEntry.overrideMeasureWorstLabel,
       };
       
       for (const key in createData) {

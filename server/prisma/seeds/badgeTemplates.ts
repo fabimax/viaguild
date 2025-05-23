@@ -43,11 +43,21 @@ function getSystemIconId(name: string, allSystemIcons: SystemIcon[]): string {
 }
 
 
-interface BadgeTemplateSeedData extends Omit<BadgeTemplate, 'id' | 'createdAt' | 'updatedAt' | 'instances' | 'metadataFieldDefinitions' | 'templateSlug_ci' | 'authoredByUser' | 'ownedByUser' | 'ownedByGuild'> { 
+interface BadgeTemplateSeedData extends Omit<BadgeTemplate, 'id' | 'createdAt' | 'updatedAt' | 'instances' | 'metadataFieldDefinitions' | 'templateSlug_ci' | 'authoredByUser' | 'ownedByUser' | 'ownedByGuild' | 'definesCredential' | 'credentialLabel' | 'credentialBest' | 'credentialWorst' | 'credentialNotes' | 'credentialIsNormalizable' | 'higherIsBetter' | 'measureBestLabel' | 'measureWorstLabel'> { 
   templateSlug: string;
   authoredByUserId: string | null;
   ownedByUserId: string | null;
   ownedByGuildId: string | null;
+  // Add the new "measure" fields
+  definesMeasure: boolean;
+  measureLabel: string | null;
+  measureBest: number | null;
+  measureWorst: number | null;
+  measureNotes: string | null;
+  measureIsNormalizable: boolean;
+  higherIsBetter: boolean | null;
+  measureBestLabel: string | null;
+  measureWorstLabel: string | null;
   metadataFields?: Omit<MetadataFieldDefinition, 'id' | 'badgeTemplateId' | 'badgeTemplate'>[];
 }
 
@@ -103,12 +113,15 @@ export async function seedBadgeTemplates(prisma: PrismaClient) {
       defaultTextFont: null,
       defaultTextSize: null,
       defaultDisplayDescription: 'This badge is awarded to users who joined ViaGuild in its very early days, recognizing their foundational support.',
-      definesCredential: false,
-      credentialLabel: null,
-      credentialBest: null,
-      credentialWorst: null,
-      credentialNotes: null,
-      credentialIsNormalizable: false,
+      definesMeasure: false,
+      measureLabel: null,
+      measureBest: null,
+      measureWorst: null,
+      measureNotes: null,
+      measureIsNormalizable: false,
+      higherIsBetter: null,
+      measureBestLabel: null,
+      measureWorstLabel: null,
       metadataFields: [
         {
           fieldKeyForInstanceData: 'joinDate',
@@ -152,12 +165,15 @@ export async function seedBadgeTemplates(prisma: PrismaClient) {
       defaultTextFont: null,
       defaultTextSize: null,
       defaultDisplayDescription: `Awarded to the esteemed founder of ${SPECIAL_GUILD_NAME}, for their vision and leadership.`,
-      definesCredential: false,
-      credentialLabel: null,
-      credentialBest: null,
-      credentialWorst: null,
-      credentialNotes: null,
-      credentialIsNormalizable: false,
+      definesMeasure: false,
+      measureLabel: null,
+      measureBest: null,
+      measureWorst: null,
+      measureNotes: null,
+      measureIsNormalizable: false,
+      higherIsBetter: null,
+      measureBestLabel: null,
+      measureWorstLabel: null,
       metadataFields: [
         {
           fieldKeyForInstanceData: 'foundingDate',
@@ -170,7 +186,7 @@ export async function seedBadgeTemplates(prisma: PrismaClient) {
       ],
     },
 
-    // Template 3: "TestUserPrime's Project Completion" (Modifiable, Owned by TUP, uses credential)
+    // Template 3: "TestUserPrime's Project Completion" (Modifiable, Owned by TUP, uses measure)
     {
         templateSlug: `user_${TEST_USER_PRIME_USERNAME}_project_alpha`,
         internalNotes: 'A badge TestUserPrime can award for completing their personal projects.',
@@ -193,12 +209,15 @@ export async function seedBadgeTemplates(prisma: PrismaClient) {
         defaultTextFont: null,
         defaultTextSize: null,
         defaultDisplayDescription: 'Awarded upon successful completion of a significant project phase or the entire project.',
-        definesCredential: true,
-        credentialLabel: 'Project Difficulty',
-        credentialBest: 10,
-        credentialWorst: 1,
-        credentialNotes: 'Difficulty scale from 1 (easy) to 10 (very hard).',
-        credentialIsNormalizable: true,
+        definesMeasure: true,
+        measureLabel: 'Project Difficulty',
+        measureBest: 10,
+        measureWorst: 1,
+        measureNotes: 'Difficulty scale from 1 (easy) to 10 (very hard).',
+        measureIsNormalizable: true,
+        higherIsBetter: true,
+        measureBestLabel: 'Max Difficulty',
+        measureWorstLabel: 'Min Difficulty',
         metadataFields: [
           {
             fieldKeyForInstanceData: 'projectName',
@@ -249,12 +268,15 @@ export async function seedBadgeTemplates(prisma: PrismaClient) {
       defaultTextFont: null,
       defaultTextSize: null,
       defaultDisplayDescription: 'Awarded to members who consistently make positive contributions to The Nexus Hub community, discussions, or projects.',
-      definesCredential: false,
-      credentialLabel: null, 
-      credentialBest: null,    
-      credentialWorst: null,   
-      credentialNotes: null,   
-      credentialIsNormalizable: false, 
+      definesMeasure: false,
+      measureLabel: null, 
+      measureBest: null,    
+      measureWorst: null,   
+      measureNotes: null,   
+      measureIsNormalizable: false, 
+      higherIsBetter: null,
+      measureBestLabel: null,
+      measureWorstLabel: null,
       metadataFields: [
         {
           fieldKeyForInstanceData: 'contributionType',
@@ -295,12 +317,15 @@ export async function seedBadgeTemplates(prisma: PrismaClient) {
       defaultTextFont: null,
       defaultTextSize: null,
       defaultDisplayDescription: 'This badge acknowledges participation in an event or activity.',
-      definesCredential: false,
-      credentialLabel: null, 
-      credentialBest: null,    
-      credentialWorst: null,   
-      credentialNotes: null,   
-      credentialIsNormalizable: false, 
+      definesMeasure: false,
+      measureLabel: null, 
+      measureBest: null,    
+      measureWorst: null,   
+      measureNotes: null,   
+      measureIsNormalizable: false, 
+      higherIsBetter: null,
+      measureBestLabel: null,
+      measureWorstLabel: null,
       metadataFields: [
         {
           fieldKeyForInstanceData: 'eventName',
@@ -311,7 +336,7 @@ export async function seedBadgeTemplates(prisma: PrismaClient) {
         },
       ],
     },
-    // Template 6: "TestUserPrime's Live Rank Badge" (User-owned by TUP, allows pushed instance updates for credentialValue)
+    // Template 6: "TestUserPrime's Live Rank Badge" (User-owned by TUP, allows pushed instance updates for measureValue)
     {
       templateSlug: `user_${TEST_USER_PRIME_USERNAME}_live_rank`,
       internalNotes: 'A badge TestUserPrime uses to show a live-updated rank or score.',
@@ -320,7 +345,7 @@ export async function seedBadgeTemplates(prisma: PrismaClient) {
       ownedByGuildId: null,
       isArchived: false,
       isModifiableByIssuer: true, // TUP might change the base look of their rank badge
-      allowsPushedInstanceUpdates: true, // Crucial: TUP's system will push updates to credentialValue
+      allowsPushedInstanceUpdates: true, // Crucial: TUP's system will push updates to measureValue
       inherentTier: null, // Rank itself is the value, not tied to G/S/B allocation
       defaultBadgeName: 'Current Rank',
       defaultSubtitleText: 'Player Standing',
@@ -334,12 +359,15 @@ export async function seedBadgeTemplates(prisma: PrismaClient) {
       defaultTextFont: 'Impact_Approved', // Example chunky font for rank
       defaultTextSize: 24,
       defaultDisplayDescription: 'Displays the current competitive ranking, updated periodically.',
-      definesCredential: true,
-      credentialLabel: 'Rank Tier',
-      credentialBest: 1,    // Lower is better for rank
-      credentialWorst: 100, // e.g. 100 ranks
-      credentialNotes: 'Player rank, where 1 is the highest. Updated by external system.',
-      credentialIsNormalizable: true,
+      definesMeasure: true,
+      measureLabel: 'Rank Tier',
+      measureBest: 1,    // Lower is better for rank
+      measureWorst: 100, // e.g. 100 ranks
+      measureNotes: 'Player rank, where 1 is the highest. Updated by external system.',
+      measureIsNormalizable: true, // Can be normalized (e.g. 1st out of 100 is 100th percentile)
+      higherIsBetter: false, // Lower rank number is better
+      measureBestLabel: 'Top Rank',
+      measureWorstLabel: 'Lowest Rank',
       metadataFields: [
         {
           fieldKeyForInstanceData: 'rankNameDetail',
@@ -380,12 +408,15 @@ export async function seedBadgeTemplates(prisma: PrismaClient) {
       defaultTextFont: null,
       defaultTextSize: null,
       defaultDisplayDescription: 'Recognizes foundational skill and dedication in craftsmanship within the Artisan Guild.',
-      definesCredential: false,
-      credentialLabel: null, 
-      credentialBest: null,    
-      credentialWorst: null,   
-      credentialNotes: null,   
-      credentialIsNormalizable: false, 
+      definesMeasure: false,
+      measureLabel: null, 
+      measureBest: null,    
+      measureWorst: null,   
+      measureNotes: null,   
+      measureIsNormalizable: false, 
+      higherIsBetter: null,
+      measureBestLabel: null,
+      measureWorstLabel: null,
       metadataFields: [
         {
           fieldKeyForInstanceData: 'craftType',
@@ -419,12 +450,15 @@ export async function seedBadgeTemplates(prisma: PrismaClient) {
       defaultTextFont: 'Georgia_Approved', // Serif font
       defaultTextSize: 22,
       defaultDisplayDescription: 'Bestowed upon those who have delved deep into the annals of TheNexusHub, preserving its history and tales.',
-      definesCredential: false,
-      credentialLabel: null, 
-      credentialBest: null,    
-      credentialWorst: null,   
-      credentialNotes: null,   
-      credentialIsNormalizable: false, 
+      definesMeasure: false,
+      measureLabel: null, 
+      measureBest: null,    
+      measureWorst: null,   
+      measureNotes: null,   
+      measureIsNormalizable: false, 
+      higherIsBetter: null,
+      measureBestLabel: null,
+      measureWorstLabel: null,
       metadataFields: [
         {
           fieldKeyForInstanceData: 'knownTopic',

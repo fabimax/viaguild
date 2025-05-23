@@ -104,4 +104,20 @@ export async function seedSystemRoles(prisma: PrismaClient) {
   console.log(`✅ System guild roles seeding finished. ${createdCount} created, ${updatedCount} updated/verified.`);
 }
 
-// If you want to run this script directly using `
+// If you want to run this script directly using `ts-node server/prisma/seeds/system/systemRoles.ts`
+// (ensure you have ts-node and necessary configs or use `npx prisma db seed` which handles it)
+/*
+async function main() {
+  const prisma = new PrismaClient();
+  try {
+    await seedSystemRoles(prisma);
+  } catch (e) {
+    console.error('Error seeding system roles:', e);
+    process.exit(1);
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
+// main();
+*/ 
