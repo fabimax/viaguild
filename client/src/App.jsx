@@ -18,6 +18,7 @@ import PublicUserProfile from './pages/PublicUserProfile';
 import HomePage from './pages/HomePage';
 import CreateGuildPage from './pages/CreateGuildPage';
 import GuildOverviewPage from './pages/GuildOverviewPage.temp';
+import GuildProfilePage from './pages/GuildProfilePage';
 
 /**
  * Custom error fallback UI for the main application
@@ -102,6 +103,11 @@ function App() {
                       <CreateGuildPage />
                     </ErrorBoundary>
                   </ProtectedRoute>
+                } />
+                <Route path="/guilds/:identifier" element={
+                  <ErrorBoundary>
+                    <GuildProfilePage />
+                  </ErrorBoundary>
                 } />
                 
                 {/* Temporary route for Guild Overview Mockup */}

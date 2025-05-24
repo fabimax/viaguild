@@ -35,11 +35,11 @@ function getAssetUrl(key: string): string {
 function getSystemIconId(name: string, allSystemIcons: SystemIcon[]): string {
     const icon = allSystemIcons.find(i => i.name === name);
     if (!icon) {
-        console.warn(`⚠️ System icon with name "${name}" not found. Using a default or placeholder ID.`);
-        // Fallback to the first available system icon or a known placeholder ID
-        return allSystemIcons[0]?.id || 'sysicon_placeholder'; 
+        console.warn(`⚠️ System icon with name "${name}" not found. Using a default or placeholder NAME.`);
+        // Fallback to the first available system icon's name or a known placeholder NAME
+        return allSystemIcons[0]?.name || 'QuestionMarkIcon_FallbackName'; 
     }
-    return icon.id;
+    return icon.name; // Return the name, not the ID
 }
 
 

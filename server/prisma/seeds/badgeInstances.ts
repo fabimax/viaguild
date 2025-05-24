@@ -115,7 +115,7 @@ export async function seedBadgeInstances(prisma: PrismaClient) {
     return undefined;
   };
 
-  const getSystemIconIdByName = (name: string): string | undefined => systemIcons.find(si => si.name === name)?.id;
+  const getSystemIconIdByName = (name: string): string | undefined => systemIcons.find(si => si.name === name)?.name;
 
   let instancesToSeed: BadgeInstanceSeedEntry[] = [
     // Scenario 1: TestUserPrime receives "Site Pioneer"

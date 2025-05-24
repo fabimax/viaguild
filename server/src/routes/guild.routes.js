@@ -8,9 +8,9 @@ router.use(authenticate);
 
 // Guild CRUD operations
 router.post('/', guildController.createGuild);
-router.get('/:id', guildController.getGuildById);
-router.put('/:id', guildController.updateGuild);
-router.delete('/:id', guildController.deleteGuild);
+router.get('/:identifier', guildController.getGuildById);
+router.put('/:identifier', guildController.updateGuild);
+router.delete('/:identifier', guildController.deleteGuild);
 
 // Guild Member Listing
 router.get('/:guildId/members', guildController.getGuildMembers);
@@ -25,9 +25,9 @@ router.get('/user/me', guildController.getGuildsByUserId);
 router.get('/search', guildController.searchGuilds);
 
 // Guild membership operations
-router.post('/:id/join', guildController.joinGuild);
-router.delete('/:id/leave', guildController.leaveGuild);
-router.put('/:id/primary', guildController.setPrimaryGuild);
+router.post('/:identifier/join', guildController.joinGuild);
+router.delete('/:identifier/leave', guildController.leaveGuild);
+router.put('/:identifier/primary', guildController.setPrimaryGuild);
 router.put('/:guildId/members/:userId/role', guildController.updateMemberRole);
 
 module.exports = router; 

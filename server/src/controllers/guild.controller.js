@@ -26,8 +26,8 @@ class GuildController {
    */
   async getGuildById(req, res) {
     try {
-      const { id } = req.params;
-      const guild = await guildService.getGuildById(id);
+      const { identifier } = req.params;
+      const guild = await guildService.getGuildByIdentifier(identifier);
       res.json(guild);
     } catch (error) {
       res.status(404).json({ error: error.message });

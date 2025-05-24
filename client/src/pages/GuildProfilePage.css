@@ -1,0 +1,301 @@
+/* GuildProfilePage.css */
+
+.guild-profile-page {
+  max-width: 900px; /* Max width for the page content */
+  margin: 20px auto; /* Center the page with some margin */
+  padding: 20px;
+  font-family: Arial, sans-serif; /* Basic font stack */
+}
+
+.guild-info-card {
+  background-color: #ffffff;
+  padding: 25px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  margin-bottom: 30px;
+}
+
+.guild-header {
+  display: flex;
+  align-items: flex-start; /* Align items to the top */
+  margin-bottom: 20px; /* Space below header before description or members */
+}
+
+.guild-avatar-large {
+  width: 128px; /* 8rem */
+  height: 128px;
+  border-radius: 50%;
+  object-fit: cover;
+  margin-right: 25px;
+  border: 3px solid #e2e8f0; /* Light gray border */
+  flex-shrink: 0;
+}
+
+.guild-avatar-placeholder-large {
+  width: 128px;
+  height: 128px;
+  border-radius: 50%;
+  background-color: #e2e8f0; /* Light gray background */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 48px; /* Large font for initial */
+  color: #718096; /* Gray text color */
+  margin-right: 25px;
+  flex-shrink: 0;
+}
+
+.guild-details {
+  text-align: left;
+}
+
+.guild-display-name {
+  font-size: 28px; /* Larger font for display name */
+  font-weight: bold;
+  color: #2d3748; /* Darker gray for name */
+  margin-bottom: 4px;
+}
+
+.guild-name-tag {
+  font-size: 14px;
+  color: #718096; /* Medium gray for unique name */
+  margin-bottom: 12px;
+}
+
+.guild-description {
+  font-size: 16px;
+  color: #4a5568; /* Standard text color */
+  white-space: pre-wrap; /* Preserve line breaks in description */
+  line-height: 1.6;
+}
+
+/* Members Section */
+.members-section {
+  margin-top: 30px;
+}
+
+.members-section h2 {
+  font-size: 24px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 15px;
+}
+
+.members-table-container {
+  background-color: #f9fafb; /* Light background for table area */
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  border-radius: 8px;
+  overflow-x: auto; /* Allow horizontal scrolling for smaller screens */
+}
+
+.members-table {
+  width: 100%;
+  min-width: 600px; /* Minimum width to prevent excessive squashing */
+  border-collapse: collapse; /* Clean table lines */
+}
+
+.members-table th,
+.members-table td {
+  padding: 12px 15px;
+  text-align: left;
+  border-bottom: 1px solid #e2e8f0; /* Light border for rows */
+  font-size: 14px;
+}
+
+.members-table th {
+  background-color: #f3f4f6; /* Slightly darker header for table */
+  font-weight: 600;
+  color: #4a5568;
+  text-transform: uppercase;
+  font-size: 12px;
+  letter-spacing: 0.05em;
+}
+
+.members-table tbody tr:hover {
+  background-color: #f0f4f8; /* Hover effect for rows */
+}
+
+.member-avatar {
+  width: 40px;  /* Smaller avatar: 2.5rem or 40px */
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid #cbd5e0;
+  flex-shrink: 0; /* Prevent shrinking in flex context */
+}
+
+.member-avatar-placeholder {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px; /* Smaller font for initial */
+  color: #718096;
+  flex-shrink: 0;
+}
+
+.member-user-info .username {
+  font-weight: 500;
+  color: #2d3748;
+}
+
+.member-user-info .actual-username {
+  font-size: 12px;
+  color: #718096;
+}
+
+.role-badge {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 16px; /* Pill shape */
+  white-space: nowrap;
+  line-height: 1.2;
+  color: #ffffff; /* Default white text, ensure good contrast with badge color */
+  /* Background color will be set inline based on member.highestRole.color */
+}
+
+.no-members-message {
+  margin-top: 20px;
+  text-align: center;
+  color: #718096;
+}
+
+/* Add a little spacing for the first avatar column header if needed */
+.members-table th.avatar-column {
+    width: 60px; /* Fixed width for avatar column */
+}
+
+/* BadgeCase Section */
+.badge-case-section {
+  margin-top: 30px;
+}
+
+.badge-case-section h2 {
+  font-size: 24px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 15px;
+}
+
+.badge-case-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); /* Adjusted for larger badges */
+  gap: 30px; /* Adjusted gap */
+  padding: 15px;
+  background-color: #f9fafb;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+/* New styles for the wrapper and external name/subtitle */
+.badge-item-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  transition: transform 0.2s ease-in-out;
+}
+
+.badge-item-wrapper:hover {
+  transform: translateY(-3px);
+}
+
+.badge-name-outside {
+  font-size: 14px; /* Slightly larger */
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 8px; /* Increased margin */
+  width: 120px; /* Adjusted for 100px badge + padding */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* .badge-display-container styles are now mostly inline in BadgeDisplay.jsx */
+/* The class itself can be used by the grid if needed, or for minor overrides. */
+/* Retained for potential hover effects or global overrides if any. */
+.badge-display-container {
+  margin-bottom: 8px; /* Increased margin */
+}
+
+.badge-subtitle-outside {
+  font-size: 12px; /* Slightly larger */
+  color: #6b7280;
+  width: 120px; /* Adjusted */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+}
+
+/* Styles for content INSIDE the badge shape */
+.badge-foreground-content {
+  max-width: 100%;
+  max-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  width: 100%;
+  height: 100%;
+}
+
+.badge-text {
+  font-size: 36px; /* Increased for 100px badge */
+  font-weight: bold;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+  padding: 2px;
+}
+
+.badge-icon-placeholder {
+  font-size: 14px; /* Increased for 100px badge */
+  font-weight: bold;
+  padding: 5px;
+  border: 1px dashed currentColor;
+  border-radius: 4px;
+}
+
+.badge-svg-icon {
+  width: 70%; /* Relative to parent badge-display-container (100px) */
+  height: 70%;
+  fill: currentColor; /* Inherit color from .badge-foreground-content */
+  border: 1px dashed blue; /* --- DEBUG BORDER --- */
+  display: flex; /* For centering SVG if it has intrinsic size smaller than this div */
+  align-items: center;
+  justify-content: center;
+}
+
+/* Target SVGs specifically inside circular badges */
+.badge-display-container.is-circle .badge-svg-icon {
+  width: 60%; /* Make it smaller for circles */
+  height: 60%;
+}
+
+.badge-svg-icon svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  border: 1px dashed lime; /* --- DEBUG BORDER --- */
+}
+
+.badge-uploaded-icon {
+  max-width: 90%;
+  max-height: 90%;
+  object-fit: contain;
+}
+
+.no-badges-message {
+  margin-top: 20px;
+  padding: 20px;
+  background-color: #f9fafb;
+  border-radius: 8px;
+  text-align: center;
+  color: #718096;
+} 

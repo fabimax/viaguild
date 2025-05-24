@@ -64,6 +64,48 @@ class GuildService {
   }
 
   /**
+   * Get public guild profile by identifier (ID or name_ci)
+   * @param {string} identifier - Guild ID or name_ci
+   * @returns {Promise<Object>} Guild details (displayName, description, avatar)
+   */
+  async getGuildPublicProfile(identifier) {
+    if (useMockData()) {
+      // Simulate fetching specific fields for mock data
+      return new Promise((resolve, reject) => {
+        const foundGuild = mockGuildSearch.find(g => g.id === identifier || g.name.toLowerCase() === identifier.toLowerCase());
+        if (foundGuild) {
+          setTimeout(() => resolve({
+            displayName: foundGuild.displayName || foundGuild.name,
+            description: foundGuild.description,
+            avatar: foundGuild.avatar
+          }), 500);
+        } else {
+          setTimeout(() => reject(new Error('Mock Guild not found')), 500);
+        }
+      });
+    }
+
+    // Real API call.
+    // Note: The new backend endpoint is /guilds/:identifier, which getGuildById already effectively calls if we pass identifier to it.
+    // However, to keep concerns separate and match the new backend service method name,
+    // we make a distinct frontend service method.
+    // This can be a simple GET request without auth if the endpoint is public.
+    // Assuming the endpoint /api/guilds/:identifier is public and doesn't strictly need the auth token.
+    // If it does need auth, getAuthAxios() should be used.
+    try {
+      // If the endpoint is public and doesn't need auth:
+      // const response = await axios.get(`${API_URL}/guilds/${identifier}`);
+      // If it might need auth (or to be consistent):
+      const api = getAuthAxios();
+      const response = await api.get(`/guilds/${identifier}`);
+      return response.data;
+    } catch (error) {
+      console.error(`Error fetching guild profile for ${identifier}:`, error.response ? error.response.data : error.message);
+      throw error; // Re-throw to be caught by the component
+    }
+  }
+
+  /**
    * Create a new guild
    * @param {Object} guildData - Guild data
    * @returns {Promise<Object>} Created guild

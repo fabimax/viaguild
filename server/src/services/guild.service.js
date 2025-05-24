@@ -84,49 +84,467 @@ class GuildService {
    * @returns {Promise<Object>} Guild
    */
   async getGuildById(guildId) {
-    const guild = await prisma.guild.findUnique({
+    const guildData = await prisma.guild.findUnique({
       where: { id: guildId },
-      include: {
-        creator: {
+      select: {
+        displayName: true,
+        description: true,
+        avatar: true,
+        id: true,
+        name: true,
+        name_ci: true,
+        isOpen: true,
+        allowJoinRequests: true,
+        createdAt: true,
+        updatedAt: true,
+        creator: { select: { id: true, username: true } },
+        updatedBy: { select: { id: true, username: true } },
+        _count: { select: { memberships: true } },
+        roleSettings: {
           select: {
-            id: true,
-            username: true,
-            // avatar: true // User avatar if needed, guild.avatar is separate
+            guildRoleId: true,
+            hierarchyOrder: true,
+            overrideRoleName: true,
+            overrideDisplayColor: true,
           }
         },
-        updatedBy: { // ADDED: Include who last updated the guild
+        memberships: {
+          orderBy: { joinedAt: 'asc' },
           select: {
-            id: true,
-            username: true,
+            joinedAt: true,
+            rank: true,
+            user: {
+              select: {
+                id: true,
+                username: true,
+                displayName: true,
+                avatar: true,
+              },
+            },
+            assignedRoles: {
+              select: {
+                guildRole: {
+                  select: {
+                    id: true,
+                    name: true,
+                    displayColor: true,
+                  }
+                }
+              }
+            }
           }
         },
-        // memberships: {}, // Can be removed if only _count is used and no other logic here needs it.
-        _count: {
-          select: { memberships: true }
+        badgeCase: {
+          select: {
+            id: true,
+            title: true,
+            isPublic: true,
+            badges: {
+              orderBy: { displayOrder: 'asc' },
+              select: {
+                displayOrder: true,
+                addedAt: true,
+                badge: {
+                  select: {
+                    id: true,
+                    message: true,
+                    overrideBadgeName: true,
+                    overrideSubtitle: true,
+                    overrideOuterShape: true,
+                    overrideBorderColor: true,
+                    overrideBackgroundType: true,
+                    overrideBackgroundValue: true,
+                    overrideForegroundType: true,
+                    overrideForegroundValue: true,
+                    overrideForegroundColor: true,
+                    overrideDisplayDescription: true,
+                    template: {
+                      select: {
+                        id: true,
+                        templateSlug: true,
+                        defaultBadgeName: true,
+                        defaultSubtitleText: true,
+                        defaultOuterShape: true,
+                        defaultBorderColor: true,
+                        defaultBackgroundType: true,
+                        defaultBackgroundValue: true,
+                        defaultForegroundType: true,
+                        defaultForegroundValue: true,
+                        defaultForegroundColor: true,
+                        defaultDisplayDescription: true,
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
         }
       }
     });
 
-    if (!guild) {
+    if (!guildData) {
       throw new Error('Guild not found');
     }
 
-    // Structure the response
+    // Process members to find their highest role
+    const roleSettingsMap = new Map(guildData.roleSettings.map(rs => [rs.guildRoleId, rs]));
+    const processedMembers = guildData.memberships.map(membership => {
+      let highestRole = null;
+      let minHierarchyOrder = Infinity;
+
+      membership.assignedRoles.forEach(assignedRoleEntry => {
+        const role = assignedRoleEntry.guildRole;
+        const setting = roleSettingsMap.get(role.id);
+        
+        if (setting && setting.hierarchyOrder !== null && setting.hierarchyOrder < minHierarchyOrder) {
+          minHierarchyOrder = setting.hierarchyOrder;
+          highestRole = {
+            id: role.id,
+            name: setting.overrideRoleName || role.name,
+            color: setting.overrideDisplayColor || role.displayColor,
+            hierarchyOrder: setting.hierarchyOrder
+          };
+        } else if (!setting && highestRole === null) { 
+          // Fallback for roles not in GuildRoleSetting (e.g. system 'Member' if not explicitly ordered)
+          // Or if multiple roles lack settings, pick the first one encountered.
+          // This part can be refined based on how un-ordered roles should be treated.
+          // For now, if no ordered role is found, and this is the first role encountered, consider it.
+          // A more robust fallback might assign a default very high hierarchy order to un-set roles.
+           if (highestRole === null) { // Only assign if no explicitly ordered role has been found yet
+             highestRole = {
+               id: role.id,
+               name: role.name,
+               color: role.displayColor,
+               hierarchyOrder: Infinity // Indicates it's effectively at the bottom or undefined
+             };
+           }
+        }
+      });
+      
+      // If no roles were found or none had hierarchy, ensure highestRole is at least {name: 'Member'} or similar default
+      if (!highestRole && membership.assignedRoles.length > 0) {
+           // If roles exist but none had settings or were chosen, pick first as a basic fallback
+           const firstRole = membership.assignedRoles[0].guildRole;
+            highestRole = { id: firstRole.id, name: firstRole.name, color: firstRole.displayColor, hierarchyOrder: Infinity };
+      } else if (!highestRole) {
+          highestRole = { name: 'Member', color: '#888888', hierarchyOrder: Infinity }; // Default if no roles at all
+      }
+
+      return {
+        user: membership.user,
+        joinedAt: membership.joinedAt,
+        rank: membership.rank,
+        highestRole: highestRole
+      };
+    });
+
+    // Process BadgeCase data
+    let processedBadgeCase = null;
+    if (guildData.badgeCase && guildData.badgeCase.badges) {
+      const badgeProcessingPromises = guildData.badgeCase.badges.map(async (guildBadgeItem) => {
+        const instance = guildBadgeItem.badge;
+        const template = instance.template;
+        const resolveProp = (instanceProp, templateProp) => instance[instanceProp] !== null && instance[instanceProp] !== undefined ? instance[instanceProp] : template[templateProp];
+        
+        let finalForegroundValue = resolveProp('overrideForegroundValue', 'defaultForegroundValue');
+        const finalForegroundType = resolveProp('overrideForegroundType', 'defaultForegroundType') || 'TEXT';
+
+        if (finalForegroundType === 'SYSTEM_ICON' && finalForegroundValue) {
+          console.log(`[getGuildById] Attempting to find SystemIcon with name: "${finalForegroundValue}"`); // DEBUG LOG
+          const systemIcon = await prisma.systemIcon.findUnique({
+            where: { name: finalForegroundValue }, 
+            select: { svgContent: true }
+          });
+          if (systemIcon && systemIcon.svgContent) {
+            console.log(`[getGuildById] Found SystemIcon "${finalForegroundValue}". Has svgContent: true`); // DEBUG LOG
+            finalForegroundValue = systemIcon.svgContent;
+          } else {
+            console.log(`[getGuildById] SystemIcon NOT FOUND or no svgContent for name: "${finalForegroundValue}"`); // DEBUG LOG
+            finalForegroundValue = '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/></svg>';
+          }
+        }
+
+        return {
+          instanceId: instance.id,
+          displayOrder: guildBadgeItem.displayOrder,
+          addedAt: guildBadgeItem.addedAt,
+          message: instance.message,
+          name: resolveProp('overrideBadgeName', 'defaultBadgeName') || 'Unnamed Badge',
+          subtitle: resolveProp('overrideSubtitle', 'defaultSubtitleText'),
+          shape: resolveProp('overrideOuterShape', 'defaultOuterShape') || 'CIRCLE',
+          borderColor: resolveProp('overrideBorderColor', 'defaultBorderColor') || '#000000',
+          backgroundType: resolveProp('overrideBackgroundType', 'defaultBackgroundType') || 'SOLID_COLOR',
+          backgroundValue: resolveProp('overrideBackgroundValue', 'defaultBackgroundValue') || '#dddddd',
+          foregroundType: finalForegroundType,
+          foregroundValue: finalForegroundValue,
+          foregroundColor: resolveProp('overrideForegroundColor', 'defaultForegroundColor'),
+          description: resolveProp('overrideDisplayDescription', 'defaultDisplayDescription'),
+          templateSlug: template.templateSlug
+        };
+      });
+      processedBadgeCase = {
+        ...guildData.badgeCase,
+        badges: await Promise.all(badgeProcessingPromises)
+      };
+    }
+
     return {
-      id: guild.id,
-      name: guild.name, // This is the unique name/slug
-      displayName: guild.displayName, // ADDED: explicitly return displayName
-      description: guild.description,
-      avatar: guild.avatar,
-      isOpen: guild.isOpen,
-      allowJoinRequests: guild.allowJoinRequests, // ADDED: explicitly return allowJoinRequests
-      // createdById: guild.createdById, // creator object is now preferred
-      // updatedById: guild.updatedById, // updatedBy object is now preferred
-      createdAt: guild.createdAt,
-      updatedAt: guild.updatedAt,
-      creator: guild.creator, 
-      updatedBy: guild.updatedBy, // ADDED: return updatedBy user info
-      memberCount: guild._count.memberships
+      id: guildData.id,
+      name: guildData.name,
+      displayName: guildData.displayName,
+      description: guildData.description,
+      avatar: guildData.avatar,
+      isOpen: guildData.isOpen,
+      allowJoinRequests: guildData.allowJoinRequests,
+      createdAt: guildData.createdAt,
+      updatedAt: guildData.updatedAt,
+      creator: guildData.creator,
+      updatedBy: guildData.updatedBy,
+      memberCount: guildData._count.memberships,
+      name_ci: guildData.name_ci,
+      members: processedMembers,
+      badgeCase: processedBadgeCase
+    };
+  }
+
+  /**
+   * Get guild by ID or name_ci
+   * @param {string} identifier - Guild ID or name_ci
+   * @returns {Promise<Object>} Guild with selected fields
+   */
+  async getGuildByIdentifier(identifier) {
+    if (!identifier) {
+      throw new Error('Guild identifier is required');
+    }
+
+    const isLikelyUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(identifier);
+
+    const selectFields = {
+      displayName: true,
+      description: true,
+      avatar: true,
+      id: true,
+      name: true,
+      name_ci: true,
+      isOpen: true,
+      allowJoinRequests: true,
+      createdAt: true,
+      updatedAt: true,
+      creator: { select: { id: true, username: true } },
+      updatedBy: { select: { id: true, username: true } },
+      _count: { select: { memberships: true } },
+      roleSettings: {
+        select: {
+          guildRoleId: true,
+          hierarchyOrder: true,
+          overrideRoleName: true,
+          overrideDisplayColor: true,
+        }
+      },
+      memberships: {
+        orderBy: { joinedAt: 'asc' },
+        select: {
+          joinedAt: true,
+          rank: true,
+          user: {
+            select: {
+              id: true,
+              username: true,
+              displayName: true,
+              avatar: true,
+            },
+          },
+          assignedRoles: {
+            select: {
+              guildRole: {
+                select: {
+                  id: true,
+                  name: true,
+                  displayColor: true,
+                }
+              }
+            }
+          }
+        }
+      },
+      badgeCase: {
+        select: {
+          id: true,
+          title: true,
+          isPublic: true,
+          badges: {
+            orderBy: { displayOrder: 'asc' },
+            select: {
+              displayOrder: true,
+              addedAt: true,
+              badge: {
+                select: {
+                  id: true,
+                  message: true,
+                  overrideBadgeName: true,
+                  overrideSubtitle: true,
+                  overrideOuterShape: true,
+                  overrideBorderColor: true,
+                  overrideBackgroundType: true,
+                  overrideBackgroundValue: true,
+                  overrideForegroundType: true,
+                  overrideForegroundValue: true,
+                  overrideForegroundColor: true,
+                  overrideDisplayDescription: true,
+                  template: {
+                    select: {
+                      id: true,
+                      templateSlug: true,
+                      defaultBadgeName: true,
+                      defaultSubtitleText: true,
+                      defaultOuterShape: true,
+                      defaultBorderColor: true,
+                      defaultBackgroundType: true,
+                      defaultBackgroundValue: true,
+                      defaultForegroundType: true,
+                      defaultForegroundValue: true,
+                      defaultForegroundColor: true,
+                      defaultDisplayDescription: true,
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    };
+
+    let guildData = null;
+    if (isLikelyUuid) {
+      guildData = await prisma.guild.findUnique({
+        where: { id: identifier },
+        select: selectFields
+      });
+    }
+
+    if (!guildData) {
+      guildData = await prisma.guild.findUnique({
+        where: { name_ci: identifier.toLowerCase() },
+        select: selectFields
+      });
+    }
+
+    if (!guildData) {
+      throw new Error('Guild not found');
+    }
+    
+    const roleSettingsMap = new Map(guildData.roleSettings.map(rs => [rs.guildRoleId, rs]));
+    const processedMembers = guildData.memberships.map(membership => {
+      let highestRole = null;
+      let minHierarchyOrder = Infinity;
+
+      membership.assignedRoles.forEach(assignedRoleEntry => {
+        const role = assignedRoleEntry.guildRole;
+        const setting = roleSettingsMap.get(role.id);
+
+        if (setting && setting.hierarchyOrder !== null && setting.hierarchyOrder < minHierarchyOrder) {
+          minHierarchyOrder = setting.hierarchyOrder;
+          highestRole = {
+            id: role.id,
+            name: setting.overrideRoleName || role.name,
+            color: setting.overrideDisplayColor || role.displayColor,
+            hierarchyOrder: setting.hierarchyOrder
+          };
+        } else if (!setting && highestRole === null) {
+           if (highestRole === null) {
+             highestRole = {
+               id: role.id,
+               name: role.name,
+               color: role.displayColor,
+               hierarchyOrder: Infinity 
+             };
+           }
+        }
+      });
+      
+      if (!highestRole && membership.assignedRoles.length > 0) {
+           const firstRole = membership.assignedRoles[0].guildRole;
+            highestRole = { id: firstRole.id, name: firstRole.name, color: firstRole.displayColor, hierarchyOrder: Infinity };
+      } else if (!highestRole) {
+          highestRole = { name: 'Member', color: '#888888', hierarchyOrder: Infinity };
+      }
+
+      return {
+        user: membership.user,
+        joinedAt: membership.joinedAt,
+        rank: membership.rank,
+        highestRole: highestRole
+      };
+    });
+
+    // Process BadgeCase data
+    let processedBadgeCase = null;
+    if (guildData.badgeCase && guildData.badgeCase.badges) {
+      const badgeProcessingPromises = guildData.badgeCase.badges.map(async (guildBadgeItem) => {
+        const instance = guildBadgeItem.badge;
+        const template = instance.template;
+        const resolveProp = (instanceProp, templateProp) => instance[instanceProp] !== null && instance[instanceProp] !== undefined ? instance[instanceProp] : template[templateProp];
+        
+        let finalForegroundValue = resolveProp('overrideForegroundValue', 'defaultForegroundValue');
+        const finalForegroundType = resolveProp('overrideForegroundType', 'defaultForegroundType') || 'TEXT';
+
+        if (finalForegroundType === 'SYSTEM_ICON' && finalForegroundValue) {
+          console.log(`[getGuildByIdentifier] Attempting to find SystemIcon with name: "${finalForegroundValue}"`); // DEBUG LOG
+          const systemIcon = await prisma.systemIcon.findUnique({
+            where: { name: finalForegroundValue }, 
+            select: { svgContent: true }
+          });
+          if (systemIcon && systemIcon.svgContent) {
+            console.log(`[getGuildByIdentifier] Found SystemIcon "${finalForegroundValue}". Has svgContent: true`); // DEBUG LOG
+            finalForegroundValue = systemIcon.svgContent;
+          } else {
+            console.log(`[getGuildByIdentifier] SystemIcon NOT FOUND or no svgContent for name: "${finalForegroundValue}"`); // DEBUG LOG
+            finalForegroundValue = '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/></svg>';
+          }
+        }
+
+        return {
+          instanceId: instance.id,
+          displayOrder: guildBadgeItem.displayOrder,
+          addedAt: guildBadgeItem.addedAt,
+          message: instance.message,
+          name: resolveProp('overrideBadgeName', 'defaultBadgeName') || 'Unnamed Badge',
+          subtitle: resolveProp('overrideSubtitle', 'defaultSubtitleText'),
+          shape: resolveProp('overrideOuterShape', 'defaultOuterShape') || 'CIRCLE',
+          borderColor: resolveProp('overrideBorderColor', 'defaultBorderColor') || '#000000',
+          backgroundType: resolveProp('overrideBackgroundType', 'defaultBackgroundType') || 'SOLID_COLOR',
+          backgroundValue: resolveProp('overrideBackgroundValue', 'defaultBackgroundValue') || '#dddddd',
+          foregroundType: finalForegroundType,
+          foregroundValue: finalForegroundValue,
+          foregroundColor: resolveProp('overrideForegroundColor', 'defaultForegroundColor'),
+          description: resolveProp('overrideDisplayDescription', 'defaultDisplayDescription'),
+          templateSlug: template.templateSlug
+        };
+      });
+      processedBadgeCase = {
+        ...guildData.badgeCase,
+        badges: await Promise.all(badgeProcessingPromises)
+      };
+    }
+
+    return {
+      id: guildData.id,
+      name: guildData.name,
+      displayName: guildData.displayName,
+      description: guildData.description,
+      avatar: guildData.avatar,
+      isOpen: guildData.isOpen,
+      allowJoinRequests: guildData.allowJoinRequests,
+      createdAt: guildData.createdAt,
+      updatedAt: guildData.updatedAt,
+      creator: guildData.creator,
+      updatedBy: guildData.updatedBy,
+      memberCount: guildData._count.memberships,
+      name_ci: guildData.name_ci,
+      members: processedMembers,
+      badgeCase: processedBadgeCase
     };
   }
 
