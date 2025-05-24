@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 
 // Helper to try and determine a good contrasting text color (very basic)
 const getContrastingTextColor = (hexBgColor) => {
@@ -25,12 +25,15 @@ const BadgeDisplay = ({ badge }) => {
     foregroundType, foregroundValue, foregroundColor,
   } = badge;
 
-  const BORDER_WIDTH = 3; // px
+  const BORDER_WIDTH = 3; // Explicitly defined, should be 3px
+  const BADGE_SIZE_PX = 100;
+  const SIMPLE_SHAPE_PADDING_PX = 5;
+  const COMPLEX_SHAPE_INNER_PADDING_PX = 2; // This is padding for the inner content div of complex shapes
 
   // Base styles for the main container that will show the shape
   let badgeContainerStyles = {
-    width: '100px',
-    height: '100px',
+    width: `${BADGE_SIZE_PX}px`,
+    height: `${BADGE_SIZE_PX}px`,
     position: 'relative', // For absolute positioning of inner content if needed
     display: 'flex',
     alignItems: 'center',
@@ -47,6 +50,7 @@ const BadgeDisplay = ({ badge }) => {
     justifyContent: 'center',
     overflow: 'hidden',
     boxSizing: 'border-box',
+    padding: `${COMPLEX_SHAPE_INNER_PADDING_PX}px`,
   };
   
   let isComplexShape = false;
@@ -62,6 +66,9 @@ const BadgeDisplay = ({ badge }) => {
       targetStyles.backgroundPosition = 'center';
     }
   };
+
+  // Determine padding for the content area based on shape type
+  const currentContentPadding = isComplexShape ? COMPLEX_SHAPE_INNER_PADDING_PX : SIMPLE_SHAPE_PADDING_PX;
 
   switch (shape) {
     case 'CIRCLE':
@@ -130,10 +137,74 @@ const BadgeDisplay = ({ badge }) => {
 
   const fgTextColor = foregroundColor || (backgroundType === 'SOLID_COLOR' ? getContrastingTextColor(backgroundValue) : '#FFFFFF');
 
+  let textContainerWidthPercentage = 0.85; // Default for Circle/Square
+  if (shape === 'STAR' || shape === 'HEXAGON' || shape === 'HEART') {
+    textContainerWidthPercentage = 0.65; // More conservative for complex shapes
+  }
+  
+  // Define a base font size for SVG text. This acts as a maximum.
+  // The actual rendered size will be scaled down by textLength if text is long.
+  const svgTextProps = {
+    initialFontSize: 22, // A reasonable starting/max font size for a 100px badge area
+    viewBoxSize: 50,     // Arbitrary viewBox units for internal scaling
+  };
+  svgTextProps.targetTextLength = svgTextProps.viewBoxSize * textContainerWidthPercentage;
+
+  const textRef = useRef(null); // Ref for the SVG text element
+  const [textTransform, setTextTransform] = useState('scale(1)'); // State for the transform
+
+  useLayoutEffect(() => {
+    if (foregroundType === 'TEXT' && foregroundValue && textRef.current) {
+      const textElement = textRef.current;
+      
+      let textWidthPercentageTarget = 0.82; // Slightly increased from 0.80
+      if (shape === 'STAR' || shape === 'HEXAGON' || shape === 'HEART') {
+        textWidthPercentageTarget = 0.82; // Slightly increased from 0.55
+      }
+
+      // Calculate available width in pixels
+      const baseContentWidth = BADGE_SIZE_PX - (BORDER_WIDTH * 2);
+      const paddingToSubtract = currentContentPadding * 2;
+      const availableWidthForTextContainer = baseContentWidth - paddingToSubtract;
+      const targetPixelWidthForText = availableWidthForTextContainer * textWidthPercentageTarget;
+
+      const actualTextWidth = textElement.getComputedTextLength();
+
+      if (actualTextWidth > targetPixelWidthForText && actualTextWidth > 0) {
+        const scaleFactor = targetPixelWidthForText / actualTextWidth;
+        setTextTransform(`scale(${scaleFactor.toFixed(3)})`);
+      } else {
+        setTextTransform('scale(1)');
+      }
+    } else {
+      setTextTransform('scale(1)');
+    }
+  }, [foregroundValue, foregroundType, shape, currentContentPadding]); // Added currentContentPadding to dependencies
+
   const renderForeground = () => (
     <div className="badge-foreground-content" style={{ color: fgTextColor }}>
-      {foregroundType === 'TEXT' && (
-        <span className="badge-text">{foregroundValue || (name ? name.charAt(0) : '?')}</span>
+      {foregroundType === 'TEXT' && foregroundValue && (
+        <svg 
+            width="100%" // SVG fills its direct parent (.badge-foreground-content)
+            height="100%" // which is inside the padded/bordered shape area
+            viewBox="0 0 100 50" // Keep viewBox relatively wide, height can be adjusted more if needed
+            preserveAspectRatio="xMidYMid meet"
+        >
+          <text 
+            ref={textRef}
+            x="50%" 
+            y="50%" 
+            dominantBaseline="central"
+            textAnchor="middle"
+            fontSize="24" // INCREASED initial font size
+            fill={fgTextColor}
+            transform={textTransform}
+            transform-origin="center center" // Attempt to scale from center
+            className="badge-svg-rendered-text"
+          >
+            {foregroundValue}
+          </text>
+        </svg>
       )}
       {foregroundType === 'SYSTEM_ICON' && foregroundValue && (
         <div 

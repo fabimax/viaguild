@@ -1,0 +1,133 @@
+/* BadgeBuilderPage.css */
+.badge-builder-page {
+  padding: 20px;
+  font-family: Arial, sans-serif;
+}
+
+.page-title {
+  text-align: center;
+  font-size: 2em;
+  margin-bottom: 25px;
+  color: #333;
+}
+
+.builder-content-area {
+  display: flex;
+  flex-wrap: wrap; /* Allow wrapping on smaller screens */
+  gap: 30px;
+}
+
+.controls-panel {
+  flex: 1;
+  min-width: 320px; /* Minimum width for controls */
+  padding: 20px;
+  background-color: #f9f9f9;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+}
+
+.controls-panel h2 {
+  font-size: 1.5em;
+  margin-top: 0;
+  margin-bottom: 20px;
+  color: #444;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 10px;
+}
+
+.control-group {
+  margin-bottom: 18px;
+}
+
+.control-group label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: #555;
+  font-size: 0.9em;
+}
+
+.control-group input[type="text"],
+.control-group select {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  box-sizing: border-box;
+  font-size: 0.95em;
+}
+
+.control-group input[type="color"] {
+  width: 50px; /* Smaller for color input */
+  height: 30px;
+  padding: 2px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  vertical-align: middle;
+  margin-right: 8px;
+}
+.control-group span {
+    font-size: 0.85em;
+    color: #666;
+}
+
+.control-divider {
+    margin: 25px 0;
+    border: none;
+    border-top: 1px solid #eee;
+}
+
+.preview-panel {
+  flex: 1;
+  min-width: 300px; /* Minimum width for preview */
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.preview-panel h2 {
+  font-size: 1.5em;
+  margin-top: 0;
+  margin-bottom: 20px;
+  color: #444;
+}
+
+.badge-preview-area {
+  margin-bottom: 25px;
+  padding: 20px;
+  border: 1px dashed #ccc;
+  border-radius: 8px;
+  min-height: 150px; /* Ensure space for badge */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #fff;
+  box-shadow: inset 0 0 10px rgba(0,0,0,0.05);
+}
+
+.props-display {
+  background-color: #2d3748; /* Dark background */
+  color: #e2e8f0; /* Light text */
+  padding: 15px;
+  border-radius: 6px;
+  font-size: 0.8em;
+  width: 100%;
+  max-height: 300px; /* Limit height and make scrollable */
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+.props-display h3 {
+    margin-top: 0;
+    font-size: 1.1em;
+    color: #a0aec0;
+    border-bottom: 1px solid #4a5568;
+    padding-bottom: 8px;
+    margin-bottom: 8px;
+}
+
+.props-display pre {
+  white-space: pre-wrap; /* Wrap long lines */
+  word-break: break-all;
+} 

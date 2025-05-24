@@ -19,6 +19,7 @@ import HomePage from './pages/HomePage';
 import CreateGuildPage from './pages/CreateGuildPage';
 import GuildOverviewPage from './pages/GuildOverviewPage.temp';
 import GuildProfilePage from './pages/GuildProfilePage';
+import BadgeBuilderPage from './pages/BadgeBuilderPage';
 
 /**
  * Custom error fallback UI for the main application
@@ -107,6 +108,11 @@ function App() {
                 <Route path="/guilds/:identifier" element={
                   <ErrorBoundary>
                     <GuildProfilePage />
+                  </ErrorBoundary>
+                } />
+                <Route path="/badge-builder" element={
+                  <ErrorBoundary>
+                    <BadgeBuilderPage />
                   </ErrorBoundary>
                 } />
                 

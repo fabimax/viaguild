@@ -10,6 +10,7 @@ const authRoutes = require('./routes/auth.routes');
 const socialAccountRoutes = require('./routes/socialAccount.routes');
 const userRoutes = require('./routes/user.routes');
 const guildRoutes = require('./routes/guild.routes');
+const systemIconRoutes = require('./routes/systemIcon.routes');
 
 // Initialize Express app
 const app = express();
@@ -43,6 +44,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/social-accounts', socialAccountRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/guilds', guildRoutes);
+app.use('/api/system-icons', systemIconRoutes);
 
 // Basic route for testing
 app.get('/', (req, res) => {
