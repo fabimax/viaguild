@@ -207,10 +207,20 @@ const BadgeDisplay = ({ badge }) => {
         </svg>
       )}
       {foregroundType === 'SYSTEM_ICON' && foregroundValue && (
-        <div 
-          className="badge-svg-icon"
-          dangerouslySetInnerHTML={{ __html: foregroundValue }}
-        />
+        (() => {
+          if (typeof foregroundValue === 'string' && foregroundValue.includes('<svg')) {
+            console.log('[BadgeDisplay] Rendering SVG for type:', foregroundType, 'shape:', shape, 
+                          '\n---BEGIN SVG STRING---\n', 
+                          foregroundValue, 
+                          '\n---END SVG STRING---');
+          }
+          return (
+            <div 
+              className="badge-svg-icon"
+              dangerouslySetInnerHTML={{ __html: foregroundValue }}
+            />
+          );
+        })()
       )}
       {foregroundType === 'UPLOADED_ICON' && (
         foregroundValue ? 

@@ -64,6 +64,17 @@ const parseColorString = (colorString) => {
   return { hex: '#000000', alpha: 1 }; // Default if parsing fails
 };
 
+// Client-side SVG formatting function (mimics server-side)
+const formatSvgString = (svgString) => {
+  if (typeof svgString !== 'string') return '';
+  return svgString
+    .replace(/\n/g, "")        // Remove all newline characters
+    .replace(/\r/g, "")        // Remove all carriage return characters
+    .replace(/\s+/g, " ")       // Replace one or more whitespace characters with a single space
+    .replace(/>\s+</g, "><")    // Remove all whitespace between a closing tag (>) and an opening tag (<)
+    .trim();                    // Remove whitespace from both ends
+};
+
 // SVGColorCustomizer Class (from user prompt)
 class SVGColorCustomizer {
   constructor() {
@@ -107,35 +118,20 @@ class SVGColorCustomizer {
   }
   replaceColor(svgString, oldNormalizedHex8, newHex8) {
     let tempSvgString = svgString;
-    const newColorToApply = newHex8.toUpperCase(); // Ensure replacement is uppercase for consistency
-
-    // Patterns to find for the old color, from most specific to least specific (shorthand)
+    const newColorToApply = newHex8.toUpperCase();
     const patternsToTry = [];
-    patternsToTry.push(oldNormalizedHex8); // Try exact HEX8 match first
-
+    patternsToTry.push(oldNormalizedHex8);
     if (oldNormalizedHex8.endsWith('FF')) {
       const hex6 = oldNormalizedHex8.substring(0, 7);
-      patternsToTry.push(hex6); // Try HEX6 if original was opaque
-
-      const r = hex6[1];
-      const g = hex6[3];
-      const b = hex6[5];
+      patternsToTry.push(hex6);
+      const r = hex6[1]; const g = hex6[3]; const b = hex6[5];
       if (r === hex6[2] && g === hex6[4] && b === hex6[6]) {
-        patternsToTry.push(`#${r}${g}${b}`); // Try HEX3 if applicable
+        patternsToTry.push(`#${r}${g}${b}`);
       }
     }
-
-    // Iterate through patterns and replace. Must be careful not to re-replace already replaced parts.
-    // A more robust way would be to parse and rebuild, but for regex:
-    // We replace one found instance of any of the patterns with a unique placeholder,
-    // then replace all placeholders with the new color.
-    // This is complex. A simpler, slightly less robust way for this use case:
-    // Replace all occurrences of each pattern. If #ABCFF becomes #XYZFF, then #ABC is replaced, it should be okay.
-
     for (const pattern of patternsToTry) {
-      // Escape special characters in the pattern for regex constructor
       const escapedPattern = pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const colorRegex = new RegExp(escapedPattern, 'gi'); // Case insensitive search
+      const colorRegex = new RegExp(escapedPattern, 'gi');
       tempSvgString = tempSvgString.replace(colorRegex, newColorToApply);
     }
     return tempSvgString;
@@ -182,6 +178,59 @@ class SVGColorCustomizer {
   }
 }
 
+// New SVG Preprocessor function
+const preprocessAndBeautifySvg = (svgString) => {
+  if (typeof svgString !== 'string' || !svgString.trim()) return '';
+
+  let processedString = formatSvgString(svgString); // First, normalize whitespace
+
+  try {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(processedString, "image/svg+xml");
+    const svgElement = doc.documentElement;
+
+    // Check for parser errors (important for malformed SVGs)
+    const parserError = svgElement.querySelector('parsererror');
+    if (parserError) {
+      console.error("SVG parsing error:", parserError.textContent);
+      return processedString; // Return formatted string if parsing failed, to avoid breaking further
+    }
+
+    const shapeElements = svgElement.querySelectorAll('path, circle, rect, ellipse, line, polyline, polygon');
+    
+    shapeElements.forEach(el => {
+      const currentFill = el.getAttribute('fill');
+      // Add fill="currentColor" if no fill is present, or if fill is "none" (and we want it to be colorable by default)
+      // Could be more nuanced: e.g., don't override existing colors unless they are black or white and no stroke?
+      // For now, if explicitly "none", we keep it. If no fill, it implies it should inherit or be black - so we make it colorable.
+      if (!currentFill) { 
+        el.setAttribute('fill', 'currentColor');
+      }
+      // Optional: similar logic for stroke if desired
+      // const currentStroke = el.getAttribute('stroke');
+      // if (!currentStroke) {
+      //  el.setAttribute('stroke', 'currentColor');
+      // }
+    });
+
+    // Also ensure root SVG has fill="currentColor" if no other fills were found, for maximum compatibility
+    // This is less critical if children are handled, but can be a fallback.
+    if (shapeElements.length > 0 && !svgElement.getAttribute('fill') && ![...shapeElements].some(el => el.getAttribute('fill'))) {
+        // svgElement.setAttribute('fill', 'currentColor');
+        // Let's be conservative: only add to paths if they don't have one. Don't force root fill.
+    }
+
+    const serializer = new XMLSerializer();
+    processedString = serializer.serializeToString(svgElement);
+    
+  } catch (e) {
+    console.error("Error during SVG preprocessing:", e);
+    // Fallback to the merely formatted string if DOM manipulation fails
+    return formatSvgString(svgString); 
+  }
+  return processedString;
+};
+
 const BadgeBuilderPage = () => {
   const [badgeProps, setBadgeProps] = useState({
     name: 'SVG Custom Badge',
@@ -211,7 +260,9 @@ const BadgeBuilderPage = () => {
 
   // NEW state for SVG color customization
   const [svgCustomizerInstance] = useState(() => new SVGColorCustomizer());
-  const [originalCustomSvg, setOriginalCustomSvg] = useState(badgeProps.foregroundType === ForegroundContentType.CUSTOM_SVG ? badgeProps.foregroundValue : '');
+  const [originalCustomSvg, setOriginalCustomSvg] = useState(() => 
+    badgeProps.foregroundType === ForegroundContentType.CUSTOM_SVG ? preprocessAndBeautifySvg(badgeProps.foregroundValue) : ''
+  );
   const [svgColorData, setSvgColorData] = useState(null);
   
   const [displayableForegroundSvg, setDisplayableForegroundSvg] = useState(null);
@@ -237,28 +288,34 @@ const BadgeBuilderPage = () => {
   // Effect to parse Custom SVG when foregroundValue or type changes
   useEffect(() => {
     if (badgeProps.foregroundType === ForegroundContentType.CUSTOM_SVG) {
-      // Only re-parse if the raw input string has changed
-      if (badgeProps.foregroundValue !== originalCustomSvg) {
-        setOriginalCustomSvg(badgeProps.foregroundValue);
-        const data = svgCustomizerInstance.generateColorCustomizationData(badgeProps.foregroundValue);
-        setSvgColorData(data);
-        setDisplayableForegroundSvg(badgeProps.foregroundValue); // Initially show the raw SVG
+      const processedInputSvg = preprocessAndBeautifySvg(badgeProps.foregroundValue);
+      
+      // Only re-parse if the truly processed input string has changed
+      if (processedInputSvg !== originalCustomSvg) {
+        setOriginalCustomSvg(processedInputSvg);
+        const data = svgCustomizerInstance.generateColorCustomizationData(processedInputSvg);
+        setSvgColorData(data); // This will trigger the preview update effect
+      } else if (svgColorData) {
+        // If input string is same, but colors might have changed via pickers, force preview update
+        // This is now primarily handled by the effect that depends on svgColorData directly
       }
     } else {
-      setSvgColorData(null); // Clear customization data if not CUSTOM_SVG mode
+      setSvgColorData(null); 
       setOriginalCustomSvg('');
     }
   }, [badgeProps.foregroundType, badgeProps.foregroundValue, svgCustomizerInstance, originalCustomSvg]);
 
-  // Effect to update preview when custom SVG colors are changed by the user
+  // Effect to update preview when custom SVG colors are changed by the user OR when originalCustomSvg (processed) is set
   useEffect(() => {
-    if (badgeProps.foregroundType === ForegroundContentType.CUSTOM_SVG && svgColorData && originalCustomSvg) {
-      const previewSvg = svgCustomizerInstance.previewWithNewColors(originalCustomSvg, svgColorData.colorSlots);
+    if (badgeProps.foregroundType === ForegroundContentType.CUSTOM_SVG && originalCustomSvg) {
+      // If svgColorData is freshly generated, use its initial slots
+      // If svgColorData exists (meaning colors might have been picked), use its current slots
+      const colorSlotsToUse = svgColorData ? svgColorData.colorSlots : svgCustomizerInstance.generateColorCustomizationData(originalCustomSvg).colorSlots;
+      const previewSvg = svgCustomizerInstance.previewWithNewColors(originalCustomSvg, colorSlotsToUse);
       setDisplayableForegroundSvg(previewSvg);
-    }
-    // This effect depends on changes within svgColorData.colorSlots (currentColor specifically)
-    // React might not deep-compare, so this might need a more explicit trigger or a full svgColorData dependency
-  }, [svgColorData, originalCustomSvg, badgeProps.foregroundType, svgCustomizerInstance]);
+    } 
+    // No else here, SYSTEM_ICON and TEXT handled in different effect
+  }, [badgeProps.foregroundType, originalCustomSvg, svgColorData, svgCustomizerInstance]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -287,12 +344,9 @@ const BadgeBuilderPage = () => {
   // Effect to reset foregroundValue or suggest defaults when foregroundType changes
   useEffect(() => {
     const newType = badgeProps.foregroundType;
-    // Only run if type actually changes to avoid loops with foregroundValue updates
-    // This effect should primarily react to user changing the type dropdown
     setBadgeProps(prev => {
       let currentFgValue = prev.foregroundValue;
       let changed = false;
-
       if (newType === ForegroundContentType.TEXT) {
         if (typeof currentFgValue !== 'string' || currentFgValue.includes('<') || currentFgValue.length > 10) {
           currentFgValue = (prev.name || 'T').charAt(0);
@@ -300,7 +354,7 @@ const BadgeBuilderPage = () => {
         }
       } else if (newType === ForegroundContentType.SYSTEM_ICON) {
         if (typeof currentFgValue !== 'string' || currentFgValue.includes('<') || currentFgValue.length < 2) {
-          currentFgValue = 'Shield'; // Default system icon name
+          currentFgValue = 'Shield';
           changed = true;
         }
       } else if (newType === ForegroundContentType.UPLOADED_ICON) {
@@ -314,9 +368,9 @@ const BadgeBuilderPage = () => {
           changed = true;
         }
       }
-      return changed ? { ...prev, foregroundValue: currentFgValue } : prev;
+      if (changed) return { ...prev, foregroundValue: currentFgValue }; return prev;
     });
-  }, [badgeProps.foregroundType, badgeProps.name]); // Include name for TEXT default
+  }, [badgeProps.foregroundType, badgeProps.name]);
 
   // Effect to fetch System Icon SVG or set Custom SVG for display
   useEffect(() => {
@@ -332,13 +386,13 @@ const BadgeBuilderPage = () => {
         })
         .finally(() => setIsLoadingSvg(false));
     } else if (badgeProps.foregroundType === ForegroundContentType.CUSTOM_SVG ) {
-      // For CUSTOM_SVG, displayableForegroundSvg is updated by the color customization effect
-      // Trigger initial parse/display if originalCustomSvg has been set from badgeProps.foregroundValue
-      if (originalCustomSvg && !svgColorData) { // If svgColorData hasn't been generated yet
+      if (originalCustomSvg && (!svgColorData || badgeProps.foregroundValue === originalCustomSvg)) { 
          const data = svgCustomizerInstance.generateColorCustomizationData(originalCustomSvg);
          setSvgColorData(data);
-         setDisplayableForegroundSvg(originalCustomSvg);
-      } else if (svgColorData) { // If data exists, means colors might have changed or initial parse done
+         // Use previewWithNewColors to apply current color slot choices to the original/formatted SVG
+         const previewSvg = svgCustomizerInstance.previewWithNewColors(originalCustomSvg, data.colorSlots);
+         setDisplayableForegroundSvg(previewSvg);
+      } else if (svgColorData && originalCustomSvg) { 
          const previewSvg = svgCustomizerInstance.previewWithNewColors(originalCustomSvg, svgColorData.colorSlots);
          setDisplayableForegroundSvg(previewSvg);
       }
@@ -352,14 +406,15 @@ const BadgeBuilderPage = () => {
   // Placeholder for the handleCustomSvgColorChange function
   const handleCustomSvgColorChange = (slotId, newColorHex, newAlpha) => {
     if (!svgColorData) return;
-    const newRgba = svgCustomizerInstance.hexToRgba(formatHexWithAlpha(newColorHex, newAlpha)); // Use our consistent hex8 format
+    const newFormattedColor = formatHexWithAlpha(newColorHex, newAlpha);
+    const newRgba = svgCustomizerInstance.hexToRgba(newFormattedColor);
 
     const updatedSlots = svgColorData.colorSlots.map(slot =>
       slot.id === slotId ? { 
           ...slot, 
-          currentColor: formatHexWithAlpha(newColorHex, newAlpha), // Store as HEX8
+          currentColor: newFormattedColor, 
           rgba: newRgba,
-          hasTransparency: newAlpha < 1
+          hasTransparency: newAlpha < 1 || newAlpha === 0 // check if alpha is not 1
         } : slot
     );
     setSvgColorData(prevData => ({ ...prevData, colorSlots: updatedSlots }));
