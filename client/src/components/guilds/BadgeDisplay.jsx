@@ -25,7 +25,7 @@ const BadgeDisplay = ({ badge }) => {
     foregroundType, foregroundValue, foregroundColor,
   } = badge;
 
-  const BORDER_WIDTH = 3; // Explicitly defined, should be 3px
+  const BORDER_WIDTH = 6; // Explicitly defined, should be 3px
   const BADGE_SIZE_PX = 100;
   const SIMPLE_SHAPE_PADDING_PX = 5;
   const COMPLEX_SHAPE_INNER_PADDING_PX = 2; // This is padding for the inner content div of complex shapes

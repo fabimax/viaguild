@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import BadgeDisplay from '../components/guilds/BadgeDisplay'; // Corrected path
 import SystemIconService from '../services/systemIcon.service'; // Import new service
 import './BadgeBuilderPage.css';
@@ -64,17 +64,136 @@ const parseColorString = (colorString) => {
   return { hex: '#000000', alpha: 1 }; // Default if parsing fails
 };
 
+// SVGColorCustomizer Class (from user prompt)
+class SVGColorCustomizer {
+  constructor() {
+    this.colorPattern = /#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{8}|[A-Fa-f0-9]{3})\b/g;
+  }
+  extractColors(svgString) {
+    const colors = new Set();
+    const matches = svgString.matchAll(this.colorPattern);
+    for (const match of matches) {
+      let color = match[0];
+      if (color.length === 4) {
+        color = '#' + color[1] + color[1] + color[2] + color[2] + color[3] + color[3] + 'FF';
+      } else if (color.length === 7) {
+        color = color + 'FF';
+      }
+      colors.add(color.toUpperCase());
+    }
+    return Array.from(colors);
+  }
+  hexToRgba(hex8) {
+    if (hex8.length !== 9 || !hex8.startsWith('#')) {
+      console.warn('Invalid hex8 for hexToRgba:', hex8); return { r:0,g:0,b:0,a:1 };
+    }
+    return {
+      r: parseInt(hex8.slice(1, 3), 16),
+      g: parseInt(hex8.slice(3, 5), 16),
+      b: parseInt(hex8.slice(5, 7), 16),
+      a: parseFloat((parseInt(hex8.slice(7, 9), 16) / 255).toFixed(2))
+    };
+  }
+  rgbaToHex(rgba) {
+    const { r, g, b, a } = rgba;
+    const hex = (n) => Math.round(Math.max(0, Math.min(255, n))).toString(16).padStart(2, '0');
+    const alphaHex = Math.round(Math.max(0, Math.min(1, parseFloat(a))) * 255).toString(16).padStart(2, '0');
+    return `#${hex(r)}${hex(g)}${hex(b)}${alphaHex}`.toUpperCase();
+  }
+  hasTransparency(hex8) {
+    if (hex8.length !== 9) return false;
+    const alpha = parseInt(hex8.slice(7, 9), 16) / 255;
+    return alpha < 1.0;
+  }
+  replaceColor(svgString, oldNormalizedHex8, newHex8) {
+    let tempSvgString = svgString;
+    const newColorToApply = newHex8.toUpperCase(); // Ensure replacement is uppercase for consistency
+
+    // Patterns to find for the old color, from most specific to least specific (shorthand)
+    const patternsToTry = [];
+    patternsToTry.push(oldNormalizedHex8); // Try exact HEX8 match first
+
+    if (oldNormalizedHex8.endsWith('FF')) {
+      const hex6 = oldNormalizedHex8.substring(0, 7);
+      patternsToTry.push(hex6); // Try HEX6 if original was opaque
+
+      const r = hex6[1];
+      const g = hex6[3];
+      const b = hex6[5];
+      if (r === hex6[2] && g === hex6[4] && b === hex6[6]) {
+        patternsToTry.push(`#${r}${g}${b}`); // Try HEX3 if applicable
+      }
+    }
+
+    // Iterate through patterns and replace. Must be careful not to re-replace already replaced parts.
+    // A more robust way would be to parse and rebuild, but for regex:
+    // We replace one found instance of any of the patterns with a unique placeholder,
+    // then replace all placeholders with the new color.
+    // This is complex. A simpler, slightly less robust way for this use case:
+    // Replace all occurrences of each pattern. If #ABCFF becomes #XYZFF, then #ABC is replaced, it should be okay.
+
+    for (const pattern of patternsToTry) {
+      // Escape special characters in the pattern for regex constructor
+      const escapedPattern = pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const colorRegex = new RegExp(escapedPattern, 'gi'); // Case insensitive search
+      tempSvgString = tempSvgString.replace(colorRegex, newColorToApply);
+    }
+    return tempSvgString;
+  }
+  replaceMultipleColors(svgString, colorMap) {
+    let updatedSvg = svgString;
+    Object.entries(colorMap).forEach(([oldColor, newColor]) => {
+      updatedSvg = this.replaceColor(updatedSvg, oldColor, newColor);
+    });
+    return updatedSvg;
+  }
+  generateColorCustomizationData(svgString) {
+    if (typeof svgString !== 'string' || !svgString.trim()) {
+        return { originalSvg: svgString || '', detectedColors: [], colorSlots: [] };
+    }
+    const colors = this.extractColors(svgString);
+    return {
+      originalSvg: svgString,
+      detectedColors: colors,
+      colorSlots: colors.map((color, index) => {
+        const rgba = this.hexToRgba(color);
+        const hasAlpha = this.hasTransparency(color);
+        return {
+          id: `custom-color-${index}`,
+          label: `SVG Color ${index + 1}`,
+          originalColor: color,
+          currentColor: color, 
+          previewColor: color, 
+          rgba: rgba, 
+          hasTransparency: hasAlpha
+        };
+      })
+    };
+  }
+  previewWithNewColors(originalSvg, colorSlots) {
+    if (!originalSvg || !colorSlots) return originalSvg || '';
+    const colorMap = {};
+    colorSlots.forEach(slot => {
+      if (slot.originalColor !== slot.currentColor) {
+        colorMap[slot.originalColor] = slot.currentColor;
+      }
+    });
+    return this.replaceMultipleColors(originalSvg, colorMap);
+  }
+}
+
 const BadgeBuilderPage = () => {
   const [badgeProps, setBadgeProps] = useState({
-    name: 'My Hex Badge',
-    subtitle: 'Alpha Channel Ready',
-    shape: BadgeShape.CIRCLE,
-    borderColor: '#00FF00FF', // HEX8 (green, fully opaque)
+    name: 'SVG Custom Badge',
+    subtitle: 'Color Editable',
+    shape: BadgeShape.SQUARE, // Default to square for custom SVG visibility
+    borderColor: '#4A5568FF', // Opaque slate
     backgroundType: BackgroundContentType.SOLID_COLOR,
-    backgroundValue: '#DDDDDD80', // HEX8 (light gray, 50% transparent)
-    foregroundType: ForegroundContentType.TEXT,
-    foregroundValue: 'H',
-    foregroundColor: '#333333', // HEX6 (dark gray, opaque)
+    backgroundValue: '#EDF2F7FF', // Opaque light gray
+    foregroundType: ForegroundContentType.CUSTOM_SVG,
+    // Default to a simple SVG for CUSTOM_SVG mode initially
+    foregroundValue: '<svg viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="16" height="16" rx="2" fill="#FF0000FF" stroke="#0000FF80" stroke-width="1"/></svg>',
+    foregroundColor: '#000000FF', // Default for TEXT, may not apply to CUSTOM_SVG if colors are embedded
   });
 
   // Initialize local states from badgeProps
@@ -90,6 +209,11 @@ const BadgeBuilderPage = () => {
   const [foregroundColorHex, setForegroundColorHex] = useState(initialForeground.hex);
   const [foregroundColorAlpha, setForegroundColorAlpha] = useState(initialForeground.alpha);
 
+  // NEW state for SVG color customization
+  const [svgCustomizerInstance] = useState(() => new SVGColorCustomizer());
+  const [originalCustomSvg, setOriginalCustomSvg] = useState(badgeProps.foregroundType === ForegroundContentType.CUSTOM_SVG ? badgeProps.foregroundValue : '');
+  const [svgColorData, setSvgColorData] = useState(null);
+  
   const [displayableForegroundSvg, setDisplayableForegroundSvg] = useState(null);
   const [isLoadingSvg, setIsLoadingSvg] = useState(false);
 
@@ -109,6 +233,32 @@ const BadgeBuilderPage = () => {
   useEffect(() => {
     setBadgeProps(prev => ({ ...prev, foregroundColor: formatHexWithAlpha(foregroundColorHex, foregroundColorAlpha) }));
   }, [foregroundColorHex, foregroundColorAlpha]);
+
+  // Effect to parse Custom SVG when foregroundValue or type changes
+  useEffect(() => {
+    if (badgeProps.foregroundType === ForegroundContentType.CUSTOM_SVG) {
+      // Only re-parse if the raw input string has changed
+      if (badgeProps.foregroundValue !== originalCustomSvg) {
+        setOriginalCustomSvg(badgeProps.foregroundValue);
+        const data = svgCustomizerInstance.generateColorCustomizationData(badgeProps.foregroundValue);
+        setSvgColorData(data);
+        setDisplayableForegroundSvg(badgeProps.foregroundValue); // Initially show the raw SVG
+      }
+    } else {
+      setSvgColorData(null); // Clear customization data if not CUSTOM_SVG mode
+      setOriginalCustomSvg('');
+    }
+  }, [badgeProps.foregroundType, badgeProps.foregroundValue, svgCustomizerInstance, originalCustomSvg]);
+
+  // Effect to update preview when custom SVG colors are changed by the user
+  useEffect(() => {
+    if (badgeProps.foregroundType === ForegroundContentType.CUSTOM_SVG && svgColorData && originalCustomSvg) {
+      const previewSvg = svgCustomizerInstance.previewWithNewColors(originalCustomSvg, svgColorData.colorSlots);
+      setDisplayableForegroundSvg(previewSvg);
+    }
+    // This effect depends on changes within svgColorData.colorSlots (currentColor specifically)
+    // React might not deep-compare, so this might need a more explicit trigger or a full svgColorData dependency
+  }, [svgColorData, originalCustomSvg, badgeProps.foregroundType, svgCustomizerInstance]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -160,7 +310,7 @@ const BadgeBuilderPage = () => {
         }
       } else if (newType === ForegroundContentType.CUSTOM_SVG) {
         if (typeof currentFgValue !== 'string' || !currentFgValue.includes('<') || !currentFgValue.includes('svg')) {
-          currentFgValue = '<svg viewBox="0 0 10 10" xmlns="http://www.w3.org/2000/svg"><circle cx="5" cy="5" r="4" fill="currentColor" /></svg>';
+          currentFgValue = '<svg viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="16" height="16" rx="2" fill="#FF0000FF" stroke="#0000FF80" stroke-width="1"/></svg>';
           changed = true;
         }
       }
@@ -181,14 +331,39 @@ const BadgeBuilderPage = () => {
           setDisplayableForegroundSvg('<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/></svg>');
         })
         .finally(() => setIsLoadingSvg(false));
-    } else if (badgeProps.foregroundType === ForegroundContentType.CUSTOM_SVG) {
-      setDisplayableForegroundSvg(badgeProps.foregroundValue); 
+    } else if (badgeProps.foregroundType === ForegroundContentType.CUSTOM_SVG ) {
+      // For CUSTOM_SVG, displayableForegroundSvg is updated by the color customization effect
+      // Trigger initial parse/display if originalCustomSvg has been set from badgeProps.foregroundValue
+      if (originalCustomSvg && !svgColorData) { // If svgColorData hasn't been generated yet
+         const data = svgCustomizerInstance.generateColorCustomizationData(originalCustomSvg);
+         setSvgColorData(data);
+         setDisplayableForegroundSvg(originalCustomSvg);
+      } else if (svgColorData) { // If data exists, means colors might have changed or initial parse done
+         const previewSvg = svgCustomizerInstance.previewWithNewColors(originalCustomSvg, svgColorData.colorSlots);
+         setDisplayableForegroundSvg(previewSvg);
+      }
       setIsLoadingSvg(false);
     } else {
       setDisplayableForegroundSvg(null);
       setIsLoadingSvg(false);
     }
-  }, [badgeProps.foregroundType, badgeProps.foregroundValue]);
+  }, [badgeProps.foregroundType, badgeProps.foregroundValue, svgCustomizerInstance, originalCustomSvg, svgColorData]);
+
+  // Placeholder for the handleCustomSvgColorChange function
+  const handleCustomSvgColorChange = (slotId, newColorHex, newAlpha) => {
+    if (!svgColorData) return;
+    const newRgba = svgCustomizerInstance.hexToRgba(formatHexWithAlpha(newColorHex, newAlpha)); // Use our consistent hex8 format
+
+    const updatedSlots = svgColorData.colorSlots.map(slot =>
+      slot.id === slotId ? { 
+          ...slot, 
+          currentColor: formatHexWithAlpha(newColorHex, newAlpha), // Store as HEX8
+          rgba: newRgba,
+          hasTransparency: newAlpha < 1
+        } : slot
+    );
+    setSvgColorData(prevData => ({ ...prevData, colorSlots: updatedSlots }));
+  };
 
   const finalBadgePropsForDisplay = {
     ...badgeProps,
@@ -198,6 +373,48 @@ const BadgeBuilderPage = () => {
     foregroundType: (badgeProps.foregroundType === ForegroundContentType.CUSTOM_SVG) 
                       ? ForegroundContentType.SYSTEM_ICON 
                       : badgeProps.foregroundType,
+  };
+
+  // Render color pickers for SVG customization
+  const renderSvgColorPickers = () => {
+    if (badgeProps.foregroundType !== ForegroundContentType.CUSTOM_SVG || !svgColorData || svgColorData.colorSlots.length === 0) {
+      return <p>No colors detected in custom SVG or not in CUSTOM_SVG mode.</p>;
+    }
+    return (
+      <div className="custom-svg-colors">
+        <h4>Detected SVG Colors:</h4>
+        {svgColorData.colorSlots.map((slot, index) => {
+          // Need local state for hex input to avoid direct mutation issues with color picker
+          // This part can be tricky; for now, we'll use a simplified direct binding for example purposes
+          // A better approach might involve temporary state for each slot's hex input
+          let currentSlotHex = slot.currentColor.substring(0, 7);
+          let currentSlotAlpha = svgCustomizerInstance.hexToRgba(slot.currentColor).a;
+
+          return (
+            <div key={slot.id} className="control-group svg-color-control">
+              <label htmlFor={`custom-color-hex-${index}`}>{slot.label}: 
+                <span style={{display: 'inline-block', width: '1em', height: '1em', backgroundColor: slot.originalColor, border: '1px solid #ccc', marginLeft: '5px', verticalAlign: 'middle'}}></span>
+                <small> (Original: {slot.originalColor})</small>
+              </label>
+              <input 
+                type="color" 
+                id={`custom-color-hex-${index}`} 
+                value={currentSlotHex}
+                onChange={(e) => handleCustomSvgColorChange(slot.id, e.target.value, currentSlotAlpha)}
+              />
+              <input 
+                type="range" 
+                id={`custom-color-alpha-${index}`} 
+                min="0" max="1" step="0.01" 
+                value={currentSlotAlpha}
+                onChange={(e) => handleCustomSvgColorChange(slot.id, currentSlotHex, parseFloat(e.target.value))}
+              />
+              <span>{slot.currentColor}</span>
+            </div>
+          );
+        })}
+      </div>
+    );
   };
 
   return (
@@ -274,15 +491,22 @@ const BadgeBuilderPage = () => {
             ) : badgeProps.foregroundType === ForegroundContentType.CUSTOM_SVG ? (
               <textarea id="foregroundValue" name="foregroundValue" value={badgeProps.foregroundValue} onChange={handleInputChange} placeholder="Paste SVG string here..." rows={5}></textarea>
             ) : null}
-            {badgeProps.foregroundType !== ForegroundContentType.CUSTOM_SVG && <span>{badgeProps.foregroundValue}</span>}
+            {badgeProps.foregroundType !== ForegroundContentType.CUSTOM_SVG && badgeProps.foregroundType !== ForegroundContentType.TEXT && <span>{badgeProps.foregroundValue}</span>}
           </div>
 
-          <div className="control-group">
-            <label htmlFor="foregroundColorHex">Foreground Color (for Text/SVG Icon):</label>
-            <input type="color" id="foregroundColorHex" name="foregroundColorHex" value={foregroundColorHex} onChange={handleInputChange} />
-            <input type="range" id="foregroundColorAlpha" name="foregroundColorAlpha" min="0" max="1" step="0.01" value={foregroundColorAlpha} onChange={handleInputChange} />
-            <span>{badgeProps.foregroundColor}</span>
-          </div>
+          {/* Only show general foreground color picker if not CUSTOM_SVG with detected colors */}
+          {!(badgeProps.foregroundType === ForegroundContentType.CUSTOM_SVG && svgColorData && svgColorData.colorSlots.length > 0) && (
+            <div className="control-group">
+              <label htmlFor="foregroundColorHex">Foreground Color (for Text/SVG Icon):</label>
+              <input type="color" id="foregroundColorHex" name="foregroundColorHex" value={foregroundColorHex} onChange={handleInputChange} />
+              <input type="range" id="foregroundColorAlpha" name="foregroundColorAlpha" min="0" max="1" step="0.01" value={foregroundColorAlpha} onChange={handleInputChange} />
+              <span>{badgeProps.foregroundColor}</span>
+            </div>
+          )}
+
+          {/* Render dynamic color pickers for custom SVG */} 
+          {badgeProps.foregroundType === ForegroundContentType.CUSTOM_SVG && renderSvgColorPickers()}
+
         </div>
 
         <div className="preview-panel">
