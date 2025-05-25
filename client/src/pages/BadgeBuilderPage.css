@@ -1,14 +1,36 @@
+:root {
+  --primary: #4f46e5;
+  --primary-light: #818cf8;
+  --primary-lighter: #c7d2fe;
+  --secondary: #64748b; /* For less important text, subheadings */
+  --dark: #1e293b;      /* For main text, primary headings */
+  --light: #f8fafc;     /* For page background or light card backgrounds */
+  --light-gray: #e2e8f0; /* For borders, dividers, subtle backgrounds */
+  --gold: #f59e0b;
+  --silver: #94a3b8;
+  --bronze: #b45309;
+  --danger: #ef4444;
+  --success: #10b981;
+  --card-bg: #ffffff; /* Added for cards like controls-panel if page is --light */
+  --input-border: #cbd5e0; /* Slightly darker than light-gray for better definition */
+  --text-muted: #64748b; /* Same as secondary, for placeholder text or dim info */
+  --text-default: var(--dark);
+  --text-heading: var(--dark);
+}
+
 /* BadgeBuilderPage.css */
 .badge-builder-page {
   padding: 20px;
   font-family: Arial, sans-serif;
+  background-color: var(--light);
+  color: var(--text-default);
 }
 
 .page-title {
   text-align: center;
   font-size: 2em;
   margin-bottom: 25px;
-  color: #333;
+  color: var(--primary);
 }
 
 .builder-content-area {
@@ -21,17 +43,18 @@
   flex: 1;
   min-width: 320px; /* Minimum width for controls */
   padding: 20px;
-  background-color: #f9f9f9;
+  background-color: var(--card-bg);
   border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+  box-shadow: 0 2px 10px rgba(0,0,0,0.05); /* Keep shadow subtle */
+  border: 1px solid var(--light-gray);
 }
 
 .controls-panel h2 {
   font-size: 1.5em;
   margin-top: 0;
   margin-bottom: 20px;
-  color: #444;
-  border-bottom: 1px solid #eee;
+  color: var(--text-heading);
+  border-bottom: 1px solid var(--light-gray);
   padding-bottom: 10px;
 }
 
@@ -43,38 +66,51 @@
   display: block;
   font-weight: 600;
   margin-bottom: 6px;
-  color: #555;
+  color: var(--secondary);
   font-size: 0.9em;
 }
 
 .control-group input[type="text"],
-.control-group select {
+.control-group select,
+.control-group textarea {
   width: 100%;
   padding: 10px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--input-border);
   border-radius: 4px;
   box-sizing: border-box;
   font-size: 0.95em;
+  background-color: var(--card-bg);
+  color: var(--text-default);
 }
 
 .control-group input[type="color"] {
-  width: 50px; /* Smaller for color input */
+  width: 50px;
   height: 30px;
   padding: 2px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--input-border);
   border-radius: 4px;
   vertical-align: middle;
   margin-right: 8px;
 }
+
+.control-group input[type="range"] {
+  width: 120px;
+  vertical-align: middle;
+  margin-left: 5px;
+  margin-right: 8px;
+  accent-color: var(--primary); /* Style the slider thumb/track */
+}
+
 .control-group span {
     font-size: 0.85em;
-    color: #666;
+    color: var(--text-muted);
+    vertical-align: middle;
 }
 
 .control-divider {
     margin: 25px 0;
     border: none;
-    border-top: 1px solid #eee;
+    border-top: 1px solid var(--light-gray);
 }
 
 .preview-panel {
@@ -84,36 +120,40 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+  background-color: var(--card-bg);
+  border-radius: 8px;
+  border: 1px solid var(--light-gray);
+  box-shadow: 0 2px 10px rgba(0,0,0,0.05);
 }
 
 .preview-panel h2 {
   font-size: 1.5em;
   margin-top: 0;
   margin-bottom: 20px;
-  color: #444;
+  color: var(--text-heading);
 }
 
 .badge-preview-area {
   margin-bottom: 25px;
   padding: 20px;
-  border: 1px dashed #ccc;
+  border: 1px dashed var(--secondary); /* Use secondary for dashed border */
   border-radius: 8px;
   min-height: 150px; /* Ensure space for badge */
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #fff;
-  box-shadow: inset 0 0 10px rgba(0,0,0,0.05);
+  background-color: var(--light); /* Light background for contrast */
+  box-shadow: inset 0 0 8px rgba(0,0,0,0.04);
 }
 
 .props-display {
-  background-color: #2d3748; /* Dark background */
-  color: #e2e8f0; /* Light text */
+  background-color: var(--dark); /* Dark background */
+  color: var(--light-gray); /* Light text */
   padding: 15px;
   border-radius: 6px;
   font-size: 0.8em;
   width: 100%;
-  max-height: 300px; /* Limit height and make scrollable */
+  max-height: 700px; /* Limit height and make scrollable */
   overflow-y: auto;
   box-sizing: border-box;
 }
@@ -121,8 +161,8 @@
 .props-display h3 {
     margin-top: 0;
     font-size: 1.1em;
-    color: #a0aec0;
-    border-bottom: 1px solid #4a5568;
+    color: var(--silver); /* Use silver for this heading */
+    border-bottom: 1px solid var(--secondary);
     padding-bottom: 8px;
     margin-bottom: 8px;
 }
@@ -136,48 +176,86 @@
 .custom-svg-colors {
   margin-top: 20px;
   padding-top: 15px;
-  border-top: 1px solid #ddd;
+  border-top: 1px solid var(--light-gray);
 }
 
 .custom-svg-colors h4 {
   font-size: 1.1em;
   margin-bottom: 15px;
-  color: #444;
+  color: var(--text-heading);
 }
 
 .svg-color-control {
   padding: 10px;
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--light-gray);
   border-radius: 4px;
   margin-bottom: 10px; 
-  background-color: #fdfdfd;
+  background-color: var(--light);
 }
 
 .svg-color-control label {
   font-weight: normal; 
   font-size: 0.85em;
   margin-bottom: 8px;
-  display: block; /* Ensure label takes full width for alignment */
+  display: block;
+  color: var(--secondary);
 }
 .svg-color-control label small {
     font-weight: normal;
-    color: #777;
+    color: var(--text-muted);
 }
 
 .svg-color-control input[type="color"] {
   width: 40px; 
   height: 25px;
-  vertical-align: middle; /* Align with other inputs/text */
-}
-.svg-color-control input[type="range"] {
-  width: 70px; 
-  margin-left: 5px;
   vertical-align: middle;
+  border-color: var(--input-border);
 }
 
-.svg-color-control > span { /* The span showing current HEX8 */
+.svg-color-control input[type="range"] {
+  vertical-align: middle;
+  accent-color: var(--primary);
+}
+
+.svg-color-control > span.color-display-hex8 {
     font-family: monospace;
     font-size: 0.9em;
     margin-left: 10px;
     vertical-align: middle;
+    color: var(--text-muted);
+}
+
+.reset-color-btn {
+  margin-left: 10px;
+  padding: 6px 10px; /* Increased padding */
+  font-size: 0.85em; /* Slightly larger font */
+  background-color: var(--light-gray); /* Lighter, more distinct background */
+  border: 1px solid var(--input-border);
+  border-radius: 4px;
+  cursor: pointer;
+  vertical-align: middle;
+  font-weight: 500;
+  color: var(--dark);
+}
+
+.reset-color-btn:hover {
+  background-color: var(--primary-lighter);
+  border-color: var(--primary-light);
+  color: var(--primary);
+}
+
+.no-colors-detected {
+    color: var(--text-muted);
+    font-style: italic;
+    padding: 10px 0;
+}
+
+/* Foreground Value Input specific styling */
+.foreground-value-group input[type="text"],
+.foreground-value-group textarea {
+  width: 100%;
+}
+
+.foreground-value-group textarea {
+    min-height: 100px;
 } 

@@ -185,42 +185,32 @@ const BadgeDisplay = ({ badge }) => {
     <div className="badge-foreground-content" style={{ color: fgTextColor }}>
       {foregroundType === 'TEXT' && foregroundValue && (
         <svg 
-            width="100%" // SVG fills its direct parent (.badge-foreground-content)
-            height="100%" // which is inside the padded/bordered shape area
-            viewBox="0 0 100 50" // Keep viewBox relatively wide, height can be adjusted more if needed
+            width="100%" height="100%" 
+            viewBox="0 0 100 50" 
             preserveAspectRatio="xMidYMid meet"
         >
-          <text 
-            ref={textRef}
-            x="50%" 
-            y="50%" 
-            dominantBaseline="central"
-            textAnchor="middle"
-            fontSize="24" // INCREASED initial font size
-            fill={fgTextColor}
-            transform={textTransform}
-            transform-origin="center center" // Attempt to scale from center
-            className="badge-svg-rendered-text"
-          >
+          <text ref={textRef} x="50%" y="50%" dominantBaseline="central" textAnchor="middle"
+            fontSize="24" fill={fgTextColor} transform={textTransform} transform-origin="center center" 
+            className="badge-svg-rendered-text">
             {foregroundValue}
           </text>
         </svg>
       )}
       {foregroundType === 'SYSTEM_ICON' && foregroundValue && (
-        (() => {
-          if (typeof foregroundValue === 'string' && foregroundValue.includes('<svg')) {
-            console.log('[BadgeDisplay] Rendering SVG for type:', foregroundType, 'shape:', shape, 
-                          '\n---BEGIN SVG STRING---\n', 
-                          foregroundValue, 
-                          '\n---END SVG STRING---');
-          }
-          return (
+        // (() => { // REMOVE/COMMENT the IIFE and logs
+        //   if (typeof foregroundValue === 'string' && foregroundValue.includes('<svg')) {
+        //     console.log('[BadgeDisplay] Rendering SVG for type:', foregroundType, 'shape:', shape, 
+        //                   '\n---BEGIN SVG STRING---\n', 
+        //                   foregroundValue, 
+        //                   '\n---END SVG STRING---');
+        //   }
+        //   return (
             <div 
               className="badge-svg-icon"
               dangerouslySetInnerHTML={{ __html: foregroundValue }}
             />
-          );
-        })()
+        //   );
+        // })()
       )}
       {foregroundType === 'UPLOADED_ICON' && (
         foregroundValue ? 

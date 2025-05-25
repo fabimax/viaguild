@@ -120,18 +120,22 @@ class SVGColorCustomizer {
     let tempSvgString = svgString;
     const newColorToApply = newHex8.toUpperCase();
     const patternsToTry = [];
+
     patternsToTry.push(oldNormalizedHex8);
     if (oldNormalizedHex8.endsWith('FF')) {
       const hex6 = oldNormalizedHex8.substring(0, 7);
-      patternsToTry.push(hex6);
+      patternsToTry.push(hex6); 
       const r = hex6[1]; const g = hex6[3]; const b = hex6[5];
       if (r === hex6[2] && g === hex6[4] && b === hex6[6]) {
         patternsToTry.push(`#${r}${g}${b}`);
       }
     }
+
     for (const pattern of patternsToTry) {
       const escapedPattern = pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const colorRegex = new RegExp(escapedPattern, 'gi');
+      const colorRegex = new RegExp(escapedPattern + '(?![0-9a-fA-F])', 'gi'); 
+      
+      const originalTempSvgString = tempSvgString; 
       tempSvgString = tempSvgString.replace(colorRegex, newColorToApply);
     }
     return tempSvgString;
@@ -189,43 +193,30 @@ const preprocessAndBeautifySvg = (svgString) => {
     const doc = parser.parseFromString(processedString, "image/svg+xml");
     const svgElement = doc.documentElement;
 
-    // Check for parser errors (important for malformed SVGs)
     const parserError = svgElement.querySelector('parsererror');
     if (parserError) {
       console.error("SVG parsing error:", parserError.textContent);
-      return processedString; // Return formatted string if parsing failed, to avoid breaking further
+      return processedString; 
     }
 
     const shapeElements = svgElement.querySelectorAll('path, circle, rect, ellipse, line, polyline, polygon');
     
     shapeElements.forEach(el => {
-      const currentFill = el.getAttribute('fill');
-      // Add fill="currentColor" if no fill is present, or if fill is "none" (and we want it to be colorable by default)
-      // Could be more nuanced: e.g., don't override existing colors unless they are black or white and no stroke?
-      // For now, if explicitly "none", we keep it. If no fill, it implies it should inherit or be black - so we make it colorable.
-      if (!currentFill) { 
+      // Only add fill="currentColor" if the element has NO fill attribute at all.
+      // If it has fill="none" or an explicit color, leave it for SVGColorCustomizer or to be as intended.
+      if (!el.hasAttribute('fill')) { 
         el.setAttribute('fill', 'currentColor');
       }
-      // Optional: similar logic for stroke if desired
-      // const currentStroke = el.getAttribute('stroke');
-      // if (!currentStroke) {
-      //  el.setAttribute('stroke', 'currentColor');
-      // }
+      
+      // DO NOT add default strokes if they don't exist, to preserve original appearance.
+      // SVGColorCustomizer will pick up existing stroke colors if they are hex.
     });
-
-    // Also ensure root SVG has fill="currentColor" if no other fills were found, for maximum compatibility
-    // This is less critical if children are handled, but can be a fallback.
-    if (shapeElements.length > 0 && !svgElement.getAttribute('fill') && ![...shapeElements].some(el => el.getAttribute('fill'))) {
-        // svgElement.setAttribute('fill', 'currentColor');
-        // Let's be conservative: only add to paths if they don't have one. Don't force root fill.
-    }
 
     const serializer = new XMLSerializer();
     processedString = serializer.serializeToString(svgElement);
     
   } catch (e) {
     console.error("Error during SVG preprocessing:", e);
-    // Fallback to the merely formatted string if DOM manipulation fails
     return formatSvgString(svgString); 
   }
   return processedString;
@@ -403,20 +394,41 @@ const BadgeBuilderPage = () => {
     }
   }, [badgeProps.foregroundType, badgeProps.foregroundValue, svgCustomizerInstance, originalCustomSvg, svgColorData]);
 
-  // Placeholder for the handleCustomSvgColorChange function
   const handleCustomSvgColorChange = (slotId, newColorHex, newAlpha) => {
     if (!svgColorData) return;
-    const newFormattedColor = formatHexWithAlpha(newColorHex, newAlpha);
-    const newRgba = svgCustomizerInstance.hexToRgba(newFormattedColor);
+    const parsedAlpha = parseFloat(newAlpha);
+    if (isNaN(parsedAlpha)) {
+      return;
+    }
+    const newFormattedColor = formatHexWithAlpha(newColorHex, parsedAlpha);
+    const newRgbaFromHexAlpha = svgCustomizerInstance.hexToRgba(newFormattedColor);
 
     const updatedSlots = svgColorData.colorSlots.map(slot =>
       slot.id === slotId ? { 
           ...slot, 
           currentColor: newFormattedColor, 
-          rgba: newRgba,
-          hasTransparency: newAlpha < 1 || newAlpha === 0 // check if alpha is not 1
+          rgba: newRgbaFromHexAlpha,
+          hasTransparency: parsedAlpha < 1 
         } : slot
     );
+    setSvgColorData(prevData => ({ ...prevData, colorSlots: updatedSlots }));
+  };
+
+  // New function to reset a specific SVG color slot to its original
+  const handleResetCustomSvgColor = (slotIdToReset) => {
+    if (!svgColorData) return;
+
+    const updatedSlots = svgColorData.colorSlots.map(slot => {
+      if (slot.id === slotIdToReset) {
+        return {
+          ...slot,
+          currentColor: slot.originalColor,
+          rgba: svgCustomizerInstance.hexToRgba(slot.originalColor),
+          hasTransparency: svgCustomizerInstance.hasTransparency(slot.originalColor),
+        };
+      }
+      return slot;
+    });
     setSvgColorData(prevData => ({ ...prevData, colorSlots: updatedSlots }));
   };
 
@@ -433,17 +445,17 @@ const BadgeBuilderPage = () => {
   // Render color pickers for SVG customization
   const renderSvgColorPickers = () => {
     if (badgeProps.foregroundType !== ForegroundContentType.CUSTOM_SVG || !svgColorData || svgColorData.colorSlots.length === 0) {
-      return <p>No colors detected in custom SVG or not in CUSTOM_SVG mode.</p>;
+      return <p className="no-colors-detected">Paste valid SVG with hex colors to customize.</p>;
     }
     return (
       <div className="custom-svg-colors">
         <h4>Detected SVG Colors:</h4>
         {svgColorData.colorSlots.map((slot, index) => {
-          // Need local state for hex input to avoid direct mutation issues with color picker
-          // This part can be tricky; for now, we'll use a simplified direct binding for example purposes
-          // A better approach might involve temporary state for each slot's hex input
-          let currentSlotHex = slot.currentColor.substring(0, 7);
-          let currentSlotAlpha = svgCustomizerInstance.hexToRgba(slot.currentColor).a;
+          // For inputs, we need the hex part and alpha part of the slot's currentColor
+          // slot.currentColor is already HEX8. Use parseColorString to get components for inputs.
+          const parsedCurrent = parseColorString(slot.currentColor);
+          const currentSlotHex = parsedCurrent.hex;
+          const currentSlotAlpha = parsedCurrent.alpha;
 
           return (
             <div key={slot.id} className="control-group svg-color-control">
@@ -464,7 +476,10 @@ const BadgeBuilderPage = () => {
                 value={currentSlotAlpha}
                 onChange={(e) => handleCustomSvgColorChange(slot.id, currentSlotHex, parseFloat(e.target.value))}
               />
-              <span>{slot.currentColor}</span>
+              <span className="color-display-hex8">{slot.currentColor}</span>
+              <button type="button" onClick={() => handleResetCustomSvgColor(slot.id)} className="reset-color-btn">
+                Reset
+              </button>
             </div>
           );
         })}
@@ -535,7 +550,7 @@ const BadgeBuilderPage = () => {
             </select>
           </div>
 
-          <div className="control-group">
+          <div className="control-group foreground-value-group">
             <label htmlFor="foregroundValue">Foreground Value:</label>
             {badgeProps.foregroundType === ForegroundContentType.TEXT ? (
               <input type="text" id="foregroundValue" name="foregroundValue" value={badgeProps.foregroundValue} onChange={handleInputChange} />
