@@ -23,12 +23,13 @@ const BadgeDisplay = ({ badge }) => {
     name, subtitle, shape, borderColor,
     backgroundType, backgroundValue,
     foregroundType, foregroundValue, foregroundColor,
+    foregroundScale,
   } = badge;
 
-  const BORDER_WIDTH = 6; // Explicitly defined, should be 3px
+  const BORDER_WIDTH = 6; // Explicitly defined, should be 6px
   const BADGE_SIZE_PX = 100;
   const SIMPLE_SHAPE_PADDING_PX = 5;
-  const COMPLEX_SHAPE_INNER_PADDING_PX = 2; // This is padding for the inner content div of complex shapes
+  const COMPLEX_SHAPE_INNER_PADDING_PX = 2;
 
   // Base styles for the main container that will show the shape
   let badgeContainerStyles = {
@@ -159,7 +160,7 @@ const BadgeDisplay = ({ badge }) => {
       
       let textWidthPercentageTarget = 0.82; // Slightly increased from 0.80
       if (shape === 'STAR' || shape === 'HEXAGON' || shape === 'HEART') {
-        textWidthPercentageTarget = 0.82; // Slightly increased from 0.55
+        textWidthPercentageTarget = 0.60;
       }
 
       // Calculate available width in pixels
@@ -181,8 +182,16 @@ const BadgeDisplay = ({ badge }) => {
     }
   }, [foregroundValue, foregroundType, shape, currentContentPadding]); // Added currentContentPadding to dependencies
 
+  const currentForegroundScale = (foregroundScale && !isNaN(parseFloat(foregroundScale))) ? parseFloat(foregroundScale) / 100 : 1;
+
   const renderForeground = () => (
-    <div className="badge-foreground-content" style={{ color: fgTextColor }}>
+    <div 
+      className="badge-foreground-content"
+      style={{
+        color: fgTextColor,
+        transform: `scale(${currentForegroundScale})`,
+      }}
+    >
       {foregroundType === 'TEXT' && foregroundValue && (
         <svg 
             width="100%" height="100%" 
@@ -197,20 +206,10 @@ const BadgeDisplay = ({ badge }) => {
         </svg>
       )}
       {foregroundType === 'SYSTEM_ICON' && foregroundValue && (
-        // (() => { // REMOVE/COMMENT the IIFE and logs
-        //   if (typeof foregroundValue === 'string' && foregroundValue.includes('<svg')) {
-        //     console.log('[BadgeDisplay] Rendering SVG for type:', foregroundType, 'shape:', shape, 
-        //                   '\n---BEGIN SVG STRING---\n', 
-        //                   foregroundValue, 
-        //                   '\n---END SVG STRING---');
-        //   }
-        //   return (
-            <div 
-              className="badge-svg-icon"
-              dangerouslySetInnerHTML={{ __html: foregroundValue }}
-            />
-        //   );
-        // })()
+        <div 
+          className="badge-svg-icon"
+          dangerouslySetInnerHTML={{ __html: foregroundValue }}
+        />
       )}
       {foregroundType === 'UPLOADED_ICON' && (
         foregroundValue ? 

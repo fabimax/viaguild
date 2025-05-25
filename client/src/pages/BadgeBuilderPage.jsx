@@ -224,16 +224,16 @@ const preprocessAndBeautifySvg = (svgString) => {
 
 const BadgeBuilderPage = () => {
   const [badgeProps, setBadgeProps] = useState({
-    name: 'SVG Custom Badge',
-    subtitle: 'Color Editable',
-    shape: BadgeShape.SQUARE, // Default to square for custom SVG visibility
-    borderColor: '#4A5568FF', // Opaque slate
+    name: 'Customizable Badge',
+    subtitle: 'This is a subtitle',
+    shape: BadgeShape.SQUARE,
+    borderColor: '#F9D90BFF',
     backgroundType: BackgroundContentType.SOLID_COLOR,
-    backgroundValue: '#EDF2F7FF', // Opaque light gray
-    foregroundType: ForegroundContentType.CUSTOM_SVG,
-    // Default to a simple SVG for CUSTOM_SVG mode initially
-    foregroundValue: '<svg viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="16" height="16" rx="2" fill="#FF0000FF" stroke="#0000FF80" stroke-width="1"/></svg>',
-    foregroundColor: '#000000FF', // Default for TEXT, may not apply to CUSTOM_SVG if colors are embedded
+    backgroundValue: '#4A97FCFF',
+    foregroundType: ForegroundContentType.TEXT,
+    foregroundValue: '--TEXT--',
+    foregroundColor: '#C0D5F2FF',
+    foregroundScale: 100,
   });
 
   // Initialize local states from badgeProps
@@ -309,26 +309,27 @@ const BadgeBuilderPage = () => {
   }, [badgeProps.foregroundType, originalCustomSvg, svgColorData, svgCustomizerInstance]);
 
   const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    if (name === 'borderColorHex') setBorderColorHex(value);
-    else if (name === 'borderColorAlpha') setBorderColorAlpha(parseFloat(value));
-    else if (name === 'backgroundSolidColorHex') setBackgroundSolidColorHex(value);
-    else if (name === 'backgroundSolidColorAlpha') setBackgroundSolidColorAlpha(parseFloat(value));
-    else if (name === 'foregroundColorHex') setForegroundColorHex(value);
-    else if (name === 'foregroundColorAlpha') setForegroundColorAlpha(parseFloat(value));
-    else if (name === 'backgroundType' && value === BackgroundContentType.HOSTED_IMAGE) {
+    const { name, value, type } = e.target;
+    const val = type === 'number' ? parseFloat(value) : value;
+    if (name === 'borderColorHex') setBorderColorHex(val);
+    else if (name === 'borderColorAlpha') setBorderColorAlpha(parseFloat(val));
+    else if (name === 'backgroundSolidColorHex') setBackgroundSolidColorHex(val);
+    else if (name === 'backgroundSolidColorAlpha') setBackgroundSolidColorAlpha(parseFloat(val));
+    else if (name === 'foregroundColorHex') setForegroundColorHex(val);
+    else if (name === 'foregroundColorAlpha') setForegroundColorAlpha(parseFloat(val));
+    else if (name === 'backgroundType' && val === BackgroundContentType.HOSTED_IMAGE) {
         // When switching to image, if current backgroundValue is a color, provide a placeholder URL
         if (badgeProps.backgroundValue.startsWith('#')) {
-            setBadgeProps(prev => ({ ...prev, backgroundType: value, backgroundValue: 'https://picsum.photos/seed/badgebg/100/100' }));
+            setBadgeProps(prev => ({ ...prev, backgroundType: val, backgroundValue: 'https://picsum.photos/seed/badgebg/100/100' }));
         } else {
-            setBadgeProps(prev => ({ ...prev, backgroundType: value }));
+            setBadgeProps(prev => ({ ...prev, backgroundType: val }));
         }
-    } else if (name === 'backgroundType' && value === BackgroundContentType.SOLID_COLOR) {
+    } else if (name === 'backgroundType' && val === BackgroundContentType.SOLID_COLOR) {
         // When switching to solid color, re-initialize from current hex/alpha for solid background
         const currentSolidRgba = formatHexWithAlpha(backgroundSolidColorHex, backgroundSolidColorAlpha);
-        setBadgeProps(prev => ({ ...prev, backgroundType: value, backgroundValue: currentSolidRgba }));
+        setBadgeProps(prev => ({ ...prev, backgroundType: val, backgroundValue: currentSolidRgba }));
     } else {
-      setBadgeProps(prev => ({ ...prev, [name]: value }));
+      setBadgeProps(prev => ({ ...prev, [name]: val }));
     }
   };
 
@@ -338,26 +339,14 @@ const BadgeBuilderPage = () => {
     setBadgeProps(prev => {
       let currentFgValue = prev.foregroundValue;
       let changed = false;
-      if (newType === ForegroundContentType.TEXT) {
-        if (typeof currentFgValue !== 'string' || currentFgValue.includes('<') || currentFgValue.length > 10) {
-          currentFgValue = (prev.name || 'T').charAt(0);
-          changed = true;
-        }
-      } else if (newType === ForegroundContentType.SYSTEM_ICON) {
-        if (typeof currentFgValue !== 'string' || currentFgValue.includes('<') || currentFgValue.length < 2) {
-          currentFgValue = 'Shield';
-          changed = true;
-        }
-      } else if (newType === ForegroundContentType.UPLOADED_ICON) {
-        if (typeof currentFgValue !== 'string' || !currentFgValue.includes('/') || currentFgValue.includes('<')) {
-          currentFgValue = 'https://picsum.photos/seed/badgeicon/60/60';
-          changed = true;
-        }
-      } else if (newType === ForegroundContentType.CUSTOM_SVG) {
-        if (typeof currentFgValue !== 'string' || !currentFgValue.includes('<') || !currentFgValue.includes('svg')) {
-          currentFgValue = '<svg viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="16" height="16" rx="2" fill="#FF0000FF" stroke="#0000FF80" stroke-width="1"/></svg>';
-          changed = true;
-        }
+      if (newType === ForegroundContentType.TEXT && (typeof currentFgValue !== 'string' || currentFgValue.includes('<') || currentFgValue.length > 10 && prev.foregroundType !== ForegroundContentType.TEXT ) ) {
+          currentFgValue = (prev.name || 'T').charAt(0); changed = true;
+      } else if (newType === ForegroundContentType.SYSTEM_ICON && (typeof currentFgValue !== 'string' || currentFgValue.includes('<') || currentFgValue.length < 2)) {
+          currentFgValue = 'Shield'; changed = true;
+      } else if (newType === ForegroundContentType.UPLOADED_ICON && (typeof currentFgValue !== 'string' || !currentFgValue.includes('/') || currentFgValue.includes('<'))) {
+          currentFgValue = 'https://picsum.photos/seed/badgeicon/60/60'; changed = true;
+      } else if (newType === ForegroundContentType.CUSTOM_SVG && (typeof currentFgValue !== 'string' || !currentFgValue.includes('<') || !currentFgValue.includes('svg'))) {
+          currentFgValue = '<svg viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="2" width="16" height="16" rx="2" fill="#FF0000FF" stroke="#0000FF80" stroke-width="1"/></svg>'; changed = true;
       }
       if (changed) return { ...prev, foregroundValue: currentFgValue }; return prev;
     });
@@ -562,6 +551,21 @@ const BadgeBuilderPage = () => {
               <textarea id="foregroundValue" name="foregroundValue" value={badgeProps.foregroundValue} onChange={handleInputChange} placeholder="Paste SVG string here..." rows={5}></textarea>
             ) : null}
             {badgeProps.foregroundType !== ForegroundContentType.CUSTOM_SVG && badgeProps.foregroundType !== ForegroundContentType.TEXT && <span>{badgeProps.foregroundValue}</span>}
+          </div>
+
+          <div className="control-group">
+            <label htmlFor="foregroundScale">Foreground Size (%):</label>
+            <input 
+              type="number" 
+              id="foregroundScale" 
+              name="foregroundScale" 
+              value={badgeProps.foregroundScale} 
+              onChange={handleInputChange} 
+              min="10"
+              max="300"
+              step="5"
+            />
+            <span>{badgeProps.foregroundScale}%</span>
           </div>
 
           {/* Only show general foreground color picker if not CUSTOM_SVG with detected colors */}
