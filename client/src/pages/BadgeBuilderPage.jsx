@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import BadgeDisplay from '../components/guilds/BadgeDisplay'; // Corrected path
 import SystemIconService from '../services/systemIcon.service'; // Import new service
+import DOMPurify from 'dompurify'; // Import DOMPurify
 import './BadgeBuilderPage.css';
 
 // Mimic enums for dropdowns - in a real app, these might come from a shared source or constants file
@@ -186,40 +187,59 @@ class SVGColorCustomizer {
 const preprocessAndBeautifySvg = (svgString) => {
   if (typeof svgString !== 'string' || !svgString.trim()) return '';
 
-  let processedString = formatSvgString(svgString); // First, normalize whitespace
+  let formattedString = formatSvgString(svgString);
 
   try {
+    // Step 1: Sanitize with DOMPurify
+    const cleanSvgString = DOMPurify.sanitize(formattedString, {
+      USE_PROFILES: { svg: true, svgFilters: true },
+      // FORBID_TAGS: ['script', 'style', 'foreignObject'], // Disallow <style> for simplicity now
+      // FORBID_ATTR: ['onclick', 'onerror', 'onload'] // Add more event handlers if needed
+      // More specific config can be added based on requirements
+    });
+
+    if (!cleanSvgString.trim()) {
+        console.warn("SVG content removed entirely by sanitizer.");
+        return ""; 
+    }
+    
+    // Step 2: Parse the *cleaned* SVG and add fill="currentColor" where needed
     const parser = new DOMParser();
-    const doc = parser.parseFromString(processedString, "image/svg+xml");
+    const doc = parser.parseFromString(cleanSvgString, "image/svg+xml");
     const svgElement = doc.documentElement;
 
     const parserError = svgElement.querySelector('parsererror');
     if (parserError) {
-      console.error("SVG parsing error:", parserError.textContent);
-      return processedString; 
+      console.error("SVG parsing error after sanitization:", parserError.textContent);
+      return cleanSvgString; // Return sanitized string if further parsing failed
     }
 
-    const shapeElements = svgElement.querySelectorAll('path, circle, rect, ellipse, line, polyline, polygon');
+    const shapeElements = svgElement.querySelectorAll('path, circle, rect, ellipse, line, polyline, polygon, g');
     
     shapeElements.forEach(el => {
-      // Only add fill="currentColor" if the element has NO fill attribute at all.
-      // If it has fill="none" or an explicit color, leave it for SVGColorCustomizer or to be as intended.
-      if (!el.hasAttribute('fill')) { 
+      if (el.tagName.toLowerCase() !== 'g' && !el.hasAttribute('fill')) { 
         el.setAttribute('fill', 'currentColor');
       }
-      
-      // DO NOT add default strokes if they don't exist, to preserve original appearance.
-      // SVGColorCustomizer will pick up existing stroke colors if they are hex.
     });
 
     const serializer = new XMLSerializer();
-    processedString = serializer.serializeToString(svgElement);
+    let finalSvgString = serializer.serializeToString(svgElement);
+    
+    // Ensure xmlns attribute is present as DOMParser/Serializer might strip it
+    if (finalSvgString && !finalSvgString.includes('xmlns="http://www.w3.org/2000/svg"')) {
+      if (finalSvgString.startsWith('<svg')) {
+        finalSvgString = finalSvgString.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
+      } else {
+        // If it's a fragment or something unexpected, wrap it
+        finalSvgString = `<svg xmlns="http://www.w3.org/2000/svg">${finalSvgString}</svg>`; 
+      }
+    }
+    return finalSvgString;
     
   } catch (e) {
-    console.error("Error during SVG preprocessing:", e);
+    console.error("Error during SVG preprocessing/sanitization:", e);
     return formatSvgString(svgString); 
   }
-  return processedString;
 };
 
 const BadgeBuilderPage = () => {
