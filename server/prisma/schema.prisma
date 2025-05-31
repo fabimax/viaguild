@@ -75,6 +75,12 @@ enum ForegroundContentType {
 // }
 // --- END Configuration Enums ---
 
+enum EntityType {
+  USER
+  GUILD
+  CLUSTER
+}
+
 enum NotificationType {
   GUILD_INVITE
   BADGE_RECEIVED
@@ -185,10 +191,7 @@ model User {
   resolvedGuildRelationshipProposals  GuildRelationshipProposal[] @relation("ResolvedByUser")
 
   // --- BADGE SYSTEM RELATIONS (Updated) ---
-  givenBadgesAsUser      BadgeInstance[]       @relation("UserGivenBadges") // Badges given directly by this user
-  receivedBadgesAsUser   BadgeInstance[]       @relation("UserReceivedBadges") // Badges received directly by this user
   authoredBadgeTemplates BadgeTemplate[]       @relation("AuthoredByRelation") // Templates authored by this user
-  ownedBadgeTemplates    BadgeTemplate[]       @relation("UserOwnedBadgeTemplates")
   badgeAllocations       UserBadgeAllocation[] // Tiered badge allocations for this user
   badgeCase              UserBadgeCase?
   uploadedAssets         UploadedAsset[]       @relation("UserUploadedAssets")
@@ -276,9 +279,6 @@ model Guild {
   roleSettings GuildRoleSetting[]
 
   // --- BADGE SYSTEM RELATIONS (Updated) ---
-  givenBadgesAsGuild    BadgeInstance[] @relation("GuildGivenBadges") // Badges given by this guild as an entity
-  receivedBadgesAsGuild BadgeInstance[] @relation("GuildReceivedBadges") // Badges received by this guild as an entity
-  ownedBadgeTemplates   BadgeTemplate[] @relation("GuildOwnedBadgeTemplates") // Badge templates "owned" or designed by this guild
   badgeCase             GuildBadgeCase? // Guild's showcase of received badges
   // --- END BADGE SYSTEM RELATIONS ---
 
@@ -542,10 +542,10 @@ model BadgeTemplate {
   // Ownership and Creation (of the template)
   authoredByUserId String?
   authoredByUser   User?   @relation("AuthoredByRelation", fields: [authoredByUserId], references: [id], onDelete: SetNull)
-  ownedByUserId    String?
-  ownedByUser      User?   @relation("UserOwnedBadgeTemplates", fields: [ownedByUserId], references: [id], onDelete: SetNull)
-  ownedByGuildId   String?
-  ownedByGuild     Guild?  @relation("GuildOwnedBadgeTemplates", fields: [ownedByGuildId], references: [id], onDelete: SetNull)
+  
+  // Discriminated union fields for ownership
+  ownerType EntityType?
+  ownerId   String?
 
   // Lifecycle & Behavior
   isArchived                  Boolean @default(false) // Whether the template owner has archived/soft-deleted this template (it is not deleted from the db if there exist awarded badge instances with this template)
@@ -590,11 +590,10 @@ model BadgeTemplate {
   // or by making templateSlug globally @unique if preferred (but then requires globally unique names from users/guilds too).
   // The current setup with scoped uniques is generally more flexible for user/guild created templates.
 
-  @@unique([ownedByUserId, templateSlug_ci], name: "unique_user_template_slug_ci")
-  @@unique([ownedByGuildId, templateSlug_ci], name: "unique_guild_template_slug_ci")
+  // Note: We can't create unique constraints on nullable discriminated union fields
+  // Application logic must enforce uniqueness of templateSlug per owner
   @@index([authoredByUserId])
-  @@index([ownedByUserId])
-  @@index([ownedByGuildId])
+  @@index([ownerType, ownerId])
   @@index([isArchived])
   @@index([isModifiableByIssuer])
   @@index([allowsPushedInstanceUpdates])
@@ -623,19 +622,13 @@ model BadgeInstance {
   templateId String
   template   BadgeTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict)
 
-  // --- Giver (Polymorphic: User or Guild) ---
-  userGiverId  String?
-  userGiver    User?   @relation("UserGivenBadges", fields: [userGiverId], references: [id], onDelete: SetNull)
-  guildGiverId String?
-  guildGiver   Guild?  @relation("GuildGivenBadges", fields: [guildGiverId], references: [id], onDelete: SetNull)
+  // --- Giver (Discriminated Union) ---
+  giverType EntityType
+  giverId   String
 
-  // --- Receiver (Polymorphic: User or Guild or Cluster) ---
-  userReceiverId    String?
-  userReceiver      User?    @relation("UserReceivedBadges", fields: [userReceiverId], references: [id], onDelete: Cascade)
-  guildReceiverId   String?
-  guildReceiver     Guild?   @relation("GuildReceivedBadges", fields: [guildReceiverId], references: [id], onDelete: Cascade)
-  clusterReceiverId String? 
-  clusterReceiver   Cluster? @relation("ClusterReceivedBadges", fields: [clusterReceiverId], references: [id], onDelete: Cascade)
+  // --- Receiver (Discriminated Union) ---
+  receiverType EntityType
+  receiverId   String
 
   assignedAt DateTime  @default(now())
   revokedAt  DateTime?
@@ -680,17 +673,14 @@ model BadgeInstance {
   clusterBadgeItems ClusterBadgeItem[] // Link to badgecases where this badge instance is displayed
 
   // CHECK constraint (conceptual, enforce in application logic):
-  // 1. (userGiverId != null XOR guildGiverId != null XOR clusterGiverId != null) // Consider clusterGiver later
-  // 2. (userReceiverId != null XOR guildReceiverId != null XOR clusterReceiverId != null)
-  // 3. If guildGiverId is set, detailsOfGuildAssignmentId can be set.
+  // 1. giverType and giverId must form a valid reference (e.g., if giverType = 'USER', giverId must be a valid user ID)
+  // 2. receiverType and receiverId must form a valid reference (e.g., if receiverType = 'GUILD', receiverId must be a valid guild ID)
+  // 3. If giverType is 'GUILD', detailsOfGuildAssignmentId can be set.
   //    (The link is via GuildAssignmentDetails.badgeInstanceId pointing to this BadgeInstance.id)
 
   @@index([templateId])
-  @@index([userGiverId])
-  @@index([guildGiverId])
-  @@index([userReceiverId])
-  @@index([guildReceiverId])
-  @@index([clusterReceiverId])
+  @@index([giverType, giverId])
+  @@index([receiverType, receiverId])
   @@index([measureValue])
   @@index([awardStatus])
   @@index([apiVisible])
@@ -956,7 +946,6 @@ model Cluster {
   primaryForGuilds Guild[] @relation("PrimaryClusterForGuilds")
 
   // Relationships - Badges
-  receivedBadgesAsCluster BadgeInstance[]   @relation("ClusterReceivedBadges") // Badges received by this cluster
   badgeCase               ClusterBadgeCase? // Cluster's showcase of received badges
   contacts                ClusterContact[] // New: Contact links for the cluster
 

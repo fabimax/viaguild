@@ -4,7 +4,8 @@ import {
   BadgeInstance,
   UserBadgeCase, GuildBadgeCase, ClusterBadgeCase, // The cases
   UserBadgeItem, GuildBadgeItem, ClusterBadgeItem, // The case items (join tables)
-  BadgeAwardStatus
+  BadgeAwardStatus,
+  EntityType // For discriminated unions
 } from '@prisma/client';
 import { faker } from '@faker-js/faker';
 import { TEST_USER_PRIME_USERNAME } from './users';
@@ -60,7 +61,7 @@ export async function seedBadgeCases(prisma: PrismaClient) {
   // --- Seed for TestUserPrime ---
   if (testUserPrime) {
     const userInstances = await prisma.badgeInstance.findMany({
-      where: { userReceiverId: testUserPrime.id, awardStatus: BadgeAwardStatus.ACCEPTED },
+      where: { receiverType: EntityType.USER, receiverId: testUserPrime.id, awardStatus: BadgeAwardStatus.ACCEPTED },
       select: { id: true },
       take: increasedTakeAmount, 
     });
@@ -88,7 +89,7 @@ export async function seedBadgeCases(prisma: PrismaClient) {
   // --- Seed for SpecialGuild (TheNexusHub) ---
   if (specialGuild) {
     const guildInstances = await prisma.badgeInstance.findMany({
-      where: { guildReceiverId: specialGuild.id, awardStatus: BadgeAwardStatus.ACCEPTED },
+      where: { receiverType: EntityType.GUILD, receiverId: specialGuild.id, awardStatus: BadgeAwardStatus.ACCEPTED },
       select: { id: true },
       take: increasedTakeAmount, 
     });
@@ -120,7 +121,7 @@ export async function seedBadgeCases(prisma: PrismaClient) {
   // --- Seed for NexusHub's Primary Cluster (Cluster1 if found) ---
   if (nexusHubPrimaryCluster) {
     const clusterInstances = await prisma.badgeInstance.findMany({
-      where: { clusterReceiverId: nexusHubPrimaryCluster.id, awardStatus: BadgeAwardStatus.ACCEPTED },
+      where: { receiverType: EntityType.CLUSTER, receiverId: nexusHubPrimaryCluster.id, awardStatus: BadgeAwardStatus.ACCEPTED },
       select: { id: true },
       take: increasedTakeAmount, 
     });
@@ -157,7 +158,7 @@ export async function seedBadgeCases(prisma: PrismaClient) {
     if (user.id === testUserPrime?.id) continue; 
 
     const userInstances = await prisma.badgeInstance.findMany({
-      where: { userReceiverId: user.id, awardStatus: BadgeAwardStatus.ACCEPTED },
+      where: { receiverType: EntityType.USER, receiverId: user.id, awardStatus: BadgeAwardStatus.ACCEPTED },
       select: { id: true },
       take: increasedTakeAmount, 
     });
@@ -190,7 +191,7 @@ export async function seedBadgeCases(prisma: PrismaClient) {
     if (guild.id === specialGuild?.id) continue; 
 
     const guildInstances = await prisma.badgeInstance.findMany({
-      where: { guildReceiverId: guild.id, awardStatus: BadgeAwardStatus.ACCEPTED },
+      where: { receiverType: EntityType.GUILD, receiverId: guild.id, awardStatus: BadgeAwardStatus.ACCEPTED },
       select: { id: true },
       take: increasedTakeAmount, 
     });
@@ -228,7 +229,7 @@ export async function seedBadgeCases(prisma: PrismaClient) {
     if (cluster.id === nexusHubPrimaryCluster?.id) continue; 
 
     const clusterInstances = await prisma.badgeInstance.findMany({
-      where: { clusterReceiverId: cluster.id, awardStatus: BadgeAwardStatus.ACCEPTED },
+      where: { receiverType: EntityType.CLUSTER, receiverId: cluster.id, awardStatus: BadgeAwardStatus.ACCEPTED },
       select: { id: true },
       take: increasedTakeAmount, 
     });

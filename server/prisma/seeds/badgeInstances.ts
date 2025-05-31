@@ -1,11 +1,8 @@
 import {
   PrismaClient,
-  User, Guild, Cluster, // For Giver/Receiver IDs
-  BadgeTemplate, MetadataFieldDefinition, // To link and know metadata keys
-  BadgeInstance, InstanceMetadataValue, // To create
   BadgeAwardStatus, BadgeShape, // Enums for overrides
-  BackgroundContentType, ForegroundContentType, UploadedAsset, SystemIcon,
-  BadgeTier // Added BadgeTier for potential use if needed for filtering templates implicitly
+  BackgroundContentType, ForegroundContentType,
+  EntityType // For discriminated unions
 } from '@prisma/client';
 import { faker } from '@faker-js/faker';
 import { TEST_USER_PRIME_USERNAME } from './users';
@@ -68,8 +65,8 @@ export async function seedBadgeInstances(prisma: PrismaClient) {
     select: { 
       id: true,
       templateSlug: true,
-      ownedByUserId: true,
-      ownedByGuildId: true,
+      ownerType: true,
+      ownerId: true,
       definesMeasure: true,
       defaultBadgeName: true, 
       measureBest: true, 
@@ -385,9 +382,10 @@ export async function seedBadgeInstances(prisma: PrismaClient) {
   ];
 
   const dynamicInstanceCount = 50; 
-  const systemTemplates = badgeTemplates.filter(bt => !bt.ownedByGuildId && !bt.ownedByUserId);
-  const userOwnedTemplates = badgeTemplates.filter(bt => bt.ownedByUserId && users.find(u => u.id === bt.ownedByUserId));
-  const guildOwnedTemplates = badgeTemplates.filter(bt => bt.ownedByGuildId && guilds.find(g => g.id === bt.ownedByGuildId));
+  // Using new discriminated union fields
+  const systemTemplates = badgeTemplates.filter(bt => !bt.ownerType);
+  const userOwnedTemplates = badgeTemplates.filter(bt => bt.ownerType === 'USER' && users.find(u => u.id === bt.ownerId));
+  const guildOwnedTemplates = badgeTemplates.filter(bt => bt.ownerType === 'GUILD' && guilds.find(g => g.id === bt.ownerId));
   const allAvailableTemplates = [...systemTemplates, ...userOwnedTemplates, ...guildOwnedTemplates];
 
   if (allAvailableTemplates.length > 0 && users.length > 1 && guilds.length > 0) {
@@ -416,7 +414,7 @@ export async function seedBadgeInstances(prisma: PrismaClient) {
 
       if (giverType === 'USER') {
         let givingUser = faker.helpers.arrayElement(users);
-        if (receiver.type === 'USER' && givingUser.id === receiver.id && template.ownedByUserId !== givingUser.id) {
+        if (receiver.type === 'USER' && givingUser.id === receiver.id && !(template.ownerType === 'USER' && template.ownerId === givingUser.id)) {
           const otherPossibleGivers = users.filter(u => u.id !== receiver.id);
           if (otherPossibleGivers.length > 0) {
             givingUser = faker.helpers.arrayElement(otherPossibleGivers);
@@ -429,7 +427,7 @@ export async function seedBadgeInstances(prisma: PrismaClient) {
         if (!giver.type) giver = { type: 'USER', id: givingUser.id, username: givingUser.username }; 
       } else { 
         let givingGuild = faker.helpers.arrayElement(guilds);
-        if (receiver.type === 'GUILD' && givingGuild.id === receiver.id && template.ownedByGuildId !== givingGuild.id) {
+        if (receiver.type === 'GUILD' && givingGuild.id === receiver.id && !(template.ownerType === 'GUILD' && template.ownerId === givingGuild.id)) {
           const otherPossibleGivers = guilds.filter(g => g.id !== receiver.id);
           if (otherPossibleGivers.length > 0) {
             givingGuild = faker.helpers.arrayElement(otherPossibleGivers);
@@ -453,8 +451,8 @@ export async function seedBadgeInstances(prisma: PrismaClient) {
         description: `Dynamic Badge: ${template.defaultBadgeName} from ${giver.type} ${giver.username || giver.guildName} to ${receiver.type} ${receiver.username || receiver.guildName || receiver.clusterName}`,
         templateTarget: {
           slug: template.templateSlug,
-          ownedByUserId: template.ownedByUserId,
-          ownedByGuildId: template.ownedByGuildId,
+          ownedByUserId: template.ownerType === 'USER' ? template.ownerId : null,
+          ownedByGuildId: template.ownerType === 'GUILD' ? template.ownerId : null,
         },
         giver,
         receiver,
@@ -512,8 +510,8 @@ export async function seedBadgeInstances(prisma: PrismaClient) {
         description: `${descriptionPrefix}: ${template.defaultBadgeName} from ${giver.type} ${giver.username || giver.guildName}`,
         templateTarget: {
           slug: template.templateSlug,
-          ownedByUserId: template.ownedByUserId,
-          ownedByGuildId: template.ownedByGuildId,
+          ownedByUserId: template.ownerType === 'USER' ? template.ownerId : null,
+          ownedByGuildId: template.ownerType === 'GUILD' ? template.ownerId : null,
         },
         giver,
         receiver: targetReceiver,
@@ -549,17 +547,19 @@ export async function seedBadgeInstances(prisma: PrismaClient) {
     if (instanceEntry.templateTarget.ownedByUserId) {
       foundTemplate = badgeTemplates.find(t => 
         t.templateSlug === instanceEntry.templateTarget.slug && 
-        t.ownedByUserId === instanceEntry.templateTarget.ownedByUserId
+        t.ownerType === 'USER' &&
+        t.ownerId === instanceEntry.templateTarget.ownedByUserId
       ) as TemplateWithMetadataDefs | undefined;
     } else if (instanceEntry.templateTarget.ownedByGuildId) {
       foundTemplate = badgeTemplates.find(t => 
         t.templateSlug === instanceEntry.templateTarget.slug && 
-        t.ownedByGuildId === instanceEntry.templateTarget.ownedByGuildId
+        t.ownerType === 'GUILD' &&
+        t.ownerId === instanceEntry.templateTarget.ownedByGuildId
       ) as TemplateWithMetadataDefs | undefined;
     } else { 
       foundTemplate = badgeTemplates.find(t => 
         t.templateSlug === instanceEntry.templateTarget.slug && 
-        !t.ownedByUserId && !t.ownedByGuildId
+        !t.ownerType
       ) as TemplateWithMetadataDefs | undefined;
     }
 
@@ -587,11 +587,10 @@ export async function seedBadgeInstances(prisma: PrismaClient) {
     try {
       const createData: any = {
         templateId: template.id,
-        userGiverId: giverUserId,
-        guildGiverId: giverGuildId,
-        userReceiverId: receiverUserId,
-        guildReceiverId: receiverGuildId,
-        clusterReceiverId: receiverClusterId,
+        giverType: instanceEntry.giver.type as EntityType,
+        giverId: instanceEntry.giver.type === 'USER' ? giverUserId! : giverGuildId!,
+        receiverType: instanceEntry.receiver.type as EntityType,
+        receiverId: instanceEntry.receiver.type === 'USER' ? receiverUserId! : (instanceEntry.receiver.type === 'GUILD' ? receiverGuildId! : receiverClusterId!),
         awardStatus: instanceEntry.awardStatus || BadgeAwardStatus.ACCEPTED,
         apiVisible: instanceEntry.apiVisible !== undefined 
             ? instanceEntry.apiVisible 

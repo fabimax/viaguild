@@ -10,6 +10,7 @@ import {
   BadgeTier,
   BackgroundContentType,
   ForegroundContentType,
+  EntityType,
   Prisma
 } from '@prisma/client';
 import { faker } from '@faker-js/faker';
@@ -43,11 +44,15 @@ function getSystemIconId(name: string, allSystemIcons: SystemIcon[]): string {
 }
 
 
-interface BadgeTemplateSeedData extends Omit<BadgeTemplate, 'id' | 'createdAt' | 'updatedAt' | 'instances' | 'metadataFieldDefinitions' | 'templateSlug_ci' | 'authoredByUser' | 'ownedByUser' | 'ownedByGuild' | 'definesCredential' | 'credentialLabel' | 'credentialBest' | 'credentialWorst' | 'credentialNotes' | 'credentialIsNormalizable' | 'higherIsBetter' | 'measureBestLabel' | 'measureWorstLabel'> { 
+interface BadgeTemplateSeedData extends Omit<BadgeTemplate, 'id' | 'createdAt' | 'updatedAt' | 'instances' | 'metadataFieldDefinitions' | 'templateSlug_ci' | 'authoredByUser' | 'ownedByUser' | 'ownedByGuild' | 'definesCredential' | 'credentialLabel' | 'credentialBest' | 'credentialWorst' | 'credentialNotes' | 'credentialIsNormalizable' | 'higherIsBetter' | 'measureBestLabel' | 'measureWorstLabel' | 'ownedByUserId' | 'ownedByGuildId' | 'ownerType' | 'ownerId'> { 
   templateSlug: string;
   authoredByUserId: string | null;
+  // Legacy fields for backward compatibility during transition
   ownedByUserId: string | null;
   ownedByGuildId: string | null;
+  // New discriminated union fields
+  ownerType: EntityType | null;
+  ownerId: string | null;
   // Add the new "measure" fields
   definesMeasure: boolean;
   measureLabel: string | null;
@@ -97,6 +102,8 @@ export async function seedBadgeTemplates(prisma: PrismaClient) {
       authoredByUserId: systemDesignerUser?.id || null,
       ownedByUserId: null,
       ownedByGuildId: null,
+      ownerType: null, // System template - no owner
+      ownerId: null,
       isArchived: false,
       isModifiableByIssuer: false,
       allowsPushedInstanceUpdates: false,
@@ -149,6 +156,8 @@ export async function seedBadgeTemplates(prisma: PrismaClient) {
       authoredByUserId: testUserPrime?.id || systemDesignerUser?.id,
       ownedByUserId: null,
       ownedByGuildId: specialGuild?.id || null,
+      ownerType: specialGuild ? ('GUILD' as EntityType) : null,
+      ownerId: specialGuild?.id || null,
       isArchived: false,
       isModifiableByIssuer: false,
       allowsPushedInstanceUpdates: false,
@@ -193,6 +202,8 @@ export async function seedBadgeTemplates(prisma: PrismaClient) {
         authoredByUserId: testUserPrime?.id || systemDesignerUser?.id,
         ownedByUserId: testUserPrime?.id || null,
         ownedByGuildId: null,
+        ownerType: testUserPrime ? ('USER' as EntityType) : null,
+        ownerId: testUserPrime?.id || null,
         isArchived: false,
         isModifiableByIssuer: true,
         allowsPushedInstanceUpdates: true,
@@ -252,6 +263,8 @@ export async function seedBadgeTemplates(prisma: PrismaClient) {
       authoredByUserId: testUserPrime?.id || systemDesignerUser?.id, // Authored by TUP or system admin
       ownedByUserId: null,
       ownedByGuildId: specialGuild?.id || null,
+      ownerType: specialGuild ? ('GUILD' as EntityType) : null,
+      ownerId: specialGuild?.id || null,
       isArchived: false,
       isModifiableByIssuer: true, // Guild admins can update the look/description of this badge type
       allowsPushedInstanceUpdates: false, // Instance data (metadata) is set at award, not typically live-updated by issuer
@@ -300,7 +313,9 @@ export async function seedBadgeTemplates(prisma: PrismaClient) {
       internalNotes: 'A simple badge to acknowledge participation in any event or activity.',
       authoredByUserId: systemDesignerUser?.id || null,
       ownedByUserId: null,
-      ownedByGuildId: null, // System template
+      ownedByGuildId: null,
+      ownerType: null, // System template
+      ownerId: null, // System template
       isArchived: false,
       isModifiableByIssuer: false,
       allowsPushedInstanceUpdates: false,
@@ -343,6 +358,8 @@ export async function seedBadgeTemplates(prisma: PrismaClient) {
       authoredByUserId: testUserPrime?.id || systemDesignerUser?.id,
       ownedByUserId: testUserPrime?.id || null,
       ownedByGuildId: null,
+      ownerType: testUserPrime ? ('USER' as EntityType) : null,
+      ownerId: testUserPrime?.id || null,
       isArchived: false,
       isModifiableByIssuer: true, // TUP might change the base look of their rank badge
       allowsPushedInstanceUpdates: true, // Crucial: TUP's system will push updates to measureValue
@@ -392,6 +409,8 @@ export async function seedBadgeTemplates(prisma: PrismaClient) {
       authoredByUserId: systemDesignerUser?.id, 
       ownedByUserId: null,
       ownedByGuildId: artisanCraftersGuild?.id || null, // Use the fetched ID
+      ownerType: artisanCraftersGuild ? ('GUILD' as EntityType) : null,
+      ownerId: artisanCraftersGuild?.id || null,
       isArchived: false,
       isModifiableByIssuer: false,
       allowsPushedInstanceUpdates: false,
@@ -434,6 +453,8 @@ export async function seedBadgeTemplates(prisma: PrismaClient) {
       authoredByUserId: testUserPrime?.id || systemDesignerUser?.id,
       ownedByUserId: null,
       ownedByGuildId: specialGuild?.id || null,
+      ownerType: specialGuild ? ('GUILD' as EntityType) : null,
+      ownerId: specialGuild?.id || null,
       isArchived: false,
       isModifiableByIssuer: false,
       allowsPushedInstanceUpdates: false,
@@ -489,21 +510,29 @@ export async function seedBadgeTemplates(prisma: PrismaClient) {
     try {
       let existingTemplate: BadgeTemplate | null = null;
 
-      if (badgeTemplateCoreData.ownedByUserId) {
-        existingTemplate = await prisma.badgeTemplate.findUnique({
-            where: { unique_user_template_slug_ci: { ownedByUserId: badgeTemplateCoreData.ownedByUserId, templateSlug_ci: templateSlugCi } }
+      if (badgeTemplateCoreData.ownerType === 'USER' && badgeTemplateCoreData.ownerId) {
+        existingTemplate = await prisma.badgeTemplate.findFirst({
+            where: { 
+              ownerType: 'USER',
+              ownerId: badgeTemplateCoreData.ownerId,
+              templateSlug_ci: templateSlugCi 
+            }
         });
-      } else if (badgeTemplateCoreData.ownedByGuildId) {
-        existingTemplate = await prisma.badgeTemplate.findUnique({
-            where: { unique_guild_template_slug_ci: { ownedByGuildId: badgeTemplateCoreData.ownedByGuildId, templateSlug_ci: templateSlugCi } }
+      } else if (badgeTemplateCoreData.ownerType === 'GUILD' && badgeTemplateCoreData.ownerId) {
+        existingTemplate = await prisma.badgeTemplate.findFirst({
+            where: { 
+              ownerType: 'GUILD',
+              ownerId: badgeTemplateCoreData.ownerId,
+              templateSlug_ci: templateSlugCi 
+            }
         });
       } else {
-        // System template (ownedByUserId is null AND ownedByGuildId is null)
+        // System template (ownerType is null)
         existingTemplate = await prisma.badgeTemplate.findFirst({
           where: { 
             templateSlug_ci: templateSlugCi,
-            ownedByUserId: null,
-            ownedByGuildId: null
+            ownerType: null,
+            ownerId: null
           }
         });
       }
@@ -514,8 +543,10 @@ export async function seedBadgeTemplates(prisma: PrismaClient) {
         // Prepare update payload: only update non-key fields
         const { 
             authoredByUserId, 
-            ownedByUserId,      // Exclude: part of unique key
-            ownedByGuildId,     // Exclude: part of unique key
+            ownedByUserId,      // Exclude: legacy field
+            ownedByGuildId,     // Exclude: legacy field
+            ownerType,          // Exclude: part of key
+            ownerId,            // Exclude: part of key
             templateSlug: ts,   // Exclude: immutable part of unique key
             // templateSlug_ci will be derived and is also part of unique key
             ...updatableCoreData 
@@ -537,8 +568,8 @@ export async function seedBadgeTemplates(prisma: PrismaClient) {
         // Prepare create payload
         const { 
             authoredByUserId, 
-            ownedByUserId, 
-            ownedByGuildId,
+            ownedByUserId,      // Remove: legacy field
+            ownedByGuildId,     // Remove: legacy field
             templateSlug: ts, // already have templateSlug separately
             ...restOfCoreData 
         } = badgeTemplateCoreData as any;
@@ -551,12 +582,6 @@ export async function seedBadgeTemplates(prisma: PrismaClient) {
         
         if (authoredByUserId) {
           createPayload.authoredByUser = { connect: { id: authoredByUserId } };
-        }
-        if (ownedByUserId) {
-          createPayload.ownedByUser = { connect: { id: ownedByUserId } };
-        }
-        if (ownedByGuildId) {
-          createPayload.ownedByGuild = { connect: { id: ownedByGuildId } };
         }
 
         upsertedTemplate = await prisma.badgeTemplate.create({

@@ -56,13 +56,15 @@ async function main() {
   // Guild specific relations and assignments (These should come BEFORE memberships if memberships depend on them)
   await seedGuildCategoryAssignments(prisma); // Guilds to Categories - MOVED EARLIER
   await seedGuildClusterAssignments(prisma);  // Guilds to Clusters (and primary cluster for guild)
-  await seedGuildBans(prisma);
   await seedGuildRelationships(prisma);
 
-  // Memberships and then custom roles that might alter memberships or depend on them
+  // Memberships MUST come before bans since bans need to know who is/isn't a member
   await seedMemberships(prisma);              // Now runs AFTER guild-category assignments
   await seedCustomGuildRoles(prisma);
   await seedCustomClusterRoles(prisma);
+  
+  // Guild bans - MUST run after memberships so it can identify non-members to ban
+  await seedGuildBans(prisma);
   
   // Badge System - Usage (Instances & Cases)
   console.log('🌱 Seeding BadgeInstances & InstanceMetadataValues...');
