@@ -333,6 +333,34 @@ class GuildService {
     const response = await api.put(`/guilds/${guildId}/members/${userId}/role`, { role });
     return response.data;
   }
+
+  /**
+   * Get current user's permissions for a specific guild
+   * @param {string} guildId - Guild ID
+   * @returns {Promise<Object>} User's permissions in the guild
+   */
+  async getMyGuildPermissions(guildId) {
+    if (useMockData()) {
+      // Use mock data for development - simulate having edit permissions
+      return new Promise((resolve) => {
+        const permissions = {
+          guildId,
+          userId: 'u1',
+          roles: [{ id: 'r1', name: 'Owner', isSystemRole: true, displayColor: '#4f46e5', apiVisible: true }],
+          permissions: ['GUILD_EDIT_DETAILS', 'GUILD_MANAGE_RELATIONSHIPS', 'GUILD_MANAGE_CONTACTS'],
+          rank: 'S',
+          guildMembershipId: 'm1'
+        };
+        
+        setTimeout(() => resolve(permissions), 500);
+      });
+    }
+
+    // Real API call with authentication
+    const api = getAuthAxios();
+    const response = await api.get(`/guilds/${guildId}/my-permissions`);
+    return response.data;
+  }
 }
 
 export default new GuildService(); 

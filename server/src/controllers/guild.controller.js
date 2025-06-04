@@ -41,9 +41,9 @@ class GuildController {
    */
   async updateGuild(req, res) {
     try {
-      const { id } = req.params;
+      const { identifier } = req.params; // FIXED: Use identifier instead of id
       const userId = req.user.id;
-      const guild = await guildService.updateGuild(id, req.body, userId);
+      const guild = await guildService.updateGuild(identifier, req.body, userId);
       res.json(guild);
     } catch (error) {
       if (error.message === 'Guild not found') {
@@ -63,9 +63,9 @@ class GuildController {
    */
   async deleteGuild(req, res) {
     try {
-      const { id } = req.params;
+      const { identifier } = req.params; // FIXED: Use identifier instead of id
       const userId = req.user.id;
-      await guildService.deleteGuild(id, userId);
+      await guildService.deleteGuild(identifier, userId);
       res.status(204).end();
     } catch (error) {
       if (error.message === 'Guild not found') {

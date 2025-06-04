@@ -452,6 +452,51 @@ class R2Service {
   }
 
   /**
+   * Clean up old temporary guild files
+   * @param {string} guildId - Guild ID
+   * @param {string} excludeFilename - Filename to exclude from deletion (current upload)
+   */
+  async cleanupOldGuildTempFiles(guildId, excludeFilename = null) {
+    const sizes = ['large', 'medium', 'small'];
+    
+    for (const size of sizes) {
+      const prefix = `temp/guilds/${guildId}/${size}/`;
+      
+      try {
+        // List all files in this temp directory
+        const listCommand = new ListObjectsV2Command({
+          Bucket: this.bucketName,
+          Prefix: prefix,
+        });
+        
+        const response = await this.client.send(listCommand);
+        
+        if (response.Contents && response.Contents.length > 0) {
+          for (const object of response.Contents) {
+            // Skip if this is the file we just uploaded
+            if (excludeFilename && object.Key.endsWith(excludeFilename)) {
+              continue;
+            }
+            
+            // Delete old temp file
+            try {
+              await this.client.send(new DeleteObjectCommand({
+                Bucket: this.bucketName,
+                Key: object.Key,
+              }));
+              console.log(`Cleaned up old guild temp file: ${object.Key}`);
+            } catch (err) {
+              console.error(`Failed to delete old guild temp file ${object.Key}:`, err.message);
+            }
+          }
+        }
+      } catch (error) {
+        console.error(`Error listing guild temp files for ${size}:`, error.message);
+      }
+    }
+  }
+
+  /**
    * Upload badge SVG content
    * @param {string} svgContent - SVG content as string
    * @param {string} ownerId - Owner/creator ID
@@ -501,9 +546,10 @@ class R2Service {
    * @param {string} guildId - Guild ID for organization
    * @param {string} filename - Original filename
    * @param {Object} prisma - Prisma client instance
+   * @param {boolean} isPreview - Whether this is a preview upload (goes to temp folder)
    * @returns {Object} Upload result with URLs for all sizes
    */
-  async uploadGuildAvatar(buffer, guildId, filename, prisma) {
+  async uploadGuildAvatar(buffer, guildId, filename, prisma, isPreview = true) {
     // Define size variants for responsive images
     const sizes = {
       large: { width: 256, height: 256, key: null },
@@ -512,6 +558,14 @@ class R2Service {
     };
 
     const results = {};
+    
+    // Use temp folder for previews, permanent folder for saved avatars
+    const folderPrefix = isPreview ? `temp/guilds/${guildId}` : `guilds/${guildId}`;
+    
+    // Generate a single filename for all sizes to keep them synchronized
+    const timestamp = Date.now();
+    const randomString = crypto.randomBytes(8).toString('hex');
+    const avatarFilename = `${timestamp}-${randomString}.webp`;
 
     // Process and upload each size variant
     for (const [size, config] of Object.entries(sizes)) {
@@ -520,7 +574,7 @@ class R2Service {
         .webp({ quality: 85 })
         .toBuffer();
 
-      const key = this.generateKey(`guilds/${guildId}/${size}`, 'avatar.webp');
+      const key = `${folderPrefix}/${size}/${avatarFilename}`;
       config.key = key;
 
       await this.client.send(new PutObjectCommand({
@@ -532,25 +586,129 @@ class R2Service {
 
       results[size] = `${this.publicUrlBase}/${key}`;
     }
+    
+    // If this is a preview upload, clean up old temp files
+    if (isPreview) {
+      await this.cleanupOldGuildTempFiles(guildId, avatarFilename);
+    }
 
-    // Store reference in database (no uploaderId for guild assets)
-    const uploadedAsset = await prisma.uploadedAsset.create({
-      data: {
-        originalFilename: filename,
-        mimeType: 'image/webp',
-        sizeBytes: buffer.length,
-        hostedUrl: results.large,
-        storageIdentifier: sizes.large.key,
-        assetType: 'guild_avatar',
-        description: 'Guild avatar',
-      },
-    });
+    // Only store in database if it's not a preview
+    let uploadedAsset = null;
+    if (!isPreview) {
+      uploadedAsset = await prisma.uploadedAsset.create({
+        data: {
+          originalFilename: filename,
+          mimeType: 'image/webp',
+          sizeBytes: buffer.length,
+          hostedUrl: results.large,
+          storageIdentifier: sizes.large.key,
+          assetType: 'guild_avatar',
+          description: 'Guild avatar',
+        },
+      });
+    }
 
     return {
-      id: uploadedAsset.id,
+      id: uploadedAsset?.id || null,
       urls: results,
       uploadedAsset,
     };
+  }
+
+  /**
+   * Move guild avatar from temp to permanent location
+   * @param {string} tempUrl - The temporary guild avatar URL
+   * @param {string} guildId - Guild ID
+   * @param {Object} prisma - Prisma client instance
+   * @returns {Object} New permanent URLs
+   */
+  async moveGuildAvatarFromTemp(tempUrl, guildId, prisma) {
+    const tempKey = this.extractKeyFromUrl(tempUrl);
+    if (!tempKey || !tempKey.includes('temp/')) {
+      throw new Error('Invalid temp URL provided');
+    }
+
+    const sizes = ['large', 'medium', 'small'];
+    const results = {};
+    const movedKeys = {};
+
+    // Extract filename from temp key
+    const keyParts = tempKey.split('/');
+    const filename = keyParts[keyParts.length - 1];
+
+    try {
+      // Copy each size from temp to permanent location
+      for (const size of sizes) {
+        // Build the correct temp key for each size
+        let tempSizeKey;
+        if (tempKey.includes('/large/')) {
+          tempSizeKey = tempKey.replace('/large/', `/${size}/`);
+        } else if (tempKey.includes('/medium/')) {
+          tempSizeKey = tempKey.replace('/medium/', `/${size}/`);
+        } else if (tempKey.includes('/small/')) {
+          tempSizeKey = tempKey.replace('/small/', `/${size}/`);
+        } else {
+          // Fallback - build from scratch
+          const basePath = `temp/guilds/${guildId}`;
+          tempSizeKey = `${basePath}/${size}/${filename}`;
+        }
+        
+        const permanentKey = `guilds/${guildId}/${size}/${filename}`;
+
+        // Copy object
+        const copySource = encodeURIComponent(`${this.bucketName}/${tempSizeKey}`);
+        console.log(`Copying guild avatar from ${tempSizeKey} to ${permanentKey}`);
+        
+        await this.client.send(new CopyObjectCommand({
+          Bucket: this.bucketName,
+          CopySource: copySource,
+          Key: permanentKey,
+        }));
+
+        results[size] = `${this.publicUrlBase}/${permanentKey}`;
+        movedKeys[size] = permanentKey;
+      }
+
+      // Delete temp files after successful copy
+      for (const size of sizes) {
+        let tempSizeKey;
+        if (tempKey.includes('/large/')) {
+          tempSizeKey = tempKey.replace('/large/', `/${size}/`);
+        } else if (tempKey.includes('/medium/')) {
+          tempSizeKey = tempKey.replace('/medium/', `/${size}/`);
+        } else if (tempKey.includes('/small/')) {
+          tempSizeKey = tempKey.replace('/small/', `/${size}/`);
+        } else {
+          const basePath = `temp/guilds/${guildId}`;
+          tempSizeKey = `${basePath}/${size}/${filename}`;
+        }
+        await this.client.send(new DeleteObjectCommand({
+          Bucket: this.bucketName,
+          Key: tempSizeKey,
+        }));
+      }
+
+      // Create database entry for permanent guild avatar
+      const uploadedAsset = await prisma.uploadedAsset.create({
+        data: {
+          originalFilename: filename,
+          mimeType: 'image/webp',
+          sizeBytes: 0, // We don't have the original size here
+          hostedUrl: results.large,
+          storageIdentifier: movedKeys.large,
+          assetType: 'guild_avatar',
+          description: 'Guild avatar',
+        },
+      });
+
+      return {
+        urls: results,
+        uploadedAsset,
+      };
+    } catch (error) {
+      console.error('Error moving guild avatar from temp:', error);
+      throw error;
+    }
   }
 
   /**

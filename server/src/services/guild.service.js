@@ -1,4 +1,5 @@
 const { PrismaClient } = require('@prisma/client');
+const r2Service = require('./r2.service');
 const prisma = new PrismaClient();
 
 /**
@@ -559,7 +560,7 @@ class GuildService {
     // Check if guild exists first
     const existingGuild = await prisma.guild.findUnique({ 
       where: { id: guildId },
-      select: { id: true } // Select minimal field to check existence
+      select: { id: true, avatar: true } // Get current avatar for cleanup
     });
     if (!existingGuild) {
       throw new Error('Guild not found');
@@ -573,7 +574,7 @@ class GuildService {
       include: {
         assignedRoles: {
           include: {
-            role: {
+            guildRole: {
               include: {
                 permissions: {
                   include: {
@@ -592,13 +593,46 @@ class GuildService {
     }
 
     const actorPermissions = actorMembership.assignedRoles.flatMap(
-      ar => ar.role.permissions.map(p => p.permission.key)
+      ar => ar.guildRole.permissions.map(p => p.permission.key)
     );
 
     // Define the required permission for updating guild details
     const REQUIRED_PERMISSION = 'GUILD_EDIT_DETAILS'; 
     if (!actorPermissions.includes(REQUIRED_PERMISSION)) {
       throw new Error('You do not have permission to update this guild');
+    }
+
+    // Handle avatar updates
+    if (guildData.avatar) {
+      try {
+        // Avatar should be a URL from R2
+        if (typeof guildData.avatar !== 'string' || !guildData.avatar.startsWith('http')) {
+          throw new Error('Invalid avatar URL. Please upload an avatar through the upload endpoint.');
+        }
+        
+        // Validate it's from our R2 bucket
+        const publicUrlBase = process.env.R2_PUBLIC_URL_BASE;
+        if (publicUrlBase && !guildData.avatar.startsWith(publicUrlBase)) {
+          throw new Error('Avatar URL must be from our asset storage.');
+        }
+        
+        // Check if this is a temp URL that needs to be moved to permanent storage
+        if (guildData.avatar.includes('/temp/')) {
+          console.log('Moving guild avatar from temp to permanent storage:', guildData.avatar);
+          try {
+            const moveResult = await r2Service.moveGuildAvatarFromTemp(guildData.avatar, guildId, prisma);
+            // Update the avatar URL to the new permanent URL
+            guildData.avatar = moveResult.urls.large;
+            console.log('Guild avatar moved to permanent storage:', guildData.avatar);
+          } catch (moveError) {
+            console.error('Failed to move guild avatar from temp:', moveError);
+            throw new Error('Failed to save guild avatar. Please try uploading again.');
+          }
+        }
+      } catch (error) {
+        console.error('Error validating guild avatar:', error);
+        throw new Error(error.message || 'Invalid avatar format.');
+      }
     }
 
     // Construct updateData carefully to only include provided fields
@@ -627,10 +661,25 @@ class GuildService {
     }
 
     try {
-      return await prisma.guild.update({
+      // First update the guild
+      await prisma.guild.update({
         where: { id: guildId },
         data: updateData,
       });
+      
+      // If avatar was updated and old avatar was from R2, delete it
+      if (guildData.avatar && existingGuild.avatar && existingGuild.avatar !== updateData.avatar && !existingGuild.avatar.includes('/temp/')) {
+        try {
+          // Use deleteSpecificAvatar to only delete the old saved avatar files
+          await r2Service.deleteSpecificAvatar(existingGuild.avatar, prisma);
+        } catch (error) {
+          console.error('Failed to delete old guild avatar:', error);
+          // Don't fail the request if cleanup fails
+        }
+      }
+      
+      // Then return the full guild data like getGuildByIdentifier does
+      return await this.getGuildByIdentifier(guildId);
     } catch (error) {
       if (error.code === 'P2002' && error.meta?.target?.includes('name_ci')) {
         throw new Error('A guild with this name already exists');
@@ -664,7 +713,7 @@ class GuildService {
       include: {
         assignedRoles: {
           include: {
-            role: {
+            guildRole: {
               include: {
                 permissions: {
                   include: {
@@ -684,7 +733,7 @@ class GuildService {
     }
 
     const actorPermissions = actorMembership.assignedRoles.flatMap(
-      ar => ar.role.permissions.map(p => p.permission.key)
+      ar => ar.guildRole.permissions.map(p => p.permission.key)
     );
 
     const REQUIRED_PERMISSION = 'GUILD_DISBAND'; 
@@ -768,10 +817,10 @@ class GuildService {
       // Membership specific details for this user in this guild:
       userGuildMembershipId: membership.id, // The ID of the GuildMembership record itself
       roles: membership.assignedRoles.map(ar => ({
-        id: ar.role.id,
-        name: ar.role.name,
-        displayColor: ar.role.displayColor,
-        apiVisible: ar.role.apiVisible
+        id: ar.guildRole.id,
+        name: ar.guildRole.name,
+        displayColor: ar.guildRole.displayColor,
+        apiVisible: ar.guildRole.apiVisible
       })), 
       isPrimary: membership.isPrimary,
       rank: membership.rank, // Include member's rank in this guild
@@ -953,7 +1002,7 @@ class GuildService {
       throw new Error('You are not a member of this guild');
     }
 
-    const isFounder = membership.assignedRoles.some(ar => ar.role.name_ci === 'founder');
+    const isFounder = membership.assignedRoles.some(ar => ar.guildRole.name_ci === 'founder');
 
     if (isFounder) {
       // Check if they are the sole founder
@@ -1033,7 +1082,7 @@ class GuildService {
       }
     });
     if (!actorMembershipPerms) throw new Error('Actor not a member or guild not found.');
-    const actorPermissions = actorMembershipPerms.assignedRoles.flatMap(ar => ar.role.permissions.map(p => p.permission.key));
+    const actorPermissions = actorMembershipPerms.assignedRoles.flatMap(ar => ar.guildRole.permissions.map(p => p.permission.key));
     if (!actorPermissions.includes('GUILD_ROLE_ASSIGN')) {
       throw new Error('Actor does not have permission to assign roles in this guild.');
     }
@@ -1422,9 +1471,9 @@ class GuildService {
         uniqueUserGuildMembership: { userId, guildId } // MODIFIED: Use named unique constraint
       },
       include: {
-        assignedRoles: { // MODIFIED: Fetch assigned roles with their permissions
+        assignedRoles: { // Fetch assigned roles with their permissions
           include: {
-            role: {
+            guildRole: { // CORRECTED: Use guildRole instead of role
               select: { // Select role details needed for the response
                 id: true,
                 name: true,
@@ -1432,9 +1481,9 @@ class GuildService {
                 isSystemRole: true,
                 displayColor: true,
                 apiVisible: true,
-                permissions: { // MODIFIED: Include permissions for each role
+                permissions: { // Include permissions for each role
                   include: {
-                    permission: { // MODIFIED: Include the actual permission details
+                    permission: { // Include the actual permission details
                       select: { key: true } // We only need the permission key string
                     }
                   }
@@ -1453,18 +1502,18 @@ class GuildService {
     // Aggregate all permission keys from all assigned roles
     const allPermissionKeys = new Set();
     membership.assignedRoles.forEach(assignedRole => {
-      assignedRole.role.permissions.forEach(rolePermission => {
+      assignedRole.guildRole.permissions.forEach(rolePermission => { // CORRECTED: Use guildRole instead of role
         allPermissionKeys.add(rolePermission.permission.key);
       });
     });
 
     // Prepare the roles data for the response
     const userRoles = membership.assignedRoles.map(ar => ({
-        id: ar.role.id,
-        name: ar.role.name, // Display name
-        isSystemRole: ar.role.isSystemRole,
-        displayColor: ar.role.displayColor,
-        apiVisible: ar.role.apiVisible
+        id: ar.guildRole.id, // CORRECTED: Use guildRole instead of role
+        name: ar.guildRole.name, // Display name
+        isSystemRole: ar.guildRole.isSystemRole,
+        displayColor: ar.guildRole.displayColor,
+        apiVisible: ar.guildRole.apiVisible
     }));
 
     return {

@@ -92,11 +92,11 @@ const uploadController = {
           userId: req.user.id,
         },
         include: {
-          roles: {
+          assignedRoles: {
             include: {
-              role: {
+              guildRole: {
                 include: {
-                  rolePermissions: {
+                  permissions: {
                     include: {
                       permission: true,
                     },
@@ -108,10 +108,10 @@ const uploadController = {
         },
       });
 
-      // Check for MANAGE_GUILD permission
-      const hasPermission = membership?.roles.some(mr =>
-        mr.role.rolePermissions.some(rp =>
-          rp.permission.name === 'MANAGE_GUILD'
+      // Check for GUILD_EDIT_DETAILS permission (which should allow avatar changes)
+      const hasPermission = membership?.assignedRoles.some(ar =>
+        ar.guildRole.permissions.some(rp =>
+          rp.permission.key === 'GUILD_EDIT_DETAILS'
         )
       );
 
@@ -123,8 +123,36 @@ const uploadController = {
         return res.status(400).json({ error: 'No file uploaded' });
       }
 
+      // Get previous preview URL from header
+      const previousPreviewUrl = req.headers['x-previous-preview-url'];
+
+      // Get current saved guild avatar from database
+      const currentGuild = await req.prisma.guild.findUnique({
+        where: { id: guildId },
+        select: { avatar: true }
+      });
+      
+      console.log('Current saved guild avatar:', currentGuild.avatar);
+      console.log('Previous guild preview URL:', previousPreviewUrl);
+      
+      // If there's a previous preview URL, check if it should be deleted
+      if (previousPreviewUrl) {
+        // Only delete if it's different from the saved avatar (i.e., it's a preview)
+        if (previousPreviewUrl !== currentGuild.avatar) {
+          console.log('Deleting previous guild preview:', previousPreviewUrl);
+          try {
+            // Use deleteSpecificAvatar to only delete those specific files
+            await r2Service.deleteSpecificAvatar(previousPreviewUrl, req.prisma);
+          } catch (deleteError) {
+            console.error('Error deleting previous guild preview:', deleteError);
+            // Continue with upload even if deletion fails
+          }
+        } else {
+          console.log('Previous URL is the saved guild avatar, not deleting');
+        }
+      }
+
       // Upload to R2
-      // Note: Old avatar cleanup should happen when the guild profile is saved
       const result = await r2Service.uploadGuildAvatar(
         req.file.buffer,
         guildId,
@@ -178,9 +206,9 @@ const uploadController = {
         },
       });
 
-      // Check for MANAGE_CLUSTER permission or similar
+      // Check for CLUSTER_EDIT_DETAILS permission or similar
       const hasPermission = clusterRole?.clusterRole.clusterRolePermissions.some(crp =>
-        crp.permission.name === 'MANAGE_CLUSTER'
+        crp.permission.key === 'CLUSTER_EDIT_DETAILS'
       );
 
       if (!hasPermission) {

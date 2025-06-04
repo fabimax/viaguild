@@ -3,7 +3,7 @@ import PropTypes from 'prop-types';
 
 /**
  * AvatarUpload component
- * Allows users to upload and preview their profile avatar
+ * Allows users to upload and preview their profile avatar or guild avatar
  * Uploads images to R2 storage via the backend API
  * 
  * @param {Object} props - Component props
@@ -11,18 +11,23 @@ import PropTypes from 'prop-types';
  * @param {Function} props.onAvatarChange - Callback function when avatar is changed (receives URL)
  * @param {boolean} props.isLoading - Whether avatar upload is in progress
  * @param {Function} props.onUploadComplete - Optional callback after successful upload
+ * @param {string} props.uploadType - Type of upload: 'user' or 'guild'
+ * @param {string} props.guildId - Guild ID (required when uploadType is 'guild')
  */
 function AvatarUpload({ 
   currentAvatar = null, 
   onAvatarChange, 
   isLoading = false,
-  onUploadComplete
+  onUploadComplete,
+  uploadType = 'user',
+  guildId = null
 }) {
   const [previewAvatar, setPreviewAvatar] = useState(currentAvatar);
   const [error, setError] = useState('');
   const [internalLoading, setInternalLoading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadedPreviewUrl, setUploadedPreviewUrl] = useState(null); // Track uploaded preview URL
+  const originalAvatarRef = useRef(currentAvatar); // Track the original avatar separately
   const fileInputRef = useRef(null);
   
   /**
@@ -53,7 +58,16 @@ function AvatarUpload({
       console.log('No previous preview URL to send');
     }
     
-    const response = await fetch('http://localhost:3000/api/upload/avatar', {
+    // Determine upload endpoint based on type
+    let uploadUrl = 'http://localhost:3000/api/upload/avatar';
+    if (uploadType === 'guild') {
+      if (!guildId) {
+        throw new Error('Guild ID is required for guild avatar upload');
+      }
+      uploadUrl = `http://localhost:3000/api/upload/guild/${guildId}/avatar`;
+    }
+    
+    const response = await fetch(uploadUrl, {
       method: 'POST',
       headers,
       body: formData
@@ -202,13 +216,17 @@ function AvatarUpload({
       window.removeEventListener('beforeunload', handleBeforeUnload);
       
       // Cleanup function runs when component unmounts
+      // We should cleanup if there's an uploaded preview that's different from the ORIGINAL currentAvatar
+      // (not the form state currentAvatar, which gets updated during preview)
+      const originalAvatar = currentAvatar; // This is the prop passed in, representing the saved avatar
+      
       console.log('AvatarUpload unmounting, checking cleanup...', {
         uploadedPreviewUrl,
-        currentAvatar,
-        shouldCleanup: uploadedPreviewUrl && uploadedPreviewUrl !== currentAvatar
+        originalAvatar,
+        shouldCleanup: uploadedPreviewUrl && uploadedPreviewUrl !== originalAvatar
       });
       
-      if (uploadedPreviewUrl && uploadedPreviewUrl !== currentAvatar) {
+      if (uploadedPreviewUrl && uploadedPreviewUrl !== originalAvatar) {
         console.log('Component unmounting, cleaning up preview:', uploadedPreviewUrl);
         
         // Get auth token
@@ -318,7 +336,9 @@ AvatarUpload.propTypes = {
   currentAvatar: PropTypes.string,
   onAvatarChange: PropTypes.func.isRequired,
   isLoading: PropTypes.bool,
-  onUploadComplete: PropTypes.func
+  onUploadComplete: PropTypes.func,
+  uploadType: PropTypes.oneOf(['user', 'guild']),
+  guildId: PropTypes.string
 };
 
 export default AvatarUpload;
