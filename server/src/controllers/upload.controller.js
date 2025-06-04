@@ -383,6 +383,70 @@ const uploadController = {
       });
     }
   },
+
+  /**
+   * Delete a preview avatar (beacon endpoint)
+   * Special endpoint for sendBeacon that accepts auth token in body
+   */
+  async deletePreviewBeacon(req, res) {
+    try {
+      const { previewUrl, authToken } = req.body;
+
+      if (!authToken) {
+        return res.status(401).json({ error: 'No auth token provided' });
+      }
+
+      // Verify the auth token manually since this endpoint bypasses normal auth middleware
+      const jwt = require('jsonwebtoken');
+      let decoded;
+      try {
+        decoded = jwt.verify(authToken, process.env.JWT_SECRET);
+      } catch (err) {
+        return res.status(401).json({ error: 'Invalid auth token' });
+      }
+
+      if (!previewUrl) {
+        return res.status(400).json({ error: 'No preview URL provided' });
+      }
+
+      // Get current user's saved avatar
+      const currentUser = await req.prisma.user.findUnique({
+        where: { id: decoded.userId },
+        select: { avatar: true }
+      });
+
+      // Only delete if it's not the saved avatar
+      if (previewUrl !== currentUser.avatar) {
+        console.log('Deleting preview via beacon:', previewUrl);
+        try {
+          await r2Service.deleteSpecificAvatar(previewUrl, req.prisma);
+          res.json({
+            success: true,
+            message: 'Preview deleted successfully',
+          });
+        } catch (deleteError) {
+          console.error('Error deleting preview:', deleteError);
+          // Still return success to avoid blocking the frontend
+          res.json({
+            success: true,
+            message: 'Preview deletion attempted',
+          });
+        }
+      } else {
+        res.json({
+          success: true,
+          message: 'Preview is the saved avatar, not deleted',
+        });
+      }
+    } catch (error) {
+      console.error('Preview deletion error (beacon):', error);
+      // Don't fail the frontend if cleanup fails
+      res.json({
+        success: true,
+        message: 'Preview deletion attempted',
+      });
+    }
+  },
 };
 
 module.exports = { uploadController };
