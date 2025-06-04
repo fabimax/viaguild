@@ -1,136 +1,79 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import PropTypes from 'prop-types';
 
 /**
  * AvatarUpload component
  * Allows users to upload and preview their profile avatar
- * Includes optimal image compression for smaller file sizes
+ * Uploads images to R2 storage via the backend API
  * 
  * @param {Object} props - Component props
- * @param {string} props.currentAvatar - Current avatar image (Base64 string or URL)
- * @param {Function} props.onAvatarChange - Callback function when avatar is changed
+ * @param {string} props.currentAvatar - Current avatar URL
+ * @param {Function} props.onAvatarChange - Callback function when avatar is changed (receives URL)
  * @param {boolean} props.isLoading - Whether avatar upload is in progress
- * @param {Function} props.setIsLoading - Function to update loading state
+ * @param {Function} props.onUploadComplete - Optional callback after successful upload
  */
 function AvatarUpload({ 
   currentAvatar = null, 
   onAvatarChange, 
-  isLoading = false 
+  isLoading = false,
+  onUploadComplete
 }) {
   const [previewAvatar, setPreviewAvatar] = useState(currentAvatar);
   const [error, setError] = useState('');
   const [internalLoading, setInternalLoading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadedPreviewUrl, setUploadedPreviewUrl] = useState(null); // Track uploaded preview URL
   const fileInputRef = useRef(null);
   
-  // Maximum file size: 800KB (server limit 1MB gives us buffer)
-  const MAX_FILE_SIZE = 800 * 1024;
-  
-  // Target dimensions and quality (adjust as needed)
-  const MAX_WIDTH = 300;   // 300px is plenty for profile avatars
-  const MAX_HEIGHT = 300;  // Keep it square
-  const INITIAL_QUALITY = 0.9; // Start with high quality
+  /**
+   * Upload image file to R2 via backend API
+   * @param {File} file - Image file to upload
+   * @returns {Promise<Object>} - Upload response with URLs
+   */
+  const uploadToR2 = async (file) => {
+    const formData = new FormData();
+    formData.append('avatar', file);
+    
+    // Get auth token from localStorage
+    const token = localStorage.getItem('token');
+    if (!token) {
+      throw new Error('You must be logged in to upload an avatar');
+    }
+    
+    // Build headers
+    const headers = {
+      'Authorization': `Bearer ${token}`
+    };
+    
+    // Include previous preview URL as header if it exists
+    if (uploadedPreviewUrl) {
+      headers['X-Previous-Preview-URL'] = uploadedPreviewUrl;
+      console.log('Sending previous preview URL:', uploadedPreviewUrl);
+    } else {
+      console.log('No previous preview URL to send');
+    }
+    
+    const response = await fetch('http://localhost:3000/api/upload/avatar', {
+      method: 'POST',
+      headers,
+      body: formData
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to upload avatar');
+    }
+    
+    return response.json();
+  };
   
   /**
-   * Process image to ensure it's within size limits
-   * @param {File} file - Original image file
-   * @returns {Promise<string>} - Base64 encoded processed image
+   * Create local preview URL for immediate feedback
+   * @param {File} file - Image file
+   * @returns {string} - Object URL for preview
    */
-  const processImage = (file) => {
-    return new Promise((resolve, reject) => {
-      // Create a FileReader to convert the file to data URL
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      
-      reader.onload = (event) => {
-        // Create an image object to get dimensions
-        const img = new Image();
-        img.src = event.target.result;
-        
-        img.onload = () => {
-          console.log(`Original image: ${img.width}x${img.height}, Size: ~${Math.round(file.size / 1024)}KB`);
-          
-          // Determine if resizing is needed
-          let width = img.width;
-          let height = img.height;
-          let needsResize = false;
-          
-          if (width > MAX_WIDTH || height > MAX_HEIGHT) {
-            needsResize = true;
-            
-            // Calculate aspect ratio
-            const aspectRatio = width / height;
-            
-            if (width > height) {
-              // Landscape orientation
-              width = Math.min(width, MAX_WIDTH);
-              height = Math.round(width / aspectRatio);
-            } else {
-              // Portrait or square orientation
-              height = Math.min(height, MAX_HEIGHT);
-              width = Math.round(height * aspectRatio);
-            }
-          }
-          
-          // Create canvas for processing
-          const canvas = document.createElement('canvas');
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          
-          // Draw image with smooth scaling
-          ctx.imageSmoothingEnabled = true;
-          ctx.imageSmoothingQuality = 'high';
-          ctx.drawImage(img, 0, 0, width, height);
-          
-          // Function to check if we're under size limit
-          const checkSize = (dataUrl) => {
-            // Rough estimation of base64 size
-            // Remove the data URL header (e.g., data:image/jpeg;base64,)
-            const base64 = dataUrl.split(',')[1];
-            const decodedSize = Math.floor((base64.length * 3) / 4);
-            console.log(`Processed image size: ~${Math.round(decodedSize / 1024)}KB`);
-            return decodedSize < MAX_FILE_SIZE;
-          };
-          
-          // Start with high quality
-          let quality = INITIAL_QUALITY;
-          let dataUrl = canvas.toDataURL('image/jpeg', quality);
-          
-          // Reduce quality until we're under the size limit
-          while (!checkSize(dataUrl) && quality > 0.5) {
-            quality -= 0.05;
-            dataUrl = canvas.toDataURL('image/jpeg', quality);
-            console.log(`Reducing quality to ${quality.toFixed(2)}`);
-          }
-          
-          // If we're still too big, reduce dimensions
-          if (!checkSize(dataUrl) && (width > 150 || height > 150)) {
-            width = Math.round(width * 0.8);
-            height = Math.round(height * 0.8);
-            canvas.width = width;
-            canvas.height = height;
-            ctx.drawImage(img, 0, 0, width, height);
-            dataUrl = canvas.toDataURL('image/jpeg', quality);
-            console.log(`Reduced dimensions to ${width}x${height}`);
-          }
-          
-          // Final size check
-          if (checkSize(dataUrl)) {
-            resolve(dataUrl);
-          } else {
-            reject(new Error('Image is too large even after processing. Please choose a smaller image.'));
-          }
-        };
-        
-        img.onerror = (error) => {
-          reject(new Error('Error loading image. Please try another file.'));
-        };
-      };
-      
-      reader.onerror = () => {
-        reject(new Error('Error reading file. Please try again.'));
-      };
-    });
+  const createPreviewUrl = (file) => {
+    return URL.createObjectURL(file);
   };
   
   /**
@@ -140,6 +83,7 @@ function AvatarUpload({
   const handleFileChange = async (e) => {
     const file = e.target.files[0];
     setError('');
+    setUploadProgress(0);
     
     if (!file) return;
     
@@ -149,21 +93,46 @@ function AvatarUpload({
       return;
     }
     
+    // Check file size (10MB limit on backend)
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    if (file.size > maxSize) {
+      setError('File too large. Maximum size is 10MB.');
+      return;
+    }
+    
     try {
-      // Show loading state using internal state
+      // Show loading state
       setInternalLoading(true);
       
-      // Process the image to ensure it's within size limits
-      const processedImage = await processImage(file);
+      // Create preview immediately for better UX
+      const previewUrl = createPreviewUrl(file);
+      setPreviewAvatar(previewUrl);
       
-      // Update state with the processed image
-      setPreviewAvatar(processedImage);
-      onAvatarChange(processedImage);
+      // Upload to R2
+      const uploadResponse = await uploadToR2(file);
+      
+      // Update with actual uploaded URL
+      const uploadedUrl = uploadResponse.data.avatarUrl;
+      setPreviewAvatar(uploadedUrl);
+      setUploadedPreviewUrl(uploadedUrl); // Track this as the latest preview
+      onAvatarChange(uploadedUrl);
+      
+      // Call optional completion callback with full response
+      if (onUploadComplete) {
+        onUploadComplete(uploadResponse.data);
+      }
+      
+      // Clean up preview URL
+      URL.revokeObjectURL(previewUrl);
+      
     } catch (err) {
-      console.error('Error processing image:', err);
-      setError(err.message || 'Failed to process image. Please try a different file.');
+      console.error('Error uploading avatar:', err);
+      setError(err.message || 'Failed to upload avatar. Please try again.');
+      // Reset preview on error
+      setPreviewAvatar(currentAvatar);
     } finally {
       setInternalLoading(false);
+      setUploadProgress(0);
     }
   };
   
@@ -179,6 +148,7 @@ function AvatarUpload({
    */
   const handleRemoveAvatar = () => {
     setPreviewAvatar(null);
+    setUploadedPreviewUrl(null); // Clear tracked preview URL
     onAvatarChange(null);
     
     // Reset file input
@@ -190,6 +160,90 @@ function AvatarUpload({
   // Determine if component is in loading state from either prop or internal state
   const isComponentLoading = isLoading || internalLoading;
   
+  // Cleanup on unmount and tab close
+  useEffect(() => {
+    console.log('AvatarUpload mounted, preview URL:', uploadedPreviewUrl);
+    
+    // Function to handle cleanup
+    const cleanupPreview = () => {
+      if (uploadedPreviewUrl && uploadedPreviewUrl !== currentAvatar) {
+        console.log('Cleaning up preview:', uploadedPreviewUrl);
+        
+        const token = localStorage.getItem('token');
+        if (!token) {
+          console.warn('No auth token found, cannot cleanup preview');
+          return;
+        }
+        
+        // Use sendBeacon for reliable cleanup on tab close
+        const blob = new Blob([JSON.stringify({ previewUrl: uploadedPreviewUrl })], {
+          type: 'application/json'
+        });
+        
+        navigator.sendBeacon(
+          'http://localhost:3000/api/upload/delete-preview',
+          blob
+        );
+      }
+    };
+    
+    // Handle tab/window close
+    const handleBeforeUnload = (e) => {
+      cleanupPreview();
+    };
+    
+    // Add beforeunload listener
+    if (uploadedPreviewUrl && uploadedPreviewUrl !== currentAvatar) {
+      window.addEventListener('beforeunload', handleBeforeUnload);
+    }
+    
+    return () => {
+      // Remove beforeunload listener
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      
+      // Cleanup function runs when component unmounts
+      console.log('AvatarUpload unmounting, checking cleanup...', {
+        uploadedPreviewUrl,
+        currentAvatar,
+        shouldCleanup: uploadedPreviewUrl && uploadedPreviewUrl !== currentAvatar
+      });
+      
+      if (uploadedPreviewUrl && uploadedPreviewUrl !== currentAvatar) {
+        console.log('Component unmounting, cleaning up preview:', uploadedPreviewUrl);
+        
+        // Get auth token
+        const token = localStorage.getItem('token');
+        if (!token) {
+          console.warn('No auth token found, cannot cleanup preview');
+          return;
+        }
+        
+        // Send delete request for the preview
+        // Using fetch in cleanup is allowed, but we can't use async/await
+        fetch('http://localhost:3000/api/upload/delete-preview', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            previewUrl: uploadedPreviewUrl
+          })
+        })
+        .then(response => {
+          if (response.ok) {
+            console.log('Preview cleaned up successfully');
+          } else {
+            console.error('Failed to cleanup preview:', response.status);
+          }
+        })
+        .catch(error => {
+          console.error('Error cleaning up preview:', error);
+        });
+      }
+    };
+  }, [uploadedPreviewUrl, currentAvatar]);
+  
   return (
     <div className="avatar-upload">
       <div className="avatar-preview-container">
@@ -199,6 +253,10 @@ function AvatarUpload({
               src={previewAvatar} 
               alt="Avatar preview" 
               className="avatar-image"
+              onError={(e) => {
+                // Fallback if image fails to load
+                e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"%3E%3Ctext x="50" y="50" text-anchor="middle" dominant-baseline="middle" font-size="40"%3E👤%3C/text%3E%3C/svg%3E';
+              }}
             />
             <button
               type="button"
@@ -224,23 +282,33 @@ function AvatarUpload({
           onClick={handleUploadClick}
           disabled={isComponentLoading}
         >
-          {isComponentLoading ? 'Processing...' : (previewAvatar ? 'Change Avatar' : 'Upload Avatar')}
+          {isComponentLoading ? 'Uploading...' : (previewAvatar ? 'Change Avatar' : 'Upload Avatar')}
         </button>
         
         <input
           type="file"
           ref={fileInputRef}
           onChange={handleFileChange}
-          accept="image/jpeg, image/png, image/gif"
+          accept="image/jpeg, image/png, image/gif, image/webp"
           className="file-input"
           disabled={isComponentLoading}
         />
       </div>
       
+      {/* Progress indicator */}
+      {isComponentLoading && uploadProgress > 0 && (
+        <div className="upload-progress">
+          <div 
+            className="upload-progress-bar" 
+            style={{ width: `${uploadProgress}%` }}
+          />
+        </div>
+      )}
+      
       {error && <div className="avatar-error">{error}</div>}
       
       <div className="avatar-help">
-        <small>Upload a square image for best results. Maximum size: 1MB.</small>
+        <small>Upload an image up to 10MB. Square images work best.</small>
       </div>
     </div>
   );
@@ -249,7 +317,8 @@ function AvatarUpload({
 AvatarUpload.propTypes = {
   currentAvatar: PropTypes.string,
   onAvatarChange: PropTypes.func.isRequired,
-  isLoading: PropTypes.bool
+  isLoading: PropTypes.bool,
+  onUploadComplete: PropTypes.func
 };
 
 export default AvatarUpload;

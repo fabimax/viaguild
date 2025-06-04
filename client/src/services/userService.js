@@ -123,18 +123,7 @@ const userService = {
     console.log('[userService] Updating profile with data:', Object.keys(profileData));
     
     try {
-      // Check if avatar data is too large (limit to ~5MB to prevent request size issues)
-      if (profileData.avatar && typeof profileData.avatar === 'string') {
-        const MAX_AVATAR_SIZE = 5 * 1024 * 1024; // 5MB in bytes
-        const base64Data = profileData.avatar.split(',')[1] || profileData.avatar;
-        const approximateSize = Math.ceil((base64Data.length * 3) / 4);
-        
-        if (approximateSize > MAX_AVATAR_SIZE) {
-          console.error('[userService] Avatar is too large:', Math.round(approximateSize / (1024 * 1024)), 'MB');
-          throw new Error('Avatar image is too large. Please use an image smaller than 5MB.');
-        }
-      }
-      
+      // Avatar is now a URL from R2, no need for size checks
       const api = this.getAxios(true); // With authentication
       const response = await api.put('/users/profile', profileData);
       console.log('[userService] Update profile response:', response.status, response.data ? 'Data received' : 'No data');

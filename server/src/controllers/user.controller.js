@@ -1,3 +1,5 @@
+const r2Service = require('../services/r2.service');
+
 /**
  * User Controller
  * Handles user search and profile viewing functionality
@@ -209,28 +211,49 @@ exports.updateProfile = async (req, res, next) => {
     if (isPublic !== undefined) updateData.isPublic = isPublic;
     if (hiddenAccounts !== undefined) updateData.hiddenAccounts = hiddenAccounts;
     
-    // Validate avatar size if provided
+    // Get current user to check for existing avatar before update
+    const currentUser = await req.prisma.user.findUnique({
+      where: { id: userId },
+      select: { avatar: true }
+    });
+    
+    // Handle avatar updates
     if (avatar) {
       try {
-        // Calculate approximate size of Base64 string 
-        // (removing metadata part like "data:image/jpeg;base64,")
-        const base64Data = avatar.split(',')[1] || avatar;
-        const approximateSize = Math.ceil((base64Data.length * 3) / 4);
-        
-        // Log size for debugging
-        console.log(`Avatar size: ${Math.round(approximateSize / 1024)}KB`);
-        
-        // Limit to ~800KB (strict limit to prevent payload issues)
-        const MAX_AVATAR_SIZE = 800 * 1024; 
-        if (approximateSize > MAX_AVATAR_SIZE) {
-          return res.status(400).json({ 
-            message: 'Avatar image is too large. Please upload a smaller image (max 800KB).' 
+        // Avatar should now be a URL from R2
+        if (typeof avatar !== 'string' || !avatar.startsWith('http')) {
+          return res.status(400).json({
+            message: 'Invalid avatar URL. Please upload an avatar through the upload endpoint.'
           });
+        }
+        
+        // Optionally validate it's from our R2 bucket
+        const publicUrlBase = process.env.R2_PUBLIC_URL_BASE;
+        if (publicUrlBase && !avatar.startsWith(publicUrlBase)) {
+          return res.status(400).json({
+            message: 'Avatar URL must be from our asset storage.'
+          });
+        }
+        
+        // Check if this is a temp URL that needs to be moved to permanent storage
+        if (avatar.includes('/temp/')) {
+          console.log('Moving avatar from temp to permanent storage:', avatar);
+          try {
+            const moveResult = await r2Service.moveAvatarFromTemp(avatar, userId, req.prisma);
+            // Update the avatar URL to the new permanent URL
+            updateData.avatar = moveResult.urls.large;
+            console.log('Avatar moved to permanent storage:', updateData.avatar);
+          } catch (moveError) {
+            console.error('Failed to move avatar from temp:', moveError);
+            return res.status(500).json({
+              message: 'Failed to save avatar. Please try uploading again.'
+            });
+          }
         }
       } catch (error) {
         console.error('Error validating avatar:', error);
         return res.status(400).json({
-          message: 'Invalid avatar format. Please try uploading again.'
+          message: 'Invalid avatar format.'
         });
       }
     }
@@ -248,6 +271,17 @@ exports.updateProfile = async (req, res, next) => {
         hiddenAccounts: true,
       },
     });
+    
+    // If avatar was updated and old avatar was from R2, delete it
+    if (avatar && currentUser.avatar && currentUser.avatar !== updateData.avatar && !currentUser.avatar.includes('/temp/')) {
+      try {
+        // Use deleteSpecificAvatar to only delete the old saved avatar files
+        await r2Service.deleteSpecificAvatar(currentUser.avatar, req.prisma);
+      } catch (error) {
+        console.error('Failed to delete old avatar:', error);
+        // Don't fail the request if cleanup fails
+      }
+    }
     
     res.status(200).json({ 
       message: 'Profile updated successfully',

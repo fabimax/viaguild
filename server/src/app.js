@@ -11,6 +11,7 @@ const socialAccountRoutes = require('./routes/socialAccount.routes');
 const userRoutes = require('./routes/user.routes');
 const guildRoutes = require('./routes/guild.routes');
 const systemIconRoutes = require('./routes/systemIcon.routes');
+const uploadRoutes = require('./routes/upload.routes');
 
 // Initialize Express app
 const app = express();
@@ -21,7 +22,7 @@ app.use(cors({
   origin: 'http://localhost:5173', // Frontend URL
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Previous-Preview-URL']
 }));
 app.use(helmet());
 app.use(morgan('dev'));
@@ -45,6 +46,7 @@ app.use('/api/social-accounts', socialAccountRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/guilds', guildRoutes);
 app.use('/api/system-icons', systemIconRoutes);
+app.use('/api/upload', uploadRoutes);
 
 // Basic route for testing
 app.get('/', (req, res) => {
