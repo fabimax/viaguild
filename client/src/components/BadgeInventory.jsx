@@ -20,7 +20,6 @@ const BadgeInventory = ({
   error = null
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterTier, setFilterTier] = useState('');
   const [sortBy, setSortBy] = useState('newest');
 
   // Filter badges that are not in the case
@@ -43,12 +42,6 @@ const BadgeInventory = ({
       );
     }
 
-    // Apply tier filter
-    if (filterTier) {
-      filtered = filtered.filter(badge => 
-        badge.displayProps.tier === filterTier.toUpperCase()
-      );
-    }
 
     // Apply sorting
     switch (sortBy) {
@@ -74,18 +67,7 @@ const BadgeInventory = ({
     }
 
     return filtered;
-  }, [inventoryBadges, searchTerm, filterTier, sortBy]);
-
-  // Get unique tiers for filter dropdown
-  const availableTiers = useMemo(() => {
-    const tiers = new Set();
-    inventoryBadges.forEach(badge => {
-      if (badge.displayProps.tier) {
-        tiers.add(badge.displayProps.tier);
-      }
-    });
-    return Array.from(tiers).sort();
-  }, [inventoryBadges]);
+  }, [inventoryBadges, searchTerm, sortBy]);
 
   if (loading) {
     return (
@@ -125,41 +107,23 @@ const BadgeInventory = ({
 
       {inventoryBadges.length > 0 && (
         <div className="badge-inventory-controls">
-          <div className="search-bar">
-            <input
-              type="text"
-              placeholder="Search badges..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="search-input"
-            />
-          </div>
-
-          <div className="filter-controls">
-            <select
-              value={filterTier}
-              onChange={(e) => setFilterTier(e.target.value)}
-              className="filter-select"
-            >
-              <option value="">All Tiers</option>
-              {availableTiers.map(tier => (
-                <option key={tier} value={tier}>
-                  {tier.charAt(0) + tier.slice(1).toLowerCase()}
-                </option>
-              ))}
-            </select>
-
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-              className="sort-select"
-            >
-              <option value="newest">Newest First</option>
-              <option value="oldest">Oldest First</option>
-              <option value="name">Name A-Z</option>
-              <option value="tier">Tier (Gold first)</option>
-            </select>
-          </div>
+          <input
+            type="text"
+            placeholder="Search badges..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="search-input"
+          />
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            className="sort-select"
+          >
+            <option value="newest">Newest First</option>
+            <option value="oldest">Oldest First</option>
+            <option value="name">Name A-Z</option>
+            <option value="tier">Tier (Gold first)</option>
+          </select>
         </div>
       )}
 
@@ -178,11 +142,10 @@ const BadgeInventory = ({
                 <button 
                   onClick={() => {
                     setSearchTerm('');
-                    setFilterTier('');
                   }}
                   className="btn btn-secondary"
                 >
-                  Clear Filters
+                  Clear Search
                 </button>
               </div>
             )}

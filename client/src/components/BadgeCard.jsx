@@ -166,13 +166,15 @@ const BadgeCard = ({
             </button>
           )}
           
-          <button 
-            onClick={() => onDelete?.(badge.id)}
-            className="btn btn-danger btn-sm"
-            title="Delete Badge Permanently"
-          >
-            Delete
-          </button>
+          {!isInCase && (
+            <button 
+              onClick={() => onDelete?.(badge.id)}
+              className="btn btn-danger btn-sm"
+              title="Delete Badge Permanently"
+            >
+              Delete
+            </button>
+          )}
         </div>
       )}
     </div>

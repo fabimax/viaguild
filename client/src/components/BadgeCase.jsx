@@ -179,19 +179,6 @@ const BadgeCase = ({
                   className="case-badge-card"
                 />
                 
-                {isOwnCase && (
-                  <div className="badge-case-controls">
-                    <span className="badge-position">#{index + 1}</span>
-                    <button
-                      onClick={() => onRemoveFromCase?.(badge.id)}
-                      className="remove-badge-btn"
-                      title="Remove from case"
-                      aria-label="Remove badge from case"
-                    >
-                      ×
-                    </button>
-                  </div>
-                )}
               </div>
             ))}
           </div>

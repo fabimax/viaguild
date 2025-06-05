@@ -239,6 +239,31 @@
   font-weight: bold;
 }
 
+/* Badge Inventory Controls */
+.badge-inventory-controls {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.badge-inventory-controls .search-input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.badge-inventory-controls .sort-select {
+  padding: 8px 12px;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  font-size: 14px;
+  background-color: white;
+  cursor: pointer;
+}
+
 .badge-measure-range {
   color: #777;
 }

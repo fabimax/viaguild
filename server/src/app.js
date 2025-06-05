@@ -22,7 +22,7 @@ const prisma = new PrismaClient();
 app.use(cors({
   origin: 'http://localhost:5173', // Frontend URL
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Previous-Preview-URL']
 }));
 app.use(helmet());
