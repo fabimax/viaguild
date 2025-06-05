@@ -180,80 +180,10 @@ R2_PUBLIC_URL_BASE=https://pub-xxxxxxxx.r2.dev
 R2_ENDPOINT=https://your_account_id.eu.r2.cloudflarestorage.com
 ```
 
-## Git Commit Recommendation
+  ## Migration Completed ✅
 
-This is an excellent place to commit. Suggested commit message:
-
-```
-feat: implement temp-to-permanent guild avatar upload system
-
-- Add moveGuildAvatarFromTemp method to r2Service for temp-to-permanent avatar movement
-- Update guild service updateGuild method with avatar handling logic:
-  - Validates avatar URLs are from R2 bucket
-  - Detects temp URLs and moves them to permanent storage
-  - Cleans up old permanent avatars when updating
-- Enhance guild avatar upload controller with sequential preview cleanup:
-  - Tracks previous preview URLs via X-Previous-Preview-URL header
-  - Deletes old previews when new ones are uploaded
-  - Only deletes previews that differ from saved avatars
-- Guild avatars now follow same temp folder pattern as user avatars:
-  - Preview uploads go to temp/guilds/{guildId}/ folder
-  - Sequential cleanup maintains max 1 orphaned file per guild
-  - Save functionality moves avatars from temp to permanent storage
-  - Old permanent avatars deleted when saving new ones
-- Complete parity with user avatar R2 implementation
-```
-
-## Next Steps After Commit
-
-1. **Test the complete avatar upload flow** to verify new folder structure works
-2. **Implement cluster avatar system** using the same patterns
-3. **Implement BadgeBuilder R2 integration** for SVG uploads
-4. **Set up production cron job** before deploying
-
-## Folder Structure Migration
-
-### **Migration Scripts Available**
-
-#### `/server/src/scripts/migrate-r2-folder-structure.js`
-- **Purpose**: Migrates existing files from old structure to new entity-first structure
-- **Features**: 
-  - Copies all avatar files to new paths
-  - Updates database UploadedAsset records
-  - Updates user/guild avatar URLs in database
-  - Dry-run mode for safety
-  - Detailed logging and statistics
-
-**Usage:**
-```bash
-# Preview migration (safe)
-node src/scripts/migrate-r2-folder-structure.js --dry-run --verbose
-
-# Execute migration
-node src/scripts/migrate-r2-folder-structure.js --verbose
-```
-
-#### `/server/src/scripts/cleanup-old-r2-structure.js`
-- **Purpose**: Removes old folder structure files after successful migration
-- **Safety**: Requires `--confirm` flag and verifies new structure exists
-- **Features**: Selective deletion of only old structure files
-
-**Usage:**
-```bash
-# Preview cleanup (safe)
-node src/scripts/cleanup-old-r2-structure.js --dry-run --verbose
-
-# Execute cleanup (after verifying migration success)
-node src/scripts/cleanup-old-r2-structure.js --confirm --verbose
-```
-
-### **Migration Process**
-
-1. **Code Update**: ✅ Complete - r2Service.js uses new entity-first paths
-2. **Backward Compatibility**: ✅ Complete - moveAvatarFromTemp detects old/new structure
-3. **File Migration**: ✅ Complete - Migrated 26 files to new structure
-4. **Database Updates**: ✅ Complete - Updated 38 UploadedAsset records
-5. **Cleanup**: ✅ Manual - Old structure files removed from R2 manually
-6. **Verification**: 🔄 Ready - Test avatar uploads/saves work correctly
-
-This implementation provides a solid, scalable foundation for file uploads that will work well in production with minimal orphaned file accumulation.
+  R2 folder structure migration successfully completed:
+  - Migrated 26 files to entity-first organization (`users/{id}/avatars/`, `guilds/{id}/avatars/`)
+  - Updated 38 database records with new storage paths
+  - All new uploads now use scalable entity-first structure
+  - Old structure files can be manually removed from R2 dashboard
