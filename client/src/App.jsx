@@ -20,6 +20,7 @@ import CreateGuildPage from './pages/CreateGuildPage';
 import GuildOverviewPage from './pages/GuildOverviewPage.temp';
 import GuildProfilePage from './pages/GuildProfilePage';
 import BadgeBuilderPage from './pages/BadgeBuilderPage';
+import BadgeManagementPage from './pages/BadgeManagementPage';
 
 /**
  * Custom error fallback UI for the main application
@@ -88,6 +89,13 @@ function App() {
                   <ErrorBoundary>
                     <PublicUserProfile />
                   </ErrorBoundary>
+                } />
+                <Route path="/users/:username/badges" element={
+                  <ProtectedRoute>
+                    <ErrorBoundary>
+                      <BadgeManagementPage />
+                    </ErrorBoundary>
+                  </ProtectedRoute>
                 } />
                 
                 {/* Guild System Routes */}

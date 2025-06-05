@@ -12,6 +12,7 @@ const userRoutes = require('./routes/user.routes');
 const guildRoutes = require('./routes/guild.routes');
 const systemIconRoutes = require('./routes/systemIcon.routes');
 const uploadRoutes = require('./routes/upload.routes');
+const badgeRoutes = require('./routes/badge.routes');
 
 // Initialize Express app
 const app = express();
@@ -47,6 +48,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/guilds', guildRoutes);
 app.use('/api/system-icons', systemIconRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api', badgeRoutes);
 
 // Basic route for testing
 app.get('/', (req, res) => {

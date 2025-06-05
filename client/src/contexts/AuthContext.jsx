@@ -170,6 +170,7 @@ export const AuthProvider = ({ children }) => {
   // Context value
   const value = {
     currentUser,
+    token,
     loading,
     register,
     login,
