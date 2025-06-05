@@ -395,11 +395,25 @@ class BadgeService {
    */
   getBadgeDisplayProps(badgeInstance) {
     const template = badgeInstance.template;
+    
+    // Define tier-enforced border colors
+    const tierBorderColors = {
+      'GOLD': '#FFD700',
+      'SILVER': '#C0C0C0',
+      'BRONZE': '#CD7F32'
+    };
+    
+    // For tiered badges, enforce tier colors (ignore overrides)
+    // For non-tiered badges, allow custom colors
+    const borderColor = template.inherentTier && tierBorderColors[template.inherentTier] 
+      ? tierBorderColors[template.inherentTier]
+      : (badgeInstance.overrideBorderColor || template.defaultBorderColor);
+    
     return {
       name: badgeInstance.overrideBadgeName || template.defaultBadgeName,
       subtitle: badgeInstance.overrideSubtitle || template.defaultSubtitleText,
       shape: badgeInstance.overrideOuterShape || template.defaultOuterShape,
-      borderColor: badgeInstance.overrideBorderColor || template.defaultBorderColor,
+      borderColor: borderColor,
       backgroundType: badgeInstance.overrideBackgroundType || template.defaultBackgroundType,
       backgroundValue: badgeInstance.overrideBackgroundValue || template.defaultBackgroundValue,
       foregroundType: badgeInstance.overrideForegroundType || template.defaultForegroundType,
