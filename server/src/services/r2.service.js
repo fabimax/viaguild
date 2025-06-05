@@ -27,8 +27,22 @@ class R2Service {
   }
 
   /**
+   * Generate entity-first asset path
+   * @param {string} entityType - Entity type ('users', 'guilds', 'clusters', 'system')
+   * @param {string} entityId - Entity ID
+   * @param {string} assetType - Asset type ('avatars', 'badge-templates', 'icons')
+   * @param {boolean} isTemp - Whether this is a temp path
+   * @returns {string} Entity-first folder path
+   */
+  getEntityAssetPath(entityType, entityId, assetType, isTemp = false) {
+    const basePath = isTemp ? 'temp' : '';
+    const entityPath = `${entityType}/${entityId}/${assetType}`;
+    return basePath ? `${basePath}/${entityPath}` : entityPath;
+  }
+
+  /**
    * Generate a unique storage key for uploaded files
-   * @param {string} prefix - Directory prefix (e.g., 'avatars/userId')
+   * @param {string} prefix - Directory prefix (e.g., 'users/userId/avatars')
    * @param {string} filename - Original filename to extract extension
    * @returns {string} Unique storage key
    */
@@ -220,8 +234,8 @@ class R2Service {
 
     const results = {};
     
-    // Use temp folder for previews, permanent folder for saved avatars
-    const folderPrefix = isPreview ? `temp/avatars/${userId}` : `avatars/${userId}`;
+    // Use entity-first folder structure
+    const folderPrefix = this.getEntityAssetPath('users', userId, 'avatars', isPreview);
     
     // Generate a single filename for all sizes to keep them synchronized
     const timestamp = Date.now();
@@ -304,10 +318,16 @@ class R2Service {
     const filename = keyParts[keyParts.length - 1];
 
     try {
+      // Determine if this is old or new folder structure
+      const isNewStructure = tempKey.includes('temp/users/');
+      const tempBasePath = isNewStructure 
+        ? this.getEntityAssetPath('users', userId, 'avatars', true)
+        : `temp/avatars/${userId}`;
+      
       // First, let's verify what files actually exist in temp
       console.log('Checking which temp files exist...');
       for (const size of sizes) {
-        const checkKey = `temp/avatars/${userId}/${size}/${filename}`;
+        const checkKey = `${tempBasePath}/${size}/${filename}`;
         try {
           await this.client.send(new GetObjectCommand({
             Bucket: this.bucketName,
@@ -321,22 +341,11 @@ class R2Service {
       
       // Copy each size from temp to permanent location
       for (const size of sizes) {
-        // Build the correct temp key for each size
-        // tempKey might be for any size (large/medium/small), so we need to handle that
-        let tempSizeKey;
-        if (tempKey.includes('/large/')) {
-          tempSizeKey = tempKey.replace('/large/', `/${size}/`);
-        } else if (tempKey.includes('/medium/')) {
-          tempSizeKey = tempKey.replace('/medium/', `/${size}/`);
-        } else if (tempKey.includes('/small/')) {
-          tempSizeKey = tempKey.replace('/small/', `/${size}/`);
-        } else {
-          // Fallback - build from scratch
-          const basePath = `temp/avatars/${userId}`;
-          tempSizeKey = `${basePath}/${size}/${filename}`;
-        }
+        // Build the correct temp key for each size using detected structure
+        const tempSizeKey = `${tempBasePath}/${size}/${filename}`;
         
-        const permanentKey = `avatars/${userId}/${size}/${filename}`;
+        // ALWAYS use new structure for permanent storage (no matter what temp structure was)
+        const permanentKey = `users/${userId}/avatars/${size}/${filename}`;
 
         // Copy object
         // CopySource needs to be URL-encoded for S3 compatibility
@@ -356,19 +365,7 @@ class R2Service {
 
       // Delete temp files after successful copy
       for (const size of sizes) {
-        // Use the same logic as above to build the correct temp key
-        let tempSizeKey;
-        if (tempKey.includes('/large/')) {
-          tempSizeKey = tempKey.replace('/large/', `/${size}/`);
-        } else if (tempKey.includes('/medium/')) {
-          tempSizeKey = tempKey.replace('/medium/', `/${size}/`);
-        } else if (tempKey.includes('/small/')) {
-          tempSizeKey = tempKey.replace('/small/', `/${size}/`);
-        } else {
-          // Fallback - build from scratch
-          const basePath = `temp/avatars/${userId}`;
-          tempSizeKey = `${basePath}/${size}/${filename}`;
-        }
+        const tempSizeKey = `${tempBasePath}/${size}/${filename}`;
         await this.client.send(new DeleteObjectCommand({
           Bucket: this.bucketName,
           Key: tempSizeKey,
@@ -415,7 +412,7 @@ class R2Service {
     const sizes = ['large', 'medium', 'small'];
     
     for (const size of sizes) {
-      const prefix = `temp/avatars/${userId}/${size}/`;
+      const prefix = `${this.getEntityAssetPath('users', userId, 'avatars', true)}/${size}/`;
       
       try {
         // List all files in this temp directory
@@ -460,7 +457,7 @@ class R2Service {
     const sizes = ['large', 'medium', 'small'];
     
     for (const size of sizes) {
-      const prefix = `temp/guilds/${guildId}/${size}/`;
+      const prefix = `${this.getEntityAssetPath('guilds', guildId, 'avatars', true)}/${size}/`;
       
       try {
         // List all files in this temp directory
@@ -503,11 +500,15 @@ class R2Service {
    * @param {string} filename - Filename for the SVG
    * @param {string} description - Optional description
    * @param {Object} prisma - Prisma client instance
+   * @param {string} entityType - Entity type ('users', 'guilds', 'system') - defaults to 'users' for backward compatibility
    * @returns {Object} Upload result with URL
    */
-  async uploadBadgeSvg(svgContent, ownerId, filename, description, prisma) {
+  async uploadBadgeSvg(svgContent, ownerId, filename, description, prisma, entityType = 'users') {
     const buffer = Buffer.from(svgContent);
-    const key = this.generateKey(`badges/${ownerId}`, filename);
+    const assetPath = entityType === 'system' 
+      ? 'system/badge-templates'
+      : this.getEntityAssetPath(entityType, ownerId, 'badge-templates', false);
+    const key = this.generateKey(assetPath, filename);
 
     // Upload SVG to R2
     await this.client.send(new PutObjectCommand({
@@ -559,8 +560,8 @@ class R2Service {
 
     const results = {};
     
-    // Use temp folder for previews, permanent folder for saved avatars
-    const folderPrefix = isPreview ? `temp/guilds/${guildId}` : `guilds/${guildId}`;
+    // Use entity-first folder structure
+    const folderPrefix = this.getEntityAssetPath('guilds', guildId, 'avatars', isPreview);
     
     // Generate a single filename for all sizes to keep them synchronized
     const timestamp = Date.now();
@@ -637,23 +638,26 @@ class R2Service {
     const filename = keyParts[keyParts.length - 1];
 
     try {
+      // Determine if this is old or new folder structure
+      const isNewStructure = tempKey.includes('temp/guilds/') && tempKey.includes('/avatars/');
+      console.log(`[DEBUG] moveGuildAvatarFromTemp - tempKey: ${tempKey}`);
+      console.log(`[DEBUG] moveGuildAvatarFromTemp - isNewStructure: ${isNewStructure}`);
+      
+      const tempBasePath = isNewStructure 
+        ? this.getEntityAssetPath('guilds', guildId, 'avatars', true)
+        : `temp/guilds/${guildId}`;
+      
+      console.log(`[DEBUG] moveGuildAvatarFromTemp - tempBasePath: ${tempBasePath}`);
+      
       // Copy each size from temp to permanent location
       for (const size of sizes) {
-        // Build the correct temp key for each size
-        let tempSizeKey;
-        if (tempKey.includes('/large/')) {
-          tempSizeKey = tempKey.replace('/large/', `/${size}/`);
-        } else if (tempKey.includes('/medium/')) {
-          tempSizeKey = tempKey.replace('/medium/', `/${size}/`);
-        } else if (tempKey.includes('/small/')) {
-          tempSizeKey = tempKey.replace('/small/', `/${size}/`);
-        } else {
-          // Fallback - build from scratch
-          const basePath = `temp/guilds/${guildId}`;
-          tempSizeKey = `${basePath}/${size}/${filename}`;
-        }
+        // Build the correct temp key for each size using detected structure
+        const tempSizeKey = `${tempBasePath}/${size}/${filename}`;
         
-        const permanentKey = `guilds/${guildId}/${size}/${filename}`;
+        // ALWAYS use new structure for permanent storage (no matter what temp structure was)
+        const permanentKey = `guilds/${guildId}/avatars/${size}/${filename}`;
+        
+        console.log(`[DEBUG] moveGuildAvatarFromTemp - ${size}: ${tempSizeKey} → ${permanentKey}`);
 
         // Copy object
         const copySource = encodeURIComponent(`${this.bucketName}/${tempSizeKey}`);
@@ -671,17 +675,7 @@ class R2Service {
 
       // Delete temp files after successful copy
       for (const size of sizes) {
-        let tempSizeKey;
-        if (tempKey.includes('/large/')) {
-          tempSizeKey = tempKey.replace('/large/', `/${size}/`);
-        } else if (tempKey.includes('/medium/')) {
-          tempSizeKey = tempKey.replace('/medium/', `/${size}/`);
-        } else if (tempKey.includes('/small/')) {
-          tempSizeKey = tempKey.replace('/small/', `/${size}/`);
-        } else {
-          const basePath = `temp/guilds/${guildId}`;
-          tempSizeKey = `${basePath}/${size}/${filename}`;
-        }
+        const tempSizeKey = `${tempBasePath}/${size}/${filename}`;
         await this.client.send(new DeleteObjectCommand({
           Bucket: this.bucketName,
           Key: tempSizeKey,
