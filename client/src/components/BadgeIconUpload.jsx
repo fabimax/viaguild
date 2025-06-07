@@ -918,24 +918,123 @@ function BadgeIconUpload({
                 };
                 
                 const handleGroupColorChange = (originalColor, newHex, newAlpha) => {
-                  // Update all slots with this original color
+                  if (!svgColorData || !svgContent) return;
+                  const parsedAlpha = parseFloat(newAlpha);
+                  if (isNaN(parsedAlpha)) return;
+                  
+                  const newFormattedColor = formatHexWithAlpha(newHex, parsedAlpha);
+                  const newRgbaFromHexAlpha = svgCustomizer.current.hexToRgba(newFormattedColor);
+                  
+                  // Update all slots with this original color in a single state update
                   const slotsToUpdate = colorGroups[originalColor];
-                  slotsToUpdate.forEach(slot => {
-                    handleColorChange(slot.id, newHex, newAlpha);
+                  const updatedSlots = svgColorData.colorSlots.map(slot => {
+                    // Check if this slot should be updated (belongs to this group)
+                    const shouldUpdate = slotsToUpdate.some(groupSlot => groupSlot.id === slot.id);
+                    if (shouldUpdate) {
+                      return {
+                        ...slot,
+                        currentColor: newFormattedColor,
+                        rgba: newRgbaFromHexAlpha,
+                        hasTransparency: parsedAlpha < 1
+                      };
+                    }
+                    return slot;
                   });
+                  
+                  // Update element color map for SVG processing
+                  const updatedElementColorMap = { ...svgColorData.elementColorMap };
+                  slotsToUpdate.forEach(slot => {
+                    const { elementPath, colorType } = slot;
+                    if (!updatedElementColorMap[elementPath]) {
+                      updatedElementColorMap[elementPath] = {};
+                    }
+                    updatedElementColorMap[elementPath][colorType] = {
+                      original: slot.originalColor,
+                      current: newFormattedColor
+                    };
+                  });
+                  
+                  // Apply mappings to SVG
+                  const updatedSvg = applyElementMappings(svgContent, updatedElementColorMap);
+                  const newColorData = { 
+                    colorSlots: updatedSlots, 
+                    elementColorMap: updatedElementColorMap 
+                  };
+                  
+                  setSvgColorData(newColorData);
+                  
+                  // Update preview
+                  const blob = new Blob([updatedSvg], { type: 'image/svg+xml' });
+                  const newUrl = URL.createObjectURL(blob);
+                  if (previewIcon && previewIcon.startsWith('blob:')) {
+                    URL.revokeObjectURL(previewIcon);
+                  }
+                  setPreviewIcon(newUrl);
+                  
+                  // Keep using the upload reference if we have one
+                  const referenceValue = uploadId ? `upload://${uploadId}` : (uploadedUrl || newUrl);
+                  onIconChange(referenceValue, updatedSvg, uploadedUrl);
+                  onSvgDataChange?.(updatedSvg, newColorData);
                 };
                 
                 const handleResetGroup = (originalColor) => {
-                  // Reset all slots with this original color
+                  if (!svgColorData || !svgContent) return;
+                  
+                  // Reset all slots with this original color in a single state update
                   const slotsToReset = colorGroups[originalColor];
-                  slotsToReset.forEach(slot => {
-                    handleResetColor(slot.id);
+                  const updatedSlots = svgColorData.colorSlots.map(slot => {
+                    // Check if this slot should be reset (belongs to this group)
+                    const shouldReset = slotsToReset.some(groupSlot => groupSlot.id === slot.id);
+                    if (shouldReset) {
+                      return {
+                        ...slot,
+                        currentColor: slot.originalColor,
+                        rgba: svgCustomizer.current.hexToRgba(slot.originalColor),
+                        hasTransparency: svgCustomizer.current.hasTransparency(slot.originalColor)
+                      };
+                    }
+                    return slot;
                   });
+                  
+                  // Reset element color map
+                  const updatedElementColorMap = { ...svgColorData.elementColorMap };
+                  slotsToReset.forEach(slot => {
+                    const { elementPath, colorType } = slot;
+                    if (updatedElementColorMap[elementPath] && updatedElementColorMap[elementPath][colorType]) {
+                      updatedElementColorMap[elementPath][colorType].current = slot.originalColor;
+                    }
+                  });
+                  
+                  // Apply mappings to SVG
+                  const updatedSvg = applyElementMappings(svgContent, updatedElementColorMap);
+                  const newColorData = { 
+                    colorSlots: updatedSlots, 
+                    elementColorMap: updatedElementColorMap 
+                  };
+                  
+                  setSvgColorData(newColorData);
+                  
+                  // Update preview
+                  const blob = new Blob([updatedSvg], { type: 'image/svg+xml' });
+                  const newUrl = URL.createObjectURL(blob);
+                  if (previewIcon && previewIcon.startsWith('blob:')) {
+                    URL.revokeObjectURL(previewIcon);
+                  }
+                  setPreviewIcon(newUrl);
+                  
+                  // Keep using the upload reference if we have one
+                  const referenceValue = uploadId ? `upload://${uploadId}` : (uploadedUrl || newUrl);
+                  onIconChange(referenceValue, updatedSvg, uploadedUrl);
+                  onSvgDataChange?.(updatedSvg, newColorData);
                 };
                 
-                return Object.entries(colorGroups).map(([originalColor, slots], groupIndex) => {
-                  // Get current color from first slot in group (they should all be the same)
-                  const parsedCurrent = parseColorString(slots[0].currentColor);
+                return Object.entries(colorGroups).map(([originalColor, slots]) => {
+                  // Check if all slots in group have same current color
+                  const allSameColor = slots.every(slot => slot.currentColor === slots[0].currentColor);
+                  
+                  // For group controls, only show unified values when all colors are the same
+                  const groupCurrentColor = allSameColor ? slots[0].currentColor : originalColor;
+                  const parsedCurrent = parseColorString(groupCurrentColor);
                   const currentHex = parsedCurrent.hex;
                   const currentAlpha = parsedCurrent.alpha;
                   const isExpanded = expandedGroups[originalColor];
@@ -980,16 +1079,18 @@ function BadgeIconUpload({
                             type="color" 
                             value={currentHex}
                             onChange={(e) => handleGroupColorChange(originalColor, e.target.value, currentAlpha)}
-                            disabled={isComponentLoading}
+                            disabled={isComponentLoading || !allSameColor}
                           />
                           <input 
                             type="range" 
                             min="0" max="1" step="0.01" 
                             value={currentAlpha}
                             onChange={(e) => handleGroupColorChange(originalColor, currentHex, parseFloat(e.target.value))}
-                            disabled={isComponentLoading}
+                            disabled={isComponentLoading || !allSameColor}
                           />
-                          <span className="color-display-hex8">{slots[0].currentColor}</span>
+                          <span className="color-display-hex8">
+                            {allSameColor ? groupCurrentColor : `${originalColor} (mixed - expand to edit individually)`}
+                          </span>
                           <button 
                             type="button" 
                             onClick={() => handleResetGroup(originalColor)} 
