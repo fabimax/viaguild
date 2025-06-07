@@ -21,6 +21,10 @@ import GuildOverviewPage from './pages/GuildOverviewPage.temp';
 import GuildProfilePage from './pages/GuildProfilePage';
 import BadgeBuilderPage from './pages/BadgeBuilderPage';
 import BadgeManagementPage from './pages/BadgeManagementPage';
+import BadgeCasePage from './pages/BadgeCasePage';
+import BadgeInventoryPage from './pages/BadgeInventoryPage';
+import BadgeTemplateCreatePage from './pages/BadgeTemplateCreatePage';
+import BadgeTemplatesPage from './pages/BadgeTemplatesPage';
 
 /**
  * Custom error fallback UI for the main application
@@ -90,10 +94,37 @@ function App() {
                     <PublicUserProfile />
                   </ErrorBoundary>
                 } />
+                {/* Badge System Routes */}
                 <Route path="/users/:username/badges" element={
                   <ProtectedRoute>
                     <ErrorBoundary>
                       <BadgeManagementPage />
+                    </ErrorBoundary>
+                  </ProtectedRoute>
+                } />
+                <Route path="/users/:username/badges/badgecase" element={
+                  <ErrorBoundary>
+                    <BadgeCasePage />
+                  </ErrorBoundary>
+                } />
+                <Route path="/users/:username/badges/inventory" element={
+                  <ProtectedRoute>
+                    <ErrorBoundary>
+                      <BadgeInventoryPage />
+                    </ErrorBoundary>
+                  </ProtectedRoute>
+                } />
+                <Route path="/users/:username/badges/create" element={
+                  <ProtectedRoute>
+                    <ErrorBoundary>
+                      <BadgeTemplateCreatePage />
+                    </ErrorBoundary>
+                  </ProtectedRoute>
+                } />
+                <Route path="/users/:username/badges/templates" element={
+                  <ProtectedRoute>
+                    <ErrorBoundary>
+                      <BadgeTemplatesPage />
                     </ErrorBoundary>
                   </ProtectedRoute>
                 } />

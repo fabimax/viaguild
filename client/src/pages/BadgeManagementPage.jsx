@@ -31,7 +31,7 @@ const BadgeManagementPage = () => {
     isOwnPage 
   });
   
-  // Redirect if not authenticated or trying to access someone else's management page
+  // Redirect to new badge case structure
   useEffect(() => {
     if (!user || !token) {
       navigate('/login');
@@ -39,8 +39,12 @@ const BadgeManagementPage = () => {
     }
     
     if (!isOwnPage) {
-      // Redirect to user's own badge management page
-      navigate(`/users/${user.username}/badges`);
+      // Redirect to user's own badge case page
+      navigate(`/users/${user.username}/badges/badgecase`);
+      return;
+    } else {
+      // Redirect own page to badge case
+      navigate(`/users/${username}/badges/badgecase`);
       return;
     }
   }, [user, token, isOwnPage, navigate, username]);

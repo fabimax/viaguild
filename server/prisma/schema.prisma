@@ -565,6 +565,7 @@ model BadgeTemplate {
   defaultForegroundType     ForegroundContentType @default(SYSTEM_ICON)
   defaultForegroundValue    String // Text, SystemIcon.id, or HostedAsset.hostedUrl
   defaultForegroundColor    String? // Hex
+  defaultForegroundColorConfig     Json? // Element-path based color mappings for SVG customization
   defaultTextFont           String? // If foreground type is TEXT (from approved list)
   defaultTextSize           Int? // If foreground type is TEXT (e.g., in pixels)
   defaultDisplayDescription String?               @db.Text // Default user-facing description for this badge type
@@ -644,6 +645,7 @@ model BadgeInstance {
   overrideForegroundType     ForegroundContentType?
   overrideForegroundValue    String? // Text, SystemIcon.id, or HostedAsset.hostedUrl
   overrideForegroundColor    String? // Hex
+  overrideForegroundColorConfig Json? // Element-path based color mappings override
   overrideTextFont           String?
   overrideTextSize           Int?
   overrideDisplayDescription String?                @db.Text

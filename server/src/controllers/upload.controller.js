@@ -285,6 +285,74 @@ const uploadController = {
   },
 
   /**
+   * Upload badge icon (SVG or image)
+   */
+  async uploadBadgeIcon(req, res) {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      if (!req.file) {
+        return res.status(400).json({ error: 'No file uploaded' });
+      }
+
+      const { templateSlug } = req.body;
+      const file = req.file;
+      
+      // Create filename with template slug
+      const timestamp = Date.now();
+      const fileExtension = file.originalname.split('.').pop();
+      const filename = `${templateSlug || 'badge-icon'}-${timestamp}.${fileExtension}`;
+      
+      let result;
+      
+      if (file.mimetype === 'image/svg+xml') {
+        // Handle SVG upload using existing method
+        const svgContent = file.buffer.toString('utf8');
+        result = await r2Service.uploadBadgeSvg(
+          svgContent,
+          req.user.id,
+          filename,
+          `Badge icon for ${templateSlug}`,
+          req.prisma
+        );
+      } else {
+        // Handle regular image upload
+        result = await r2Service.processAndUploadImage(
+          file.buffer,
+          'users',
+          req.user.id,
+          filename,
+          {
+            width: 512,
+            height: 512,
+            quality: 90,
+            format: 'webp',
+            description: `Badge icon for ${templateSlug}`
+          },
+          req.prisma
+        );
+      }
+
+      res.json({
+        success: true,
+        message: 'Badge icon uploaded successfully',
+        data: {
+          iconUrl: result.url,
+          assetId: result.id,
+        },
+      });
+    } catch (error) {
+      console.error('Badge icon upload error:', error);
+      res.status(500).json({ 
+        error: 'Failed to upload badge icon',
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
+    }
+  },
+
+  /**
    * Generate presigned upload URL for direct client uploads
    * Useful for large files or when you want to upload directly from browser
    */

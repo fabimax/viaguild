@@ -104,6 +104,18 @@ router.post(
 );
 
 /**
+ * Upload badge icon (SVG or image file)
+ * POST /api/upload/badge-icon
+ * Requires authentication
+ */
+router.post(
+  '/badge-icon',
+  authenticate,
+  uploadWithFields.single('icon'),
+  uploadController.uploadBadgeIcon
+);
+
+/**
  * Get presigned upload URL for direct client uploads
  * POST /api/upload/presigned-url
  * Requires authentication
