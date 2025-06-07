@@ -557,7 +557,7 @@ function BadgeIconUpload({
       console.error('No upload ID available - cannot update icon');
       // Don't expose direct URLs
     }
-    onSvgDataChange?.(updatedSvg, null);
+    onSvgDataChange?.(updatedSvg, svgColorData);
   };
 
   /**
