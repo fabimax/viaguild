@@ -274,27 +274,125 @@ function BadgeIconUpload({
   };
 
   /**
-   * Build element-based color map (hybrid approach: regex detection + element mapping)
+   * Convert any color format to normalized HEX8 format
+   */
+  const parseAndNormalizeColor = (colorString) => {
+    if (!colorString || colorString === 'none' || colorString === 'transparent') {
+      return null;
+    }
+
+    // Trim whitespace
+    const color = colorString.trim();
+
+    // HEX colors: #RGB, #RRGGBB, #RRGGBBAA
+    if (color.startsWith('#')) {
+      if (color.length === 4) {
+        // #RGB -> #RRGGBBFF
+        const r = color[1] + color[1];
+        const g = color[2] + color[2];
+        const b = color[3] + color[3];
+        return `#${r}${g}${b}FF`.toUpperCase();
+      } else if (color.length === 7) {
+        // #RRGGBB -> #RRGGBBFF
+        return `${color}FF`.toUpperCase();
+      } else if (color.length === 9) {
+        // #RRGGBBAA -> #RRGGBBAA
+        return color.toUpperCase();
+      }
+    }
+
+    // RGB/RGBA colors: rgb(r,g,b) or rgba(r,g,b,a)
+    const rgbMatch = color.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([0-9.]+))?\)$/i);
+    if (rgbMatch) {
+      const r = parseInt(rgbMatch[1]).toString(16).padStart(2, '0');
+      const g = parseInt(rgbMatch[2]).toString(16).padStart(2, '0');
+      const b = parseInt(rgbMatch[3]).toString(16).padStart(2, '0');
+      const alpha = rgbMatch[4] !== undefined ? parseFloat(rgbMatch[4]) : 1;
+      const a = Math.round(alpha * 255).toString(16).padStart(2, '0');
+      return `#${r}${g}${b}${a}`.toUpperCase();
+    }
+
+    // HSL/HSLA colors: hsl(h,s%,l%) or hsla(h,s%,l%,a)
+    const hslMatch = color.match(/^hsla?\((\d+),\s*(\d+)%,\s*(\d+)%(?:,\s*([0-9.]+))?\)$/i);
+    if (hslMatch) {
+      const h = parseInt(hslMatch[1]) / 360;
+      const s = parseInt(hslMatch[2]) / 100;
+      const l = parseInt(hslMatch[3]) / 100;
+      const alpha = hslMatch[4] !== undefined ? parseFloat(hslMatch[4]) : 1;
+
+      // Convert HSL to RGB
+      const hslToRgb = (h, s, l) => {
+        let r, g, b;
+        if (s === 0) {
+          r = g = b = l; // achromatic
+        } else {
+          const hue2rgb = (p, q, t) => {
+            if (t < 0) t += 1;
+            if (t > 1) t -= 1;
+            if (t < 1/6) return p + (q - p) * 6 * t;
+            if (t < 1/2) return q;
+            if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+            return p;
+          };
+          const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+          const p = 2 * l - q;
+          r = hue2rgb(p, q, h + 1/3);
+          g = hue2rgb(p, q, h);
+          b = hue2rgb(p, q, h - 1/3);
+        }
+        return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
+      };
+
+      const [r, g, b] = hslToRgb(h, s, l);
+      const rHex = r.toString(16).padStart(2, '0');
+      const gHex = g.toString(16).padStart(2, '0');
+      const bHex = b.toString(16).padStart(2, '0');
+      const aHex = Math.round(alpha * 255).toString(16).padStart(2, '0');
+      return `#${rHex}${gHex}${bHex}${aHex}`.toUpperCase();
+    }
+
+    // Named colors
+    const namedColors = {
+      'red': '#FF0000FF', 'green': '#008000FF', 'blue': '#0000FFFF',
+      'white': '#FFFFFFFF', 'black': '#000000FF', 'gray': '#808080FF', 'grey': '#808080FF',
+      'yellow': '#FFFF00FF', 'orange': '#FFA500FF', 'purple': '#800080FF', 'pink': '#FFC0CBFF',
+      'brown': '#A52A2AFF', 'cyan': '#00FFFFFF', 'magenta': '#FF00FFFF', 'lime': '#00FF00FF',
+      'navy': '#000080FF', 'maroon': '#800000FF', 'olive': '#808000FF', 'teal': '#008080FF',
+      'silver': '#C0C0C0FF', 'gold': '#FFD700FF', 'indigo': '#4B0082FF', 'violet': '#EE82EEFF'
+    };
+
+    const normalizedName = color.toLowerCase();
+    if (namedColors[normalizedName]) {
+      return namedColors[normalizedName];
+    }
+
+    // If we can't parse it, return null
+    return null;
+  };
+
+  /**
+   * Build element-based color map (enhanced: detects all color formats)
    */
   const buildElementColorMap = (svgString) => {
-    // Step 1: Use the working regex approach to find ALL colors
-    const allColors = svgCustomizer.current.extractColors(svgString);
-    console.log('All colors found by regex:', allColors);
+    console.log('Building element color map for SVG:', svgString.substring(0, 200) + '...');
     
-    if (allColors.length === 0) {
-      return {};
-    }
-    
-    // Step 2: Parse DOM to map colors to elements
+    // Parse DOM to map colors to elements directly
     const parser = new DOMParser();
     const doc = parser.parseFromString(svgString, 'image/svg+xml');
     const svgElement = doc.documentElement;
     
-    if (svgElement.querySelector('parsererror')) {
-      throw new Error('Invalid SVG content');
+    // Check for parser errors and log them
+    const parserError = svgElement.querySelector('parsererror');
+    if (parserError) {
+      console.error('SVG parsing error:', parserError.textContent);
+      console.error('SVG that failed to parse:', svgString);
+      throw new Error(`Invalid SVG content: ${parserError.textContent}`);
     }
     
+    console.log('SVG parsed successfully. Root element:', svgElement.tagName);
+    
     const colorMap = {};
+    const detectedColors = new Set(); // Track all detected colors
     const colorableElements = svgElement.querySelectorAll('path, circle, rect, ellipse, polygon, line, polyline');
     
     // Helper to get color from element (checks both attributes and style)
@@ -315,26 +413,15 @@ function BadgeIconUpload({
       
       return color;
     };
-    
-    // Helper to normalize hex colors (same as SVGColorCustomizer)
-    const normalizeHexColor = (hex) => {
-      if (hex.length === 4) {
-        hex = '#' + hex[1] + hex[1] + hex[2] + hex[2] + hex[3] + hex[3];
-      }
-      if (hex.length === 7) {
-        hex = hex + 'FF';
-      }
-      return hex.toUpperCase();
-    };
-    
-    colorableElements.forEach(el => {
-      const elementPath = getElementPath(el, svgElement);
-      
+
+    // Helper to process colors for any element
+    const processElementColors = (element, elementPath) => {
       // Check fill color
-      const fill = getElementColor(el, 'fill');
-      if (fill && fill.startsWith('#')) {
-        const normalizedFill = normalizeHexColor(fill);
-        if (allColors.includes(normalizedFill)) {
+      const fillRaw = getElementColor(element, 'fill');
+      if (fillRaw) {
+        const normalizedFill = parseAndNormalizeColor(fillRaw);
+        if (normalizedFill) {
+          detectedColors.add(normalizedFill);
           if (!colorMap[elementPath]) colorMap[elementPath] = {};
           colorMap[elementPath].fill = {
             original: normalizedFill,
@@ -344,10 +431,11 @@ function BadgeIconUpload({
       }
       
       // Check stroke color
-      const stroke = getElementColor(el, 'stroke');
-      if (stroke && stroke.startsWith('#')) {
-        const normalizedStroke = normalizeHexColor(stroke);
-        if (allColors.includes(normalizedStroke)) {
+      const strokeRaw = getElementColor(element, 'stroke');
+      if (strokeRaw) {
+        const normalizedStroke = parseAndNormalizeColor(strokeRaw);
+        if (normalizedStroke) {
+          detectedColors.add(normalizedStroke);
           if (!colorMap[elementPath]) colorMap[elementPath] = {};
           colorMap[elementPath].stroke = {
             original: normalizedStroke,
@@ -355,9 +443,21 @@ function BadgeIconUpload({
           };
         }
       }
+    };
+
+    // First check the root SVG element
+    processElementColors(svgElement, 'svg');
+    
+    // Then check all child elements
+    colorableElements.forEach(el => {
+      const elementPath = getElementPath(el, svgElement);
+      processElementColors(el, elementPath);
     });
     
-    console.log('Final color map:', colorMap);
+    console.log('Enhanced color detection:');
+    console.log('- Detected colors:', Array.from(detectedColors));
+    console.log('- Element color map:', colorMap);
+    
     return colorMap;
   };
 
@@ -481,10 +581,9 @@ function BadgeIconUpload({
         
         // Upload SVG to R2 as temporary asset
         const uploadResponse = await uploadToR2(file);
-        console.log('Upload response:', uploadResponse);
         const uploadedUrl = uploadResponse.data.iconUrl;
         const assetId = uploadResponse.data.assetId; // Get the upload ID
-        console.log('Asset ID:', assetId, 'Uploaded URL:', uploadedUrl);
+        console.log('Asset uploaded successfully. Reference:', `upload://${assetId}`);
         
         // Create preview URL for display
         const blob = new Blob([processedSvg], { type: 'image/svg+xml' });
