@@ -44,7 +44,7 @@ function getSystemIconId(name: string, allSystemIcons: SystemIcon[]): string {
 }
 
 
-interface BadgeTemplateSeedData extends Omit<BadgeTemplate, 'id' | 'createdAt' | 'updatedAt' | 'instances' | 'metadataFieldDefinitions' | 'templateSlug_ci' | 'authoredByUser' | 'ownedByUser' | 'ownedByGuild' | 'definesCredential' | 'credentialLabel' | 'credentialBest' | 'credentialWorst' | 'credentialNotes' | 'credentialIsNormalizable' | 'higherIsBetter' | 'measureBestLabel' | 'measureWorstLabel' | 'ownedByUserId' | 'ownedByGuildId' | 'ownerType' | 'ownerId'> { 
+interface BadgeTemplateSeedData extends Omit<BadgeTemplate, 'id' | 'createdAt' | 'updatedAt' | 'instances' | 'metadataFieldDefinitions' | 'templateSlug_ci' | 'authoredByUser' | 'ownedByUser' | 'ownedByGuild' | 'definesCredential' | 'credentialLabel' | 'credentialBest' | 'credentialWorst' | 'credentialNotes' | 'credentialIsNormalizable' | 'higherIsBetter' | 'measureBestLabel' | 'measureWorstLabel' | 'ownedByUserId' | 'ownedByGuildId' | 'ownerType' | 'ownerId' | 'defaultForegroundColorConfig'> { 
   templateSlug: string;
   authoredByUserId: string | null;
   // Legacy fields for backward compatibility during transition
@@ -64,6 +64,7 @@ interface BadgeTemplateSeedData extends Omit<BadgeTemplate, 'id' | 'createdAt' |
   measureBestLabel: string | null;
   measureWorstLabel: string | null;
   metadataFields?: Omit<MetadataFieldDefinition, 'id' | 'badgeTemplateId' | 'badgeTemplate'>[];
+  defaultForegroundColorConfig?: Prisma.JsonValue | null; // Optional for seed data
 }
 
 export async function seedBadgeTemplates(prisma: PrismaClient) {

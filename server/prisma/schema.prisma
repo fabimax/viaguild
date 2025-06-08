@@ -101,6 +101,14 @@ enum NotificationType {
   // Add more as new features arise
 }
 
+enum AssetStatus {
+  UPLOADING   // Asset is being uploaded
+  PROCESSING  // Asset is being processed (e.g., extracting metadata)
+  TEMP        // Temporary asset with expiration
+  PERMANENT   // Permanently stored asset
+  DELETED     // Asset has been deleted from storage
+}
+
 // --- Guild Invitation System Enums ---
 enum GuildInvitationStatus {
   PENDING // Invitation sent, awaiting response
@@ -793,11 +801,18 @@ model UploadedAsset {
   description        String?   
   createdAt          DateTime     @default(now())
   updatedAt          DateTime     @updatedAt
+  
+  // New fields for asset lifecycle management
+  status             AssetStatus  @default(PERMANENT)
+  expiresAt          DateTime?    // For temporary file cleanup
+  metadata           Json?        // Cache extracted data (colors, dimensions, etc.)
+  
   systemIconsAsAsset SystemIcon[] 
 
   @@index([uploaderId])
   @@index([assetType])
   @@index([hostedUrl])
+  @@index([status, expiresAt]) // For cleanup queries
 }
 
 model SystemIcon {

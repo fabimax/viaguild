@@ -59,6 +59,7 @@ export async function seedUploadedAssets(prisma: PrismaClient) {
           sizeBytes: assetData.width * assetData.height * 50, // Very rough approximation of size
           assetType: assetData.assetType,
           description: assetData.description,
+          status: 'PERMANENT', // Explicitly set for seed data
           // uploaderId: systemUser?.id ?? undefined, // Or keep null
         },
         create: {
@@ -68,6 +69,9 @@ export async function seedUploadedAssets(prisma: PrismaClient) {
           sizeBytes: assetData.width * assetData.height * 50, // Rough approximation
           assetType: assetData.assetType,
           description: assetData.description,
+          status: 'PERMANENT', // Seed data should be permanent
+          expiresAt: null, // No expiration for permanent assets
+          // metadata is optional, no need to explicitly set to null
           // uploaderId: systemUser?.id ?? undefined,
         },
       });
