@@ -144,6 +144,7 @@ function BadgeIconUpload({
   const [internalLoading, setInternalLoading] = useState(false);
   const [uploadedUrl, setUploadedUrl] = useState(null);
   const [uploadId, setUploadId] = useState(null);
+  const [previousUploadId, setPreviousUploadId] = useState(null);
   const [isSvg, setIsSvg] = useState(false);
   const [svgContent, setSvgContent] = useState('');
   const [svgColorData, setSvgColorData] = useState(null);
@@ -153,7 +154,239 @@ function BadgeIconUpload({
   const fileInputRef = useRef(null);
   const svgCustomizer = useRef(new SVGColorCustomizer());
   
-  // Initialize preview from current icon
+  // Tab synchronization state
+  const [isDiscovering, setIsDiscovering] = useState(false);
+  
+  /**
+   * Discover existing temp upload from server
+   */
+  const discoverExistingUpload = async () => {
+    const token = localStorage.getItem('token');
+    if (!token) return null;
+    
+    try {
+      setIsDiscovering(true);
+      const response = await fetch('http://localhost:3000/api/upload/badge-icon/current', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (!response.ok) return null;
+      
+      const result = await response.json();
+      return result.data.tempAsset;
+    } catch (error) {
+      console.error('Error discovering existing upload:', error);
+      return null;
+    } finally {
+      setIsDiscovering(false);
+    }
+  };
+
+  /**
+   * Load temp upload into component state
+   */
+  const loadTempUpload = async (tempAsset) => {
+    if (!tempAsset) return;
+    
+    try {
+      setUploadedUrl(tempAsset.hostedUrl);
+      setUploadId(tempAsset.id);
+      
+      const isSvgAsset = tempAsset.metadata?.type === 'svg' || tempAsset.hostedUrl.includes('.svg');
+      setIsSvg(isSvgAsset);
+      
+      let processedSvgContent = null;
+      
+      if (isSvgAsset && tempAsset.hostedUrl) {
+        // Fetch and process SVG content
+        const svgResponse = await fetch(tempAsset.hostedUrl);
+        const svgContent = await svgResponse.text();
+        setSvgContent(svgContent);
+        processedSvgContent = svgContent;
+        
+        // Build color map
+        const elementColorMap = buildElementColorMap(svgContent);
+        const elementPaths = Object.keys(elementColorMap);
+        
+        if (elementPaths.length > 0) {
+          const colorSlots = [];
+          elementPaths.forEach(path => {
+            const elementColors = elementColorMap[path];
+            
+            if (elementColors.fill) {
+              colorSlots.push({
+                id: `${path}-fill`,
+                label: `${path} (fill)`,
+                originalColor: elementColors.fill.original,
+                currentColor: elementColors.fill.current,
+                elementPath: path,
+                colorType: 'fill',
+                rgba: svgCustomizer.current.hexToRgba(elementColors.fill.original),
+                hasTransparency: svgCustomizer.current.hasTransparency(elementColors.fill.original)
+              });
+            }
+            
+            if (elementColors.stroke) {
+              colorSlots.push({
+                id: `${path}-stroke`,
+                label: `${path} (stroke)`,
+                originalColor: elementColors.stroke.original,
+                currentColor: elementColors.stroke.current,
+                elementPath: path,
+                colorType: 'stroke',
+                rgba: svgCustomizer.current.hexToRgba(elementColors.stroke.original),
+                hasTransparency: svgCustomizer.current.hasTransparency(elementColors.stroke.original)
+              });
+            }
+          });
+          
+          setSvgColorData({
+            colorSlots,
+            elementColorMap
+          });
+        }
+        
+        // Create preview blob URL
+        const blob = new Blob([svgContent], { type: 'image/svg+xml' });
+        const previewUrl = URL.createObjectURL(blob);
+        setPreviewIcon(previewUrl);
+      } else {
+        // Regular image
+        setPreviewIcon(tempAsset.hostedUrl);
+      }
+      
+      // Notify parent component about the loaded upload
+      const uploadReference = `upload://${tempAsset.id}`;
+      onIconChange(uploadReference, processedSvgContent, tempAsset.hostedUrl);
+      
+      console.log('Loaded existing temp upload:', tempAsset.id);
+    } catch (error) {
+      console.error('Error loading temp upload:', error);
+    }
+  };
+
+  /**
+   * Check localStorage for recent sync data
+   */
+  const checkLocalStorageSync = () => {
+    try {
+      const syncData = localStorage.getItem('badgeIconPreview');
+      if (syncData) {
+        const parsed = JSON.parse(syncData);
+        // Check if the sync data is recent (less than 1 hour old)
+        const isRecent = Date.now() - parsed.timestamp < 60 * 60 * 1000;
+        if (isRecent) {
+          console.log('Found recent sync data in localStorage:', parsed);
+          return parsed;
+        }
+      }
+    } catch (error) {
+      console.error('Error checking localStorage sync:', error);
+    }
+    return null;
+  };
+
+  /**
+   * Store sync data in localStorage for other tabs
+   */
+  const storeSyncData = (iconUrl, assetId, metadata) => {
+    try {
+      const syncData = {
+        iconUrl,
+        assetId,
+        timestamp: Date.now(),
+        metadata
+      };
+      localStorage.setItem('badgeIconPreview', JSON.stringify(syncData));
+      console.log('Stored sync data in localStorage:', syncData);
+    } catch (error) {
+      console.error('Error storing sync data:', error);
+    }
+  };
+
+  // Initialize component: check localStorage first, then server
+  useEffect(() => {
+    const initializeComponent = async () => {
+      // Skip if already have an upload or icon
+      if (uploadId || previewIcon || currentIcon) return;
+      
+      console.log('Initializing badge icon component...');
+      
+      // First check localStorage for recent sync
+      const localSync = checkLocalStorageSync();
+      if (localSync) {
+        console.log('Using localStorage sync data');
+        // Quick load from localStorage, but still verify with server
+        setUploadedUrl(localSync.iconUrl);
+        setUploadId(localSync.assetId);
+        setPreviewIcon(localSync.iconUrl);
+      }
+      
+      // Then check server for authoritative data
+      const serverAsset = await discoverExistingUpload();
+      if (serverAsset) {
+        console.log('Found existing upload on server, loading...');
+        await loadTempUpload(serverAsset);
+      }
+    };
+    
+    initializeComponent();
+  }, []);
+
+  // Listen for storage events from other tabs
+  useEffect(() => {
+    const handleStorageChange = (e) => {
+      if (e.key === 'badgeIconPreview') {
+        console.log('Storage change detected from another tab');
+        try {
+          const newSyncData = JSON.parse(e.newValue);
+          console.log('New sync data:', newSyncData);
+          
+          // Update component state with new data from other tab
+          if (newSyncData.assetId !== uploadId) {
+            setUploadedUrl(newSyncData.iconUrl);
+            setUploadId(newSyncData.assetId);
+            setPreviewIcon(newSyncData.iconUrl);
+            setIsSvg(newSyncData.metadata?.type === 'svg');
+            
+            // Update parent component with proper SVG content if available
+            const uploadReference = `upload://${newSyncData.assetId}`;
+            
+            if (newSyncData.metadata?.type === 'svg') {
+              // For SVG, try to fetch content to pass to parent
+              fetch(newSyncData.iconUrl)
+                .then(res => res.text())
+                .then(svgContent => {
+                  setSvgContent(svgContent);
+                  onIconChange(uploadReference, svgContent, newSyncData.iconUrl);
+                })
+                .catch(err => {
+                  console.error('Error fetching SVG content for sync:', err);
+                  onIconChange(uploadReference, null, newSyncData.iconUrl);
+                });
+            } else {
+              onIconChange(uploadReference, null, newSyncData.iconUrl);
+            }
+            
+            // Reset SVG state initially (will be set properly above if needed)
+            setSvgContent('');
+            setSvgColorData(null);
+            
+            console.log('Updated component state from other tab');
+          }
+        } catch (error) {
+          console.error('Error handling storage change:', error);
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, [uploadId, onIconChange]);
+
+  // Initialize preview from current icon (legacy support)
   useEffect(() => {
     if (currentIcon && currentIcon.includes('.svg')) {
       setIsSvg(true);
@@ -209,6 +442,29 @@ function BadgeIconUpload({
     }
   }, [currentIcon]);
   
+  /**
+   * Delete a temporary upload
+   */
+  const deleteTempUpload = async (assetId) => {
+    if (!assetId) return;
+    
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    
+    try {
+      await fetch(`http://localhost:3000/api/upload/badge-icon/${assetId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      console.log('Deleted previous temp upload:', assetId);
+    } catch (error) {
+      console.error('Failed to delete previous upload:', error);
+      // Don't block on cleanup errors
+    }
+  };
+
   /**
    * Upload file to R2 via backend API
    */
@@ -509,16 +765,22 @@ function BadgeIconUpload({
       return;
     }
     
-    // Check file size (5MB limit for icons)
-    const maxSize = 5 * 1024 * 1024;
+    // Check file size (2MB limit for badge icons)
+    const maxSize = 2 * 1024 * 1024;
     if (file.size > maxSize) {
-      setError('File too large. Maximum size is 5MB.');
+      setError('File too large. Maximum size is 2MB for badge icons.');
       return;
     }
     
     try {
       setInternalLoading(true);
       setIsSvg(isSvgFile);
+      
+      // Delete previous temp upload if exists
+      if (previousUploadId) {
+        await deleteTempUpload(previousUploadId);
+        setPreviousUploadId(null);
+      }
       
       if (isSvgFile) {
         // Read SVG and analyze colors BEFORE processing
@@ -585,12 +847,23 @@ function BadgeIconUpload({
         const assetId = uploadResponse.data.assetId; // Get the upload ID
         console.log('Asset uploaded successfully. Reference:', `upload://${assetId}`);
         
+        // Store sync data for other tabs (metadata is defined below)
+        const syncMetadata = {
+          type: 'svg',
+          extractedColors: [], // Will be populated by frontend
+          hasCurrentColor: processedSvg.includes('currentColor'),
+          dimensions: { width: 100, height: 100 }, // Parse from SVG
+          fileSize: file.buffer?.length || file.size
+        };
+        storeSyncData(uploadedUrl, assetId, syncMetadata);
+        
         // Create preview URL for display
         const blob = new Blob([processedSvg], { type: 'image/svg+xml' });
         const previewUrl = URL.createObjectURL(blob);
         setPreviewIcon(previewUrl);
         setUploadedUrl(uploadedUrl);
         setUploadId(assetId);
+        setPreviousUploadId(assetId); // Track for cleanup on next upload
         
         // Pass upload reference for API usage, but also store the actual URL for display
         const uploadReference = `upload://${assetId}`;
@@ -606,9 +879,13 @@ function BadgeIconUpload({
         const uploadedUrl = uploadResponse.data.iconUrl;
         const assetId = uploadResponse.data.assetId;
         
+        // Store sync data for other tabs
+        storeSyncData(uploadedUrl, assetId, { type: 'image' });
+        
         setPreviewIcon(uploadedUrl);
         setUploadedUrl(uploadedUrl);
         setUploadId(assetId);
+        setPreviousUploadId(assetId); // Track for cleanup on next upload
         
         // Pass upload reference for API usage, but also the actual URL for display
         const uploadReference = `upload://${assetId}`;
@@ -882,8 +1159,29 @@ function BadgeIconUpload({
       }
     };
   }, [previewIcon]);
+
+  // Cleanup temp upload on unmount
+  useEffect(() => {
+    return () => {
+      // Cleanup on unmount if there's an unsaved upload
+      if (uploadId) {
+        const token = localStorage.getItem('token');
+        if (token) {
+          // Use sendBeacon for reliable unmount cleanup
+          const payload = JSON.stringify({
+            assetId: uploadId,
+            authToken: token
+          });
+          navigator.sendBeacon(
+            'http://localhost:3000/api/upload/badge-icon-beacon',
+            new Blob([payload], { type: 'application/json' })
+          );
+        }
+      }
+    };
+  }, [uploadId]);
   
-  const isComponentLoading = isLoading || internalLoading;
+  const isComponentLoading = isLoading || internalLoading || isDiscovering;
   
   return (
     <div className="badge-icon-upload">
@@ -1253,7 +1551,7 @@ function BadgeIconUpload({
       )}
       
       <div className="icon-help">
-        <small>Upload an icon up to 5MB. SVG files recommended for color customization.</small>
+        <small>Upload an icon up to 2MB. SVG files recommended for color customization.</small>
       </div>
     </div>
   );

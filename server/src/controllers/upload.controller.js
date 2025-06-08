@@ -286,6 +286,7 @@ const uploadController = {
 
   /**
    * Upload badge icon (SVG or image)
+   * Single global preview per user - deletes any existing temp upload first
    */
   async uploadBadgeIcon(req, res) {
     try {
@@ -299,48 +300,129 @@ const uploadController = {
 
       const { templateSlug } = req.body;
       const file = req.file;
+      const isSvg = file.mimetype === 'image/svg+xml';
       
-      // Create filename with template slug
-      const timestamp = Date.now();
-      const fileExtension = file.originalname.split('.').pop();
-      const filename = `${templateSlug || 'badge-icon'}-${timestamp}.${fileExtension}`;
-      
-      let result;
-      
-      if (file.mimetype === 'image/svg+xml') {
-        // Handle SVG upload using existing method
-        const svgContent = file.buffer.toString('utf8');
-        result = await r2Service.uploadBadgeSvg(
-          svgContent,
-          req.user.id,
-          filename,
-          `Badge icon for ${templateSlug}`,
-          req.prisma
-        );
-      } else {
-        // Handle regular image upload
-        result = await r2Service.processAndUploadImage(
-          file.buffer,
-          'users',
-          req.user.id,
-          filename,
-          {
-            width: 512,
-            height: 512,
-            quality: 90,
-            format: 'webp',
-            description: `Badge icon for ${templateSlug}`
-          },
-          req.prisma
-        );
+      // Check file size limit (2MB for badge icons)
+      const maxSize = 2 * 1024 * 1024; // 2MB
+      if (file.buffer.length > maxSize) {
+        return res.status(400).json({ error: 'File too large. Maximum size is 2MB for badge icons.' });
       }
+      
+      // SINGLE PREVIEW SYSTEM: Delete any existing temp badge icon for this user
+      console.log('Checking for existing temp badge icon for user:', req.user.id);
+      const existingTempAsset = await req.prisma.uploadedAsset.findFirst({
+        where: {
+          uploaderId: req.user.id,
+          assetType: 'badge-icon',
+          status: 'TEMP'
+        }
+      });
+      
+      if (existingTempAsset) {
+        console.log('Deleting existing temp badge icon:', existingTempAsset.id);
+        try {
+          // Delete from R2
+          await r2Service.client.send(new (require('@aws-sdk/client-s3').DeleteObjectCommand)({
+            Bucket: r2Service.bucketName,
+            Key: existingTempAsset.storageIdentifier,
+          }));
+          
+          // Delete from database
+          await req.prisma.uploadedAsset.delete({
+            where: { id: existingTempAsset.id }
+          });
+          
+          console.log('Successfully deleted existing temp badge icon');
+        } catch (deleteError) {
+          console.error('Error deleting existing temp asset:', deleteError);
+          // Continue with upload even if deletion fails
+        }
+      }
+      
+      // Create generic temp filename (no template relationship implied)
+      const timestamp = Date.now();
+      const randomString = require('crypto').randomBytes(4).toString('hex');
+      const fileExtension = file.originalname.split('.').pop();
+      const filename = `temp-icon-${timestamp}-${randomString}.${fileExtension}`;
+      
+      // Generate storage key for temp upload
+      const tempPath = r2Service.getEntityAssetPath('users', req.user.id, 'badge-icons', true);
+      const storageKey = `${tempPath}/${filename}`;
+      
+      let metadata = null;
+      let processedBuffer = file.buffer;
+      
+      if (isSvg) {
+        // Extract SVG metadata (colors, dimensions, etc.)
+        const svgContent = file.buffer.toString('utf8');
+        // TODO: Add actual SVG metadata extraction here
+        metadata = {
+          type: 'svg',
+          extractedColors: [], // Will be populated by frontend
+          hasCurrentColor: svgContent.includes('currentColor'),
+          dimensions: { width: 100, height: 100 }, // Parse from SVG
+          fileSize: file.buffer.length
+        };
+      } else {
+        // Process regular image
+        const sharp = require('sharp');
+        const imageMetadata = await sharp(file.buffer).metadata();
+        metadata = {
+          type: 'image',
+          dimensions: { width: imageMetadata.width, height: imageMetadata.height },
+          format: imageMetadata.format,
+          fileSize: file.buffer.length,
+          hasTransparency: imageMetadata.channels === 4
+        };
+      }
+      
+      // Upload to R2 temp folder
+      await r2Service.client.send(new (require('@aws-sdk/client-s3').PutObjectCommand)({
+        Bucket: r2Service.bucketName,
+        Key: storageKey,
+        Body: processedBuffer,
+        ContentType: file.mimetype,
+      }));
+      
+      const hostedUrl = `${r2Service.publicUrlBase}/${storageKey}`;
+      
+      // Create temporary asset record with expiration
+      const expiresAt = new Date();
+      expiresAt.setHours(expiresAt.getHours() + 24); // 24 hour expiration
+      
+      const uploadedAsset = await req.prisma.uploadedAsset.create({
+        data: {
+          uploaderId: req.user.id,
+          originalFilename: file.originalname,
+          mimeType: file.mimetype,
+          sizeBytes: file.buffer.length,
+          hostedUrl,
+          storageIdentifier: storageKey,
+          assetType: 'badge-icon',
+          description: 'Temporary badge icon upload',
+          status: 'TEMP',
+          expiresAt,
+          metadata
+        },
+      });
 
       res.json({
         success: true,
         message: 'Badge icon uploaded successfully',
         data: {
-          iconUrl: result.url,
-          assetId: result.id,
+          iconUrl: hostedUrl,
+          assetId: uploadedAsset.id,
+          uploadId: uploadedAsset.id, // For upload:// references
+          expires: expiresAt.toISOString(),
+          metadata,
+          replaced: !!existingTempAsset, // Let frontend know if we replaced an existing preview
+          // Data for localStorage sync across tabs
+          syncData: {
+            iconUrl: hostedUrl,
+            assetId: uploadedAsset.id,
+            timestamp: Date.now(),
+            metadata
+          }
         },
       });
     } catch (error) {
@@ -477,6 +559,169 @@ const uploadController = {
         success: true,
         message: 'Preview deletion attempted',
       });
+    }
+  },
+
+  /**
+   * Delete a temporary badge icon upload
+   * DELETE /api/upload/badge-icon/:assetId
+   * Requires authentication and ownership
+   */
+  async deleteTempBadgeIcon(req, res) {
+    try {
+      const { assetId } = req.params;
+
+      // Find the asset
+      const asset = await req.prisma.uploadedAsset.findUnique({
+        where: { id: assetId },
+      });
+
+      if (!asset) {
+        return res.status(404).json({ error: 'Asset not found' });
+      }
+
+      // Check if user owns the asset
+      if (asset.uploaderId !== req.user.id) {
+        return res.status(403).json({ error: 'Unauthorized to delete this asset' });
+      }
+
+      // Only allow deletion of TEMP assets
+      if (asset.status !== 'TEMP') {
+        return res.status(400).json({ error: 'Can only delete temporary assets' });
+      }
+
+      // Delete from R2
+      try {
+        await r2Service.client.send(new (require('@aws-sdk/client-s3').DeleteObjectCommand)({
+          Bucket: r2Service.bucketName,
+          Key: asset.storageIdentifier,
+        }));
+      } catch (err) {
+        console.error('Error deleting from R2:', err);
+      }
+
+      // Delete from database
+      await req.prisma.uploadedAsset.delete({
+        where: { id: assetId },
+      });
+
+      res.json({
+        success: true,
+        message: 'Temporary badge icon deleted successfully',
+      });
+    } catch (error) {
+      console.error('Badge icon deletion error:', error);
+      res.status(500).json({ error: 'Failed to delete badge icon' });
+    }
+  },
+
+  /**
+   * Delete a temporary badge icon (beacon endpoint)
+   * Special endpoint for sendBeacon that accepts auth token in body
+   */
+  async deleteBadgeIconBeacon(req, res) {
+    try {
+      const { assetId, authToken } = req.body;
+
+      if (!authToken) {
+        return res.status(401).json({ error: 'No auth token provided' });
+      }
+
+      // Verify the auth token manually since this endpoint bypasses normal auth middleware
+      const jwt = require('jsonwebtoken');
+      let decoded;
+      try {
+        decoded = jwt.verify(authToken, process.env.JWT_SECRET);
+      } catch (err) {
+        return res.status(401).json({ error: 'Invalid auth token' });
+      }
+
+      if (!assetId) {
+        return res.status(400).json({ error: 'No asset ID provided' });
+      }
+
+      // Find the asset
+      const asset = await req.prisma.uploadedAsset.findUnique({
+        where: { id: assetId },
+      });
+
+      if (!asset) {
+        return res.json({ success: true, message: 'Asset not found' });
+      }
+
+      // Check if user owns the asset
+      if (asset.uploaderId !== decoded.userId) {
+        return res.json({ success: true, message: 'Not authorized' });
+      }
+
+      // Only delete if it's still a TEMP asset
+      if (asset.status === 'TEMP') {
+        try {
+          await r2Service.client.send(new (require('@aws-sdk/client-s3').DeleteObjectCommand)({
+            Bucket: r2Service.bucketName,
+            Key: asset.storageIdentifier,
+          }));
+        } catch (err) {
+          console.error('Error deleting from R2:', err);
+        }
+
+        await req.prisma.uploadedAsset.delete({
+          where: { id: assetId },
+        });
+
+        console.log('Deleted badge icon via beacon:', assetId);
+      }
+
+      res.json({
+        success: true,
+        message: 'Badge icon cleanup completed',
+      });
+    } catch (error) {
+      console.error('Badge icon beacon deletion error:', error);
+      // Don't fail the frontend if cleanup fails
+      res.json({
+        success: true,
+        message: 'Badge icon cleanup attempted',
+      });
+    }
+  },
+
+  /**
+   * Get current temporary badge icon for user
+   * GET /api/upload/badge-icon/current
+   * Used for tab synchronization and discovery
+   */
+  async getCurrentBadgeIcon(req, res) {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      const tempAsset = await req.prisma.uploadedAsset.findFirst({
+        where: {
+          uploaderId: req.user.id,
+          assetType: 'badge-icon',
+          status: 'TEMP'
+        },
+        select: {
+          id: true,
+          hostedUrl: true,
+          metadata: true,
+          expiresAt: true,
+          originalFilename: true,
+          sizeBytes: true
+        }
+      });
+
+      res.json({
+        success: true,
+        data: {
+          tempAsset: tempAsset || null
+        }
+      });
+    } catch (error) {
+      console.error('Get current badge icon error:', error);
+      res.status(500).json({ error: 'Failed to get current badge icon' });
     }
   },
 

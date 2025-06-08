@@ -36,7 +36,7 @@ const upload = multer({
 const uploadWithFields = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB limit
+    fileSize: 2 * 1024 * 1024, // 2MB limit for badge icons
   },
   fileFilter: (req, file, cb) => {
     // Allowed image types
@@ -116,6 +116,18 @@ router.post(
 );
 
 /**
+ * Get current temporary badge icon
+ * GET /api/upload/badge-icon/current
+ * Requires authentication
+ * Used for tab discovery and synchronization
+ */
+router.get(
+  '/badge-icon/current',
+  authenticate,
+  uploadController.getCurrentBadgeIcon
+);
+
+/**
  * Get presigned upload URL for direct client uploads
  * POST /api/upload/presigned-url
  * Requires authentication
@@ -135,6 +147,17 @@ router.delete(
   '/asset/:assetId',
   authenticate,
   uploadController.deleteAsset
+);
+
+/**
+ * Delete a temporary badge icon
+ * DELETE /api/upload/badge-icon/:assetId
+ * Requires authentication and ownership
+ */
+router.delete(
+  '/badge-icon/:assetId',
+  authenticate,
+  uploadController.deleteTempBadgeIcon
 );
 
 /**
@@ -160,11 +183,25 @@ router.post(
 );
 
 /**
+ * Delete a badge icon (beacon endpoint)
+ * POST /api/upload/badge-icon-beacon
+ * Accepts auth token in body for sendBeacon compatibility
+ */
+router.post(
+  '/badge-icon-beacon',
+  uploadController.deleteBadgeIconBeacon
+);
+
+/**
  * Error handling middleware for multer
  */
 router.use((error, req, res, next) => {
   if (error instanceof multer.MulterError) {
     if (error.code === 'LIMIT_FILE_SIZE') {
+      // Check which endpoint was hit to give appropriate error message
+      if (req.path.includes('badge-icon')) {
+        return res.status(400).json({ error: 'File too large. Maximum size is 2MB for badge icons.' });
+      }
       return res.status(400).json({ error: 'File too large. Maximum size is 10MB.' });
     }
     return res.status(400).json({ error: error.message });

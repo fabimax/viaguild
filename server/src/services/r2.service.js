@@ -724,6 +724,42 @@ class R2Service {
   }
 
   /**
+   * Move asset from temp to permanent location
+   * @param {Object} tempAsset - Temporary asset from database
+   * @returns {string} New permanent URL
+   */
+  async moveFromTempToPermanent(tempAsset) {
+    if (!tempAsset.storageIdentifier.includes('temp/')) {
+      throw new Error('Asset is not in temp storage');
+    }
+    
+    // Generate permanent key by removing 'temp/' prefix
+    const permanentKey = tempAsset.storageIdentifier.replace('temp/', '');
+    
+    try {
+      // Copy object to permanent location
+      const copySource = encodeURIComponent(`${this.bucketName}/${tempAsset.storageIdentifier}`);
+      await this.client.send(new CopyObjectCommand({
+        Bucket: this.bucketName,
+        CopySource: copySource,
+        Key: permanentKey,
+      }));
+      
+      // Delete temp object
+      await this.client.send(new DeleteObjectCommand({
+        Bucket: this.bucketName,
+        Key: tempAsset.storageIdentifier,
+      }));
+      
+      // Return new permanent URL
+      return `${this.publicUrlBase}/${permanentKey}`;
+    } catch (error) {
+      console.error('Error moving asset from temp to permanent:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Generate a presigned upload URL for direct client uploads
    * @param {string} key - Storage key
    * @param {string} contentType - MIME type
