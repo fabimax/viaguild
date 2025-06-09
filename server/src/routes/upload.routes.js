@@ -56,6 +56,30 @@ const uploadWithFields = multer({
   },
 });
 
+// Multer for badge backgrounds (5MB limit, includes SVG)
+const uploadBackgrounds = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB limit for backgrounds
+  },
+  fileFilter: (req, file, cb) => {
+    // Allowed image types (including SVG for backgrounds)
+    const allowedTypes = [
+      'image/jpeg',
+      'image/png',
+      'image/gif',
+      'image/webp',
+      'image/svg+xml',
+    ];
+
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only JPEG, PNG, GIF, WebP, and SVG are allowed for backgrounds.'));
+    }
+  },
+});
+
 /**
  * Upload user avatar
  * POST /api/upload/avatar
@@ -193,6 +217,51 @@ router.post(
 );
 
 /**
+ * Upload badge background image
+ * POST /api/upload/badge-background
+ * Requires authentication
+ */
+router.post(
+  '/badge-background',
+  authenticate,
+  uploadBackgrounds.single('background'),
+  uploadController.uploadBadgeBackground
+);
+
+/**
+ * Get current temporary badge background
+ * GET /api/upload/badge-background/current
+ * Requires authentication
+ * Used for tab discovery and synchronization
+ */
+router.get(
+  '/badge-background/current',
+  authenticate,
+  uploadController.getCurrentBadgeBackground
+);
+
+/**
+ * Delete a temporary badge background
+ * DELETE /api/upload/badge-background/:assetId
+ * Requires authentication and ownership
+ */
+router.delete(
+  '/badge-background/:assetId',
+  authenticate,
+  uploadController.deleteTempBadgeBackground
+);
+
+/**
+ * Delete a badge background (beacon endpoint)
+ * POST /api/upload/badge-background-beacon
+ * Accepts auth token in body for sendBeacon compatibility
+ */
+router.post(
+  '/badge-background-beacon',
+  uploadController.deleteBadgeBackgroundBeacon
+);
+
+/**
  * Error handling middleware for multer
  */
 router.use((error, req, res, next) => {
@@ -201,6 +270,8 @@ router.use((error, req, res, next) => {
       // Check which endpoint was hit to give appropriate error message
       if (req.path.includes('badge-icon')) {
         return res.status(400).json({ error: 'File too large. Maximum size is 2MB for badge icons.' });
+      } else if (req.path.includes('badge-background')) {
+        return res.status(400).json({ error: 'File too large. Maximum size is 5MB for badge backgrounds.' });
       }
       return res.status(400).json({ error: 'File too large. Maximum size is 10MB.' });
     }

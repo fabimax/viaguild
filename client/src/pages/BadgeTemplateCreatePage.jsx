@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import BadgeNavigation from '../components/BadgeNavigation';
 import BadgeDisplay from '../components/guilds/BadgeDisplay';
 import BadgeIconUpload from '../components/BadgeIconUpload';
+import BadgeBackgroundUpload from '../components/BadgeBackgroundUpload';
 import SystemIconService from '../services/systemIcon.service';
 import './BadgeBuilderPage.css';
 
@@ -60,6 +61,7 @@ const BadgeTemplateCreatePage = () => {
   const [displayableForegroundSvg, setDisplayableForegroundSvg] = useState(null);
   const [uploadedIconSvg, setUploadedIconSvg] = useState(null);
   const [iconSvgColorData, setIconSvgColorData] = useState(null);
+  const [uploadedBackgroundUrl, setUploadedBackgroundUrl] = useState(null);
   
   const isOwnPage = user && user.username.toLowerCase() === username.toLowerCase();
   
@@ -99,6 +101,83 @@ const BadgeTemplateCreatePage = () => {
     }
   }, [template.defaultForegroundType, template.defaultForegroundValue, uploadedIconSvg]);
 
+  // Reset foregroundColor to appropriate default when foregroundType changes
+  useEffect(() => {
+    const newType = template.defaultForegroundType;
+    setTemplate(prev => {
+      let newForegroundColor = prev.defaultForegroundColor;
+      
+      if (newType === ForegroundContentType.TEXT && prev.defaultForegroundColor === '#000000') {
+        newForegroundColor = '#FFFFFF'; // White for text
+      } else if (newType === ForegroundContentType.SYSTEM_ICON && prev.defaultForegroundColor === '#FFFFFF') {
+        newForegroundColor = '#000000'; // Black for system icons
+      } else if (newType === ForegroundContentType.UPLOADED_ICON && prev.defaultForegroundColor === '#FFFFFF') {
+        newForegroundColor = '#000000'; // Black for uploaded icons (matches BadgeIconUpload fallback)
+      }
+      
+      if (newForegroundColor !== prev.defaultForegroundColor) {
+        return { ...prev, defaultForegroundColor: newForegroundColor };
+      }
+      return prev;
+    });
+  }, [template.defaultForegroundType]);
+
+  // Reset foregroundValue to appropriate default when foregroundType changes
+  useEffect(() => {
+    const newType = template.defaultForegroundType;
+    setTemplate(prev => {
+      let newForegroundValue = prev.defaultForegroundValue;
+      let changed = false;
+      
+      if (newType === ForegroundContentType.TEXT && 
+          (prev.defaultForegroundValue?.startsWith('upload://') || 
+           prev.defaultForegroundValue?.includes('<') || 
+           (prev.defaultForegroundValue?.length > 20 && prev.defaultForegroundType !== ForegroundContentType.TEXT))) {
+        newForegroundValue = '[text]'; // Default text placeholder
+        changed = true;
+      } else if (newType === ForegroundContentType.SYSTEM_ICON && 
+                 (prev.defaultForegroundValue?.startsWith('upload://') || 
+                  prev.defaultForegroundValue?.includes('<') || 
+                  prev.defaultForegroundValue?.length < 2)) {
+        newForegroundValue = 'Shield';
+        changed = true;
+      } else if (newType === ForegroundContentType.UPLOADED_ICON && 
+                 prev.defaultForegroundValue?.startsWith('upload://')) {
+        // Keep upload references when switching to UPLOADED_ICON
+        changed = false;
+      }
+      
+      if (changed) {
+        return { ...prev, defaultForegroundValue: newForegroundValue };
+      }
+      return prev;
+    });
+  }, [template.defaultForegroundType, template.defaultBadgeName]);
+
+  // Auto-set border color based on tier selection
+  useEffect(() => {
+    if (template.inherentTier) {
+      let tierColor;
+      switch (template.inherentTier) {
+        case 'GOLD':
+          tierColor = '#FFD700'; // Gold
+          break;
+        case 'SILVER':
+          tierColor = '#C0C0C0'; // Silver
+          break;
+        case 'BRONZE':
+          tierColor = '#CD7F32'; // Bronze
+          break;
+        default:
+          return; // No tier, don't change border color
+      }
+      
+      if (template.defaultBorderColor !== tierColor) {
+        setTemplate(prev => ({ ...prev, defaultBorderColor: tierColor }));
+      }
+    }
+  }, [template.inherentTier, template.defaultBorderColor]);
+
   const handleIconChange = (iconUrl, svgContent, actualUrl) => {
     setTemplate(prev => ({ ...prev, defaultForegroundValue: iconUrl }));
     if (svgContent) {
@@ -118,6 +197,13 @@ const BadgeTemplateCreatePage = () => {
       setUploadedIconSvg(null);
     }
     setIconSvgColorData(colorData);
+  };
+
+  const handleBackgroundChange = (backgroundUrl, actualUrl) => {
+    setTemplate(prev => ({ ...prev, defaultBackgroundValue: backgroundUrl }));
+    if (actualUrl) {
+      setUploadedBackgroundUrl(actualUrl);
+    }
   };
 
   // Generate API payload for third-party integration
@@ -243,7 +329,9 @@ const BadgeTemplateCreatePage = () => {
     shape: template.defaultOuterShape,
     borderColor: template.defaultBorderColor,
     backgroundType: template.defaultBackgroundType,
-    backgroundValue: template.defaultBackgroundValue,
+    backgroundValue: template.defaultBackgroundType === BackgroundContentType.HOSTED_IMAGE && uploadedBackgroundUrl
+      ? uploadedBackgroundUrl  // Use actual URL for display
+      : template.defaultBackgroundValue,
     foregroundType: template.defaultForegroundType === ForegroundContentType.UPLOADED_ICON && displayableForegroundSvg && displayableForegroundSvg.includes('<svg')
       ? ForegroundContentType.SYSTEM_ICON  // Treat SVG content as SYSTEM_ICON for display
       : template.defaultForegroundType,
@@ -251,7 +339,9 @@ const BadgeTemplateCreatePage = () => {
                      template.defaultForegroundType === ForegroundContentType.UPLOADED_ICON) 
       ? displayableForegroundSvg 
       : template.defaultForegroundValue,
-    foregroundColor: template.defaultForegroundColor,
+    foregroundColor: template.defaultForegroundType === ForegroundContentType.UPLOADED_ICON 
+      ? '#000000' // Use black fallback color for uploaded icons (matches BadgeIconUpload default)
+      : template.defaultForegroundColor,
     foregroundScale: 100
   };
 
@@ -370,7 +460,11 @@ const BadgeTemplateCreatePage = () => {
                     name="defaultBorderColor"
                     value={template.defaultBorderColor}
                     onChange={handleInputChange}
+                    disabled={!!template.inherentTier}
                   />
+                  {template.inherentTier && (
+                    <small>Border color is automatically set by the selected tier</small>
+                  )}
                 </div>
 
                 <div className="control-group">
@@ -398,13 +492,11 @@ const BadgeTemplateCreatePage = () => {
                       onChange={handleInputChange}
                     />
                   ) : (
-                    <input
-                      type="url"
-                      id="defaultBackgroundValue"
-                      name="defaultBackgroundValue"
-                      value={template.defaultBackgroundValue}
-                      onChange={handleInputChange}
-                      placeholder="https://example.com/image.jpg"
+                    <BadgeBackgroundUpload
+                      currentBackground={template.defaultBackgroundValue}
+                      onBackgroundChange={handleBackgroundChange}
+                      templateSlug={template.templateSlug}
+                      isLoading={isSubmitting}
                     />
                   )}
                 </div>
@@ -432,7 +524,7 @@ const BadgeTemplateCreatePage = () => {
                       name="defaultForegroundValue"
                       value={template.defaultForegroundValue}
                       onChange={handleInputChange}
-                      maxLength={10}
+                      maxLength={20}
                     />
                   ) : template.defaultForegroundType === ForegroundContentType.SYSTEM_ICON ? (
                     <input
@@ -482,14 +574,15 @@ const BadgeTemplateCreatePage = () => {
               <div className="control-section">
                 <h3>Measure Configuration</h3>
                 
-                <div className="control-group">
-                  <label>
-                    <input
-                      type="checkbox"
-                      name="definesMeasure"
-                      checked={template.definesMeasure}
-                      onChange={handleInputChange}
-                    />
+                <div className="control-group checkbox-row">
+                  <input
+                    type="checkbox"
+                    id="definesMeasure"
+                    name="definesMeasure"
+                    checked={template.definesMeasure}
+                    onChange={handleInputChange}
+                  />
+                  <label htmlFor="definesMeasure">
                     Enable measure tracking for this template
                   </label>
                 </div>
@@ -551,26 +644,28 @@ const BadgeTemplateCreatePage = () => {
               <div className="control-section">
                 <h3>Template Behavior</h3>
                 
-                <div className="control-group">
-                  <label>
-                    <input
-                      type="checkbox"
-                      name="isModifiableByIssuer"
-                      checked={template.isModifiableByIssuer}
-                      onChange={handleInputChange}
-                    />
+                <div className="control-group checkbox-row">
+                  <input
+                    type="checkbox"
+                    id="isModifiableByIssuer"
+                    name="isModifiableByIssuer"
+                    checked={template.isModifiableByIssuer}
+                    onChange={handleInputChange}
+                  />
+                  <label htmlFor="isModifiableByIssuer">
                     Allow template modifications (changes apply to existing badges)
                   </label>
                 </div>
 
-                <div className="control-group">
-                  <label>
-                    <input
-                      type="checkbox"
-                      name="allowsPushedInstanceUpdates"
-                      checked={template.allowsPushedInstanceUpdates}
-                      onChange={handleInputChange}
-                    />
+                <div className="control-group checkbox-row">
+                  <input
+                    type="checkbox"
+                    id="allowsPushedInstanceUpdates"
+                    name="allowsPushedInstanceUpdates"
+                    checked={template.allowsPushedInstanceUpdates}
+                    onChange={handleInputChange}
+                  />
+                  <label htmlFor="allowsPushedInstanceUpdates">
                     Allow individual badge instance updates after awarding
                   </label>
                 </div>
@@ -605,8 +700,18 @@ const BadgeTemplateCreatePage = () => {
             <div className="preview-panel">
               <h2>Live Preview</h2>
               <div className="badge-preview-area">
-                <BadgeDisplay badge={badgePreviewProps} />
+                <div className="badge-card preview-badge-card">
+                  <div className="badge-card-visual">
+                    <BadgeDisplay badge={badgePreviewProps} />
+                  </div>
+                  {template.defaultDisplayDescription && (
+                    <div className="badge-card-content">
+                      <p className="badge-card-description">{template.defaultDisplayDescription}</p>
+                    </div>
+                  )}
+                </div>
               </div>
+              
               <div className="preview-info">
                 <h3>Template Details</h3>
                 <p><strong>Slug:</strong> {template.templateSlug}</p>

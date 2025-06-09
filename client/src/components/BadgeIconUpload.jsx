@@ -1291,7 +1291,8 @@ function BadgeIconUpload({
               disabled={isComponentLoading}
             />
             <span>{formatHexWithAlpha(fallbackColor, fallbackAlpha)}</span>
-            <small>This color will be applied to currentColor elements</small>
+            <small><br></br>This color fills parts of the icon that don't have a specific color, i.e. currentColor elements.
+             Not all icons have such elements.</small>
           </div>
           
           {svgColorData && svgColorData.colorSlots.length > 0 && (

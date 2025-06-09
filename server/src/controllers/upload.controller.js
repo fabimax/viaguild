@@ -788,6 +788,299 @@ const uploadController = {
       });
     }
   },
+
+  /**
+   * Upload badge background image
+   * Similar to badge icon but for background images
+   * Follows single global preview pattern
+   */
+  async uploadBadgeBackground(req, res) {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      if (!req.file) {
+        return res.status(400).json({ error: 'No file uploaded' });
+      }
+
+      const fileExtension = req.file.originalname.split('.').pop().toLowerCase();
+      const allowedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'];
+      
+      if (!allowedExtensions.includes(fileExtension)) {
+        return res.status(400).json({ error: 'Invalid file type. Only JPEG, PNG, GIF, WebP, and SVG are allowed for backgrounds.' });
+      }
+
+      // SINGLE GLOBAL PREVIEW SYSTEM: Delete any existing temp background upload for this user
+      const existingTempAsset = await req.prisma.uploadedAsset.findFirst({
+        where: {
+          uploaderId: req.user.id,
+          assetType: 'badge-background',
+          status: 'TEMP'
+        }
+      });
+
+      let replacedExisting = false;
+      if (existingTempAsset) {
+        try {
+          // Delete from R2
+          await r2Service.deleteAsset(existingTempAsset.storageIdentifier, req.prisma);
+          
+          // Delete from database
+          await req.prisma.uploadedAsset.delete({
+            where: { id: existingTempAsset.id }
+          });
+          
+          replacedExisting = true;
+          console.log('Deleted existing temp background upload:', existingTempAsset.id);
+        } catch (deleteError) {
+          console.error('Error deleting existing temp background:', deleteError);
+          // Continue with new upload even if deletion fails
+        }
+      }
+
+      // Generate unique filename with generic naming (no template association yet)
+      const timestamp = Date.now();
+      const randomString = require('crypto').randomBytes(4).toString('hex');
+      const filename = `temp-bg-${timestamp}-${randomString}.${fileExtension}`;
+
+      // Generate storage key for temp upload (following badge icon pattern)
+      const tempPath = r2Service.getEntityAssetPath('users', req.user.id, 'badge-backgrounds', true);
+      const storageKey = `${tempPath}/${filename}`;
+
+      // Upload to R2 directly
+      await r2Service.client.send(new (require('@aws-sdk/client-s3').PutObjectCommand)({
+        Bucket: r2Service.bucketName,
+        Key: storageKey,
+        Body: req.file.buffer,
+        ContentType: req.file.mimetype,
+      }));
+      
+      const hostedUrl = `${r2Service.publicUrlBase}/${storageKey}`;
+
+      // Extract metadata
+      const metadata = {
+        type: 'image',
+        mimeType: req.file.mimetype,
+        dimensions: { width: null, height: null }, // Could extract with sharp if needed
+        fileSize: req.file.size
+      };
+
+      // Create database record with TEMP status and expiration
+      const uploadedAsset = await req.prisma.uploadedAsset.create({
+        data: {
+          hostedUrl,
+          storageIdentifier: storageKey,
+          originalFilename: req.file.originalname,
+          mimeType: req.file.mimetype,
+          sizeBytes: req.file.size,
+          assetType: 'badge-background',
+          uploaderId: req.user.id,
+          status: 'TEMP',
+          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
+          metadata,
+          description: 'Temporary badge background upload'
+        }
+      });
+
+      console.log('Badge background uploaded:', uploadedAsset.id);
+
+      res.json({
+        success: true,
+        message: 'Badge background uploaded successfully',
+        data: {
+          backgroundUrl: hostedUrl,
+          assetId: uploadedAsset.id,
+          expiresAt: uploadedAsset.expiresAt,
+          syncData: {
+            assetId: uploadedAsset.id,
+            backgroundUrl: hostedUrl,
+            timestamp: Date.now(),
+            metadata
+          },
+          replacedExisting
+        }
+      });
+    } catch (error) {
+      console.error('Badge background upload error:', error);
+      res.status(500).json({ error: 'Failed to upload badge background' });
+    }
+  },
+
+  /**
+   * Get current temporary badge background for the user
+   * Used for tab discovery and synchronization
+   */
+  async getCurrentBadgeBackground(req, res) {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      const tempAsset = await req.prisma.uploadedAsset.findFirst({
+        where: {
+          uploaderId: req.user.id,
+          assetType: 'badge-background',
+          status: 'TEMP'
+        },
+        select: {
+          id: true,
+          hostedUrl: true,
+          metadata: true,
+          expiresAt: true,
+          originalFilename: true,
+          sizeBytes: true
+        }
+      });
+
+      res.json({
+        success: true,
+        data: {
+          tempAsset: tempAsset || null
+        }
+      });
+    } catch (error) {
+      console.error('Get current badge background error:', error);
+      res.status(500).json({ error: 'Failed to get current badge background' });
+    }
+  },
+
+  /**
+   * Delete temporary badge background
+   * Similar to badge icon deletion
+   */
+  async deleteTempBadgeBackground(req, res) {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      const { assetId } = req.params;
+
+      // Find the asset
+      const asset = await req.prisma.uploadedAsset.findUnique({
+        where: { id: assetId }
+      });
+
+      if (!asset) {
+        return res.status(404).json({ error: 'Asset not found' });
+      }
+
+      // Check ownership
+      if (asset.uploaderId !== req.user.id) {
+        return res.status(403).json({ error: 'You do not own this asset' });
+      }
+
+      // Only allow deletion of TEMP badge backgrounds
+      if (asset.status !== 'TEMP' || asset.assetType !== 'badge-background') {
+        return res.status(400).json({ error: 'Can only delete temporary badge backgrounds' });
+      }
+
+      // Delete from R2
+      try {
+        await r2Service.client.send(new (require('@aws-sdk/client-s3').DeleteObjectCommand)({
+          Bucket: r2Service.bucketName,
+          Key: asset.storageIdentifier,
+        }));
+      } catch (deleteError) {
+        console.error('R2 deletion error for badge background:', deleteError);
+        // Continue with database deletion even if R2 fails
+      }
+
+      // Delete from database
+      await req.prisma.uploadedAsset.delete({
+        where: { id: assetId }
+      });
+
+      res.json({
+        success: true,
+        message: 'Badge background deleted successfully'
+      });
+    } catch (error) {
+      console.error('Delete badge background error:', error);
+      res.status(500).json({ error: 'Failed to delete badge background' });
+    }
+  },
+
+  /**
+   * Delete badge background (beacon endpoint)
+   * For cleanup on component unmount
+   */
+  async deleteBadgeBackgroundBeacon(req, res) {
+    try {
+      // Parse the raw body as JSON
+      let body;
+      if (req.body && typeof req.body === 'string') {
+        try {
+          body = JSON.parse(req.body);
+        } catch (e) {
+          body = req.body;
+        }
+      } else {
+        body = req.body || {};
+      }
+
+      const { assetId, authToken } = body;
+
+      if (!assetId || !authToken) {
+        return res.json({
+          success: false,
+          message: 'Missing required fields'
+        });
+      }
+
+      // Manually verify the auth token
+      const jwt = require('jsonwebtoken');
+      let userId;
+      try {
+        const decoded = jwt.verify(authToken, process.env.JWT_SECRET || 'your-secret-key');
+        userId = decoded.userId;
+      } catch (err) {
+        return res.json({
+          success: false,
+          message: 'Invalid auth token'
+        });
+      }
+
+      // Find the asset
+      const asset = await req.prisma.uploadedAsset.findUnique({
+        where: { id: assetId }
+      });
+
+      if (!asset || asset.uploaderId !== userId || asset.status !== 'TEMP' || asset.assetType !== 'badge-background') {
+        return res.json({
+          success: false,
+          message: 'Asset not found or not eligible for deletion'
+        });
+      }
+
+      // Delete from R2
+      try {
+        await r2Service.client.send(new (require('@aws-sdk/client-s3').DeleteObjectCommand)({
+          Bucket: r2Service.bucketName,
+          Key: asset.storageIdentifier,
+        }));
+      } catch (deleteError) {
+        console.error('R2 deletion error for badge background (beacon):', deleteError);
+      }
+
+      // Delete from database
+      await req.prisma.uploadedAsset.delete({
+        where: { id: assetId }
+      });
+
+      res.json({
+        success: true,
+        message: 'Badge background deleted via beacon'
+      });
+    } catch (error) {
+      console.error('Badge background deletion error (beacon):', error);
+      res.json({
+        success: true,
+        message: 'Badge background deletion attempted'
+      });
+    }
+  },
 };
 
 module.exports = { uploadController };
