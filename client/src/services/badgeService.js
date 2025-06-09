@@ -140,6 +140,64 @@ class BadgeService {
     const data = await response.json();
     return data.data;
   }
+
+  /**
+   * Create a new badge template
+   * @param {Object} templateData - Badge template data
+   * @returns {Promise<Object>} Created badge template
+   */
+  async createBadgeTemplate(templateData) {
+    const response = await this.makeRequest('/badge-templates', {
+      method: 'POST',
+      body: JSON.stringify(templateData)
+    });
+    return response.data;
+  }
+
+  /**
+   * Get all badge templates owned by a user
+   * @param {string} username - Username to fetch templates for
+   * @returns {Promise<Array>} Array of badge templates
+   */
+  async getUserBadgeTemplates(username) {
+    const response = await this.makeRequest(`/users/${username}/badge-templates`);
+    return response.data;
+  }
+
+  /**
+   * Get a specific badge template
+   * @param {string} templateId - Template ID
+   * @returns {Promise<Object>} Badge template
+   */
+  async getBadgeTemplate(templateId) {
+    const response = await this.makeRequest(`/badge-templates/${templateId}`);
+    return response.data;
+  }
+
+  /**
+   * Update a badge template
+   * @param {string} templateId - Template ID
+   * @param {Object} updateData - Data to update
+   * @returns {Promise<Object>} Updated badge template
+   */
+  async updateBadgeTemplate(templateId, updateData) {
+    const response = await this.makeRequest(`/badge-templates/${templateId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updateData)
+    });
+    return response.data;
+  }
+
+  /**
+   * Delete a badge template
+   * @param {string} templateId - Template ID
+   * @returns {Promise<void>}
+   */
+  async deleteBadgeTemplate(templateId) {
+    await this.makeRequest(`/badge-templates/${templateId}`, {
+      method: 'DELETE'
+    });
+  }
 }
 
 // Export a singleton instance

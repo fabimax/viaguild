@@ -15,4 +15,11 @@ router.patch('/users/:username/badgecase/order', authenticate, badgeController.r
 router.patch('/users/:username/badgecase/visibility', authenticate, badgeController.toggleBadgeCaseVisibility);
 router.delete('/users/:username/badges/:badgeInstanceId', authenticate, badgeController.deleteBadgePermanently);
 
+// Badge template routes
+router.post('/badge-templates', authenticate, badgeController.createBadgeTemplate);
+router.get('/users/:username/badge-templates', authenticate, badgeController.getUserBadgeTemplates);
+router.get('/badge-templates/:templateId', authenticate, badgeController.getBadgeTemplate);
+router.patch('/badge-templates/:templateId', authenticate, badgeController.updateBadgeTemplate);
+router.delete('/badge-templates/:templateId', authenticate, badgeController.deleteBadgeTemplate);
+
 module.exports = router;

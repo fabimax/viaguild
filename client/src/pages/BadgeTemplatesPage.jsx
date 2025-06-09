@@ -3,6 +3,8 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import BadgeNavigation from '../components/BadgeNavigation';
 import BadgeDisplay from '../components/guilds/BadgeDisplay';
+import BadgeCard from '../components/BadgeCard';
+import badgeService from '../services/badgeService';
 
 const BadgeTemplatesPage = () => {
   const { username } = useParams();
@@ -34,53 +36,15 @@ const BadgeTemplatesPage = () => {
       setLoading(true);
       setError(null);
       
-      // TODO: Implement API call to fetch user's badge templates
-      // const templatesData = await badgeService.getUserBadgeTemplates(username);
+      const templatesData = await badgeService.getUserBadgeTemplates(username);
       
-      // Mock data for now
-      const mockTemplates = [
-        {
-          id: '1',
-          templateSlug: 'community-champion',
-          defaultBadgeName: 'Community Champion',
-          defaultSubtitleText: 'Outstanding Contribution',
-          defaultDisplayDescription: 'Awarded for exceptional community engagement and leadership',
-          inherentTier: 'GOLD',
-          defaultOuterShape: 'STAR',
-          defaultBorderColor: '#FFD700',
-          defaultBackgroundType: 'SOLID_COLOR',
-          defaultBackgroundValue: '#4A97FC',
-          defaultForegroundType: 'SYSTEM_ICON',
-          defaultForegroundValue: 'Trophy',
-          defaultForegroundColor: '#FFFFFF',
-          isArchived: false,
-          definesMeasure: true,
-          measureLabel: 'Contribution Score',
-          usageCount: 15,
-          createdAt: '2024-01-15T10:30:00Z'
-        },
-        {
-          id: '2',
-          templateSlug: 'first-post',
-          defaultBadgeName: 'First Post',
-          defaultSubtitleText: 'Welcome to the Community',
-          defaultDisplayDescription: 'Awarded for making your first post in the community',
-          inherentTier: 'BRONZE',
-          defaultOuterShape: 'CIRCLE',
-          defaultBorderColor: '#CD7F32',
-          defaultBackgroundType: 'SOLID_COLOR',
-          defaultBackgroundValue: '#87CEEB',
-          defaultForegroundType: 'TEXT',
-          defaultForegroundValue: '1st',
-          defaultForegroundColor: '#FFFFFF',
-          isArchived: false,
-          definesMeasure: false,
-          usageCount: 342,
-          createdAt: '2024-01-10T14:20:00Z'
-        }
-      ];
+      // Add a usage count placeholder (would need a separate API endpoint for actual counts)
+      const templatesWithUsage = templatesData.map(template => ({
+        ...template,
+        usageCount: 0 // TODO: Fetch actual usage count from API
+      }));
       
-      setTemplates(mockTemplates);
+      setTemplates(templatesWithUsage);
     } catch (err) {
       console.error('Error fetching badge templates:', err);
       setError(err.message);
@@ -91,8 +55,10 @@ const BadgeTemplatesPage = () => {
 
   const handleArchiveTemplate = async (templateId) => {
     try {
-      // TODO: Implement API call to archive template
-      console.log('Archiving template:', templateId);
+      const template = templates.find(t => t.id === templateId);
+      await badgeService.updateBadgeTemplate(templateId, {
+        isArchived: !template.isArchived
+      });
       await fetchTemplates();
     } catch (err) {
       console.error('Error archiving template:', err);
@@ -106,8 +72,7 @@ const BadgeTemplatesPage = () => {
     }
 
     try {
-      // TODO: Implement API call to delete template
-      console.log('Deleting template:', templateId);
+      await badgeService.deleteBadgeTemplate(templateId);
       await fetchTemplates();
     } catch (err) {
       console.error('Error deleting template:', err);
@@ -133,17 +98,25 @@ const BadgeTemplatesPage = () => {
     return true;
   });
 
-  const formatBadgePreview = (template) => ({
-    name: template.defaultBadgeName,
-    subtitle: template.defaultSubtitleText,
-    shape: template.defaultOuterShape,
-    borderColor: template.defaultBorderColor,
-    backgroundType: template.defaultBackgroundType,
-    backgroundValue: template.defaultBackgroundValue,
-    foregroundType: template.defaultForegroundType,
-    foregroundValue: template.defaultForegroundValue,
-    foregroundColor: template.defaultForegroundColor,
-    foregroundScale: 100
+  // Format template for BadgeCard component
+  const formatTemplateForCard = (template) => ({
+    id: template.id,
+    displayProps: {
+      name: template.defaultBadgeName,
+      subtitle: template.defaultSubtitleText,
+      description: template.defaultDisplayDescription,
+      shape: template.defaultOuterShape,
+      borderColor: template.defaultBorderColor,
+      backgroundType: template.defaultBackgroundType,
+      backgroundValue: template.defaultBackgroundValue,
+      foregroundType: template.defaultForegroundType,
+      foregroundValue: template.defaultForegroundValue,
+      foregroundColor: template.defaultForegroundColor,
+      foregroundColorConfig: template.defaultForegroundColorConfig, // Include color config
+      tier: template.inherentTier,
+      measureLabel: template.measureLabel,
+      metadata: []
+    }
   });
 
   if (!isOwnPage) {
@@ -228,19 +201,14 @@ const BadgeTemplatesPage = () => {
           <div className="templates-grid">
             {filteredTemplates.map(template => (
               <div key={template.id} className="template-card">
-                <div className="template-preview">
-                  <BadgeDisplay badge={formatBadgePreview(template)} />
-                </div>
+                <BadgeCard
+                  badge={formatTemplateForCard(template)}
+                  showActions={false}
+                  className="template-badge-card"
+                />
                 
                 <div className="template-info">
-                  <h3>{template.defaultBadgeName}</h3>
-                  <p className="template-subtitle">{template.defaultSubtitleText}</p>
-                  <p className="template-description">{template.defaultDisplayDescription}</p>
-                  
                   <div className="template-meta">
-                    <span className="template-tier">
-                      {template.inherentTier ? `${template.inherentTier} Tier` : 'No Tier'}
-                    </span>
                     <span className="template-usage">
                       Used {template.usageCount} times
                     </span>

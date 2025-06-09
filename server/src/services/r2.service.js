@@ -760,6 +760,26 @@ class R2Service {
   }
 
   /**
+   * Upload content directly to R2
+   * @param {string} key - Storage key
+   * @param {string|Buffer} content - Content to upload
+   * @param {string} contentType - MIME type
+   * @returns {string} Public URL of uploaded content
+   */
+  async uploadContent(key, content, contentType) {
+    const buffer = typeof content === 'string' ? Buffer.from(content) : content;
+    
+    await this.client.send(new PutObjectCommand({
+      Bucket: this.bucketName,
+      Key: key,
+      Body: buffer,
+      ContentType: contentType,
+    }));
+
+    return `${this.publicUrlBase}/${key}`;
+  }
+
+  /**
    * Generate a presigned upload URL for direct client uploads
    * @param {string} key - Storage key
    * @param {string} contentType - MIME type

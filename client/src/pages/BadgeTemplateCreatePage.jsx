@@ -6,6 +6,7 @@ import BadgeDisplay from '../components/guilds/BadgeDisplay';
 import BadgeIconUpload from '../components/BadgeIconUpload';
 import BadgeBackgroundUpload from '../components/BadgeBackgroundUpload';
 import SystemIconService from '../services/systemIcon.service';
+import badgeService from '../services/badgeService';
 import './BadgeBuilderPage.css';
 
 // Enums matching the database schema
@@ -300,18 +301,36 @@ const BadgeTemplateCreatePage = () => {
     setError(null);
 
     try {
-      // TODO: Implement API call to create badge template
       const templateData = {
         ...template,
         ownerType: 'USER',
         ownerId: user.id,
-        authoredByUserId: user.id
+        authoredByUserId: user.id,
+        // Include color config if applicable
+        ...(iconSvgColorData && iconSvgColorData.elementColorMap && Object.keys(iconSvgColorData.elementColorMap).length > 0 && {
+          defaultForegroundColorConfig: {
+            type: 'element-path',
+            version: 1,
+            mappings: iconSvgColorData.elementColorMap
+          }
+        })
       };
+
+      // If we have a transformed SVG, send the content instead of upload reference
+      if (template.defaultForegroundType === 'UPLOADED_ICON' && 
+          uploadedIconSvg && 
+          uploadedIconSvg.trim().startsWith('<svg') &&
+          iconSvgColorData && 
+          iconSvgColorData.elementColorMap && 
+          Object.keys(iconSvgColorData.elementColorMap).length > 0) {
+        
+        console.log('Sending transformed SVG content instead of upload reference');
+        templateData.transformedForegroundSvgContent = uploadedIconSvg;
+      }
 
       console.log('Creating badge template:', templateData);
       
-      // Placeholder for API call
-      // await badgeService.createBadgeTemplate(templateData);
+      await badgeService.createBadgeTemplate(templateData);
       
       // Navigate to templates page on success
       navigate(`/users/${username}/badges/templates`);
@@ -392,7 +411,7 @@ const BadgeTemplateCreatePage = () => {
                     title="Only lowercase letters, numbers, and hyphens allowed"
                     required
                   />
-                  <small>Unique identifier for this template (auto-generated from name)</small>
+                  <small>Unique identifier for this template (auto-generated from name if empty)</small>
                 </div>
 
                 <div className="control-group">

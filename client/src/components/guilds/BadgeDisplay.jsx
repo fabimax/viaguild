@@ -212,9 +212,19 @@ const BadgeDisplay = ({ badge }) => {
         />
       )}
       {foregroundType === 'UPLOADED_ICON' && (
-        foregroundValue ? 
-          <img src={foregroundValue} alt={name || 'badge icon'} className="badge-uploaded-icon" /> :
+        foregroundValue ? (
+          // Check if it's SVG content (starts with <svg) or an image URL
+          foregroundValue.trim().startsWith('<svg') ? (
+            <div 
+              className="badge-svg-icon"
+              dangerouslySetInnerHTML={{ __html: foregroundValue }}
+            />
+          ) : (
+            <img src={foregroundValue} alt={name || 'badge icon'} className="badge-uploaded-icon" />
+          )
+        ) : (
           <span className="badge-icon-placeholder">IMG</span> 
+        )
       )}
     </div>
   );

@@ -1,5 +1,7 @@
 const { PrismaClient } = require('@prisma/client');
+const { DeleteObjectCommand } = require('@aws-sdk/client-s3');
 const prisma = new PrismaClient();
+const r2Service = require('./r2.service');
 
 class BadgeService {
   /**
@@ -454,6 +456,350 @@ class BadgeService {
       };
     }).filter(item => item.value !== null);
   }
+
+  /**
+   * Create a new badge template
+   * @param {Object} templateData - Template data including owner information
+   * @returns {Promise<Object>} Created badge template
+   */
+  async createBadgeTemplate(templateData) {
+    const {
+      templateSlug,
+      ownerType,
+      ownerId,
+      authoredByUserId,
+      defaultBadgeName,
+      defaultSubtitleText,
+      defaultDisplayDescription,
+      defaultOuterShape,
+      defaultBorderColor,
+      defaultBackgroundType,
+      defaultBackgroundValue,
+      defaultForegroundType,
+      defaultForegroundValue,
+      defaultForegroundColor,
+      defaultForegroundColorConfig,
+      transformedForegroundSvgContent,
+      defaultTextFont,
+      defaultTextSize,
+      inherentTier,
+      definesMeasure,
+      measureLabel,
+      measureBest,
+      measureWorst,
+      measureNotes,
+      measureIsNormalizable,
+      higherIsBetter,
+      measureBestLabel,
+      measureWorstLabel,
+      isModifiableByIssuer,
+      allowsPushedInstanceUpdates,
+      internalNotes
+    } = templateData;
+
+    // Check if template slug already exists for this owner
+    const existingTemplate = await prisma.badgeTemplate.findFirst({
+      where: {
+        templateSlug: templateSlug,
+        ownerType: ownerType,
+        ownerId: ownerId
+      }
+    });
+
+    if (existingTemplate) {
+      throw new Error(`Template with slug '${templateSlug}' already exists for this owner`);
+    }
+
+    // Process upload references - convert temp uploads to permanent storage
+    let processedForegroundValue = defaultForegroundValue;
+    let processedBackgroundValue = defaultBackgroundValue;
+
+    // Handle foreground upload
+    if (defaultForegroundType === 'UPLOADED_ICON' && defaultForegroundValue?.startsWith('upload://')) {
+      const assetId = defaultForegroundValue.replace('upload://', '');
+      const asset = await prisma.uploadedAsset.findUnique({
+        where: { id: assetId }
+      });
+      
+      if (asset && asset.status === 'TEMP') {
+        // Check if we have transformed SVG content from client-side
+        if (transformedForegroundSvgContent && transformedForegroundSvgContent.trim().startsWith('<svg')) {
+          // Store the transformed SVG content directly
+          const transformedKey = `users/${ownerId}/badge-templates/${templateSlug}-icon-${asset.id}`;
+          const permanentUrl = await r2Service.uploadContent(
+            transformedKey,
+            transformedForegroundSvgContent,
+            'image/svg+xml'
+          );
+          processedForegroundValue = permanentUrl;
+          
+          // Delete the temp file
+          await r2Service.client.send(new DeleteObjectCommand({
+            Bucket: r2Service.bucketName,
+            Key: asset.storageIdentifier,
+          }));
+          
+          // Update asset to permanent status with transformed content info
+          await prisma.uploadedAsset.update({
+            where: { id: assetId },
+            data: {
+              status: 'PERMANENT',
+              expiresAt: null,
+              hostedUrl: permanentUrl,
+              storageIdentifier: transformedKey,
+              description: `Badge template icon for ${templateSlug} (color-transformed)`
+            }
+          });
+        } else {
+          // Regular image or SVG without transformations - move to proper template location
+          // First fetch the original content
+          const response = await fetch(asset.hostedUrl);
+          const originalContent = await response.buffer();
+          
+          // Store in proper template location
+          const permanentKey = `users/${ownerId}/badge-templates/${templateSlug}-icon-${asset.id}`;
+          const permanentUrl = await r2Service.uploadContent(
+            permanentKey,
+            originalContent,
+            asset.mimeType
+          );
+          processedForegroundValue = permanentUrl;
+          
+          // Delete the temp file
+          await r2Service.client.send(new DeleteObjectCommand({
+            Bucket: r2Service.bucketName,
+            Key: asset.storageIdentifier,
+          }));
+          
+          await prisma.uploadedAsset.update({
+            where: { id: assetId },
+            data: {
+              status: 'PERMANENT',
+              expiresAt: null,
+              hostedUrl: permanentUrl,
+              storageIdentifier: permanentKey,
+              description: `Badge template icon for ${templateSlug}`
+            }
+          });
+        }
+      } else if (asset) {
+        // Already permanent, use the hosted URL
+        processedForegroundValue = asset.hostedUrl;
+      }
+    }
+
+    // Handle background upload  
+    if (defaultBackgroundType === 'HOSTED_IMAGE' && defaultBackgroundValue?.startsWith('upload://')) {
+      const assetId = defaultBackgroundValue.replace('upload://', '');
+      const asset = await prisma.uploadedAsset.findUnique({
+        where: { id: assetId }
+      });
+      
+      if (asset && asset.status === 'TEMP') {
+        // Move background to proper template location
+        // First fetch the original content
+        const response = await fetch(asset.hostedUrl);
+        const originalContent = await response.buffer();
+        
+        // Store in proper template location
+        const permanentKey = `users/${ownerId}/badge-templates/${templateSlug}-bg-${asset.id}`;
+        const permanentUrl = await r2Service.uploadContent(
+          permanentKey,
+          originalContent,
+          asset.mimeType
+        );
+        processedBackgroundValue = permanentUrl;
+        
+        // Delete the temp file
+        await r2Service.client.send(new DeleteObjectCommand({
+          Bucket: r2Service.bucketName,
+          Key: asset.storageIdentifier,
+        }));
+        
+        // Update asset to permanent status
+        await prisma.uploadedAsset.update({
+          where: { id: assetId },
+          data: {
+            status: 'PERMANENT',
+            expiresAt: null,
+            hostedUrl: permanentUrl,
+            storageIdentifier: permanentKey,
+            description: `Badge template background for ${templateSlug}`
+          }
+        });
+      } else if (asset) {
+        // Already permanent, use the hosted URL
+        processedBackgroundValue = asset.hostedUrl;
+      }
+    }
+
+    // Create the template with processed URLs
+    const template = await prisma.badgeTemplate.create({
+      data: {
+        templateSlug,
+        templateSlug_ci: templateSlug.toLowerCase(),
+        ownerType,
+        ownerId,
+        authoredByUserId,
+        defaultBadgeName,
+        defaultSubtitleText: defaultSubtitleText || '',
+        defaultDisplayDescription: defaultDisplayDescription || '',
+        defaultOuterShape,
+        defaultBorderColor,
+        defaultBackgroundType,
+        defaultBackgroundValue: processedBackgroundValue,
+        defaultForegroundType,
+        defaultForegroundValue: processedForegroundValue,
+        defaultForegroundColor,
+        defaultForegroundColorConfig: defaultForegroundColorConfig || {},
+        defaultTextFont: defaultTextFont || 'Arial',
+        defaultTextSize: defaultTextSize || 24,
+        inherentTier,
+        definesMeasure: definesMeasure || false,
+        measureLabel: measureLabel || null,
+        measureBest: measureBest || null,
+        measureWorst: measureWorst || null,
+        measureNotes: measureNotes || '',
+        measureIsNormalizable: measureIsNormalizable || false,
+        higherIsBetter: higherIsBetter || null,
+        measureBestLabel: measureBestLabel || '',
+        measureWorstLabel: measureWorstLabel || '',
+        isModifiableByIssuer: isModifiableByIssuer || false,
+        allowsPushedInstanceUpdates: allowsPushedInstanceUpdates || false,
+        internalNotes: internalNotes || ''
+      }
+    });
+
+    return template;
+  }
+
+  /**
+   * Get all badge templates owned by a user
+   * @param {string} username - Username to fetch templates for
+   * @returns {Promise<Array>} Array of badge templates
+   */
+  async getUserBadgeTemplates(username) {
+    const user = await prisma.user.findUnique({
+      where: { username_ci: username.toLowerCase() },
+      select: { id: true }
+    });
+    
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    const templates = await prisma.badgeTemplate.findMany({
+      where: {
+        ownerType: 'USER',
+        ownerId: user.id
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    return templates;
+  }
+
+  /**
+   * Get a specific badge template
+   * @param {string} templateId - Template ID
+   * @returns {Promise<Object>} Badge template
+   */
+  async getBadgeTemplate(templateId) {
+    const template = await prisma.badgeTemplate.findUnique({
+      where: { id: templateId },
+      include: {
+        metadataFieldDefinitions: {
+          orderBy: { displayOrder: 'asc' }
+        }
+      }
+    });
+
+    return template;
+  }
+
+  /**
+   * Update a badge template
+   * @param {string} templateId - Template ID
+   * @param {Object} updateData - Data to update
+   * @param {string} requestingUserId - ID of user making the request
+   * @returns {Promise<Object>} Updated badge template
+   */
+  async updateBadgeTemplate(templateId, updateData, requestingUserId) {
+    // Get the template to check permissions
+    const template = await prisma.badgeTemplate.findUnique({
+      where: { id: templateId }
+    });
+
+    if (!template) {
+      throw new Error('Badge template not found');
+    }
+
+    // Check if user has permission to update
+    if (template.ownerType === 'USER' && template.ownerId !== requestingUserId) {
+      throw new Error('Cannot modify another user\'s badge template');
+    }
+
+    // If templateSlug is being updated, check for conflicts
+    if (updateData.templateSlug && updateData.templateSlug !== template.templateSlug) {
+      const existingTemplate = await prisma.badgeTemplate.findFirst({
+        where: {
+          templateSlug: updateData.templateSlug,
+          ownerType: template.ownerType,
+          ownerId: template.ownerId,
+          id: { not: templateId }
+        }
+      });
+
+      if (existingTemplate) {
+        throw new Error(`Template with slug '${updateData.templateSlug}' already exists for this owner`);
+      }
+    }
+
+    // Update the template
+    const updatedTemplate = await prisma.badgeTemplate.update({
+      where: { id: templateId },
+      data: updateData
+    });
+
+    return updatedTemplate;
+  }
+
+  /**
+   * Delete a badge template
+   * @param {string} templateId - Template ID
+   * @param {string} requestingUserId - ID of user making the request
+   * @returns {Promise<void>}
+   */
+  async deleteBadgeTemplate(templateId, requestingUserId) {
+    // Get the template to check permissions
+    const template = await prisma.badgeTemplate.findUnique({
+      where: { id: templateId }
+    });
+
+    if (!template) {
+      throw new Error('Badge template not found');
+    }
+
+    // Check if user has permission to delete
+    if (template.ownerType === 'USER' && template.ownerId !== requestingUserId) {
+      throw new Error('Cannot delete another user\'s badge template');
+    }
+
+    // Check if template has any instances
+    const instanceCount = await prisma.badgeInstance.count({
+      where: { templateId: templateId }
+    });
+
+    if (instanceCount > 0) {
+      throw new Error('Cannot delete template that has existing badges');
+    }
+
+    // Delete the template
+    await prisma.badgeTemplate.delete({
+      where: { id: templateId }
+    });
+  }
+
 }
 
 module.exports = new BadgeService();

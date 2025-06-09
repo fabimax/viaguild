@@ -306,6 +306,162 @@ const badgeController = {
         error: error.message
       });
     }
+  },
+
+  /**
+   * POST /api/badge-templates
+   * Create a new badge template
+   */
+  async createBadgeTemplate(req, res) {
+    try {
+      const templateData = req.body;
+      const creatorId = req.user.id;
+
+      // Validate required fields
+      if (!templateData.templateSlug || !templateData.defaultBadgeName) {
+        return res.status(400).json({
+          success: false,
+          error: 'Missing required fields: templateSlug and defaultBadgeName are required'
+        });
+      }
+
+      const template = await badgeService.createBadgeTemplate({
+        ...templateData,
+        authoredByUserId: creatorId
+      });
+
+      res.status(201).json({
+        success: true,
+        data: template
+      });
+    } catch (error) {
+      console.error('Error creating badge template:', error);
+      const statusCode = 
+        error.message.includes('already exists') ? 409 :
+        error.message.includes('Invalid') ? 400 :
+        500;
+      
+      res.status(statusCode).json({
+        success: false,
+        error: error.message
+      });
+    }
+  },
+
+  /**
+   * GET /api/users/:username/badge-templates
+   * Get all badge templates owned by a user
+   */
+  async getUserBadgeTemplates(req, res) {
+    try {
+      const { username } = req.params;
+      const templates = await badgeService.getUserBadgeTemplates(username);
+
+      res.json({
+        success: true,
+        data: templates
+      });
+    } catch (error) {
+      console.error('Error fetching user badge templates:', error);
+      res.status(error.message === 'User not found' ? 404 : 500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  },
+
+  /**
+   * GET /api/badge-templates/:templateId
+   * Get a specific badge template
+   */
+  async getBadgeTemplate(req, res) {
+    try {
+      const { templateId } = req.params;
+      const template = await badgeService.getBadgeTemplate(templateId);
+
+      if (!template) {
+        return res.status(404).json({
+          success: false,
+          error: 'Badge template not found'
+        });
+      }
+
+      res.json({
+        success: true,
+        data: template
+      });
+    } catch (error) {
+      console.error('Error fetching badge template:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  },
+
+  /**
+   * PATCH /api/badge-templates/:templateId
+   * Update a badge template
+   */
+  async updateBadgeTemplate(req, res) {
+    try {
+      const { templateId } = req.params;
+      const updateData = req.body;
+      const requestingUserId = req.user.id;
+
+      const template = await badgeService.updateBadgeTemplate(
+        templateId,
+        updateData,
+        requestingUserId
+      );
+
+      res.json({
+        success: true,
+        data: template
+      });
+    } catch (error) {
+      console.error('Error updating badge template:', error);
+      const statusCode = 
+        error.message === 'Badge template not found' ? 404 :
+        error.message.includes('Cannot modify') ? 403 :
+        error.message.includes('already exists') ? 409 :
+        500;
+      
+      res.status(statusCode).json({
+        success: false,
+        error: error.message
+      });
+    }
+  },
+
+  /**
+   * DELETE /api/badge-templates/:templateId
+   * Delete a badge template
+   */
+  async deleteBadgeTemplate(req, res) {
+    try {
+      const { templateId } = req.params;
+      const requestingUserId = req.user.id;
+
+      await badgeService.deleteBadgeTemplate(templateId, requestingUserId);
+
+      res.json({
+        success: true,
+        message: 'Badge template deleted successfully'
+      });
+    } catch (error) {
+      console.error('Error deleting badge template:', error);
+      const statusCode = 
+        error.message === 'Badge template not found' ? 404 :
+        error.message.includes('Cannot delete') ? 403 :
+        error.message.includes('has existing badges') ? 409 :
+        500;
+      
+      res.status(statusCode).json({
+        success: false,
+        error: error.message
+      });
+    }
   }
 };
 

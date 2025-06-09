@@ -54,6 +54,9 @@ const BadgeCard = ({
         }
       }
       
+      // For uploaded icons, the SVG is already transformed and stored in R2
+      // No additional processing needed - just use the URL directly
+      
       setBadgePropsForDisplay(props);
     };
     
