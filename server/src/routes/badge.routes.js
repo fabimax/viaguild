@@ -22,4 +22,13 @@ router.get('/badge-templates/:templateId', authenticate, badgeController.getBadg
 router.patch('/badge-templates/:templateId', authenticate, badgeController.updateBadgeTemplate);
 router.delete('/badge-templates/:templateId', authenticate, badgeController.deleteBadgeTemplate);
 
+// Badge giving routes
+router.post('/badges/give', authenticate, badgeController.giveBadge);
+router.post('/badges/give/bulk', authenticate, badgeController.giveBadgesBulk);
+router.get('/users/:username/allocations', authenticate, badgeController.getUserAllocations);
+router.get('/users/:username/badges/given', authenticate, badgeController.getUserGivenBadges);
+
+// Secure SVG proxy endpoint
+router.get('/fetch-svg', authenticate, badgeController.fetchSvgContent);
+
 module.exports = router;

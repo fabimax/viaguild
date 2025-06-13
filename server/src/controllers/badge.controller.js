@@ -1,4 +1,6 @@
 const badgeService = require('../services/badge.service');
+const { PrismaClient } = require('@prisma/client');
+const prisma = new PrismaClient();
 
 const badgeController = {
   /**
@@ -461,6 +463,265 @@ const badgeController = {
         success: false,
         error: error.message
       });
+    }
+  },
+
+  /**
+   * POST /api/badges/give
+   * Give a badge to a user
+   */
+  async giveBadge(req, res) {
+    try {
+      const giverId = req.user.id;
+      const { templateId, recipientUsername, customizations } = req.body;
+
+      // Validate required fields
+      if (!templateId || !recipientUsername) {
+        return res.status(400).json({
+          success: false,
+          error: 'Missing required fields: templateId and recipientUsername are required'
+        });
+      }
+
+      const badge = await badgeService.giveBadge(
+        giverId,
+        templateId,
+        recipientUsername,
+        customizations || {}
+      );
+
+      res.status(201).json({
+        success: true,
+        data: badge
+      });
+    } catch (error) {
+      console.error('Error giving badge:', error);
+      const statusCode = 
+        error.message === 'Badge template not found' ? 404 :
+        error.message === 'Recipient user not found' ? 404 :
+        error.message.includes('You can only give badges') ? 403 :
+        error.message.includes('Insufficient') ? 403 :
+        500;
+      
+      res.status(statusCode).json({
+        success: false,
+        error: error.message
+      });
+    }
+  },
+
+  /**
+   * POST /api/badges/give/bulk
+   * Give badges to multiple users
+   */
+  async giveBadgesBulk(req, res) {
+    try {
+      const giverId = req.user.id;
+      const { templateId, recipients } = req.body;
+
+      // Validate required fields
+      if (!templateId || !recipients || !Array.isArray(recipients)) {
+        return res.status(400).json({
+          success: false,
+          error: 'Missing required fields: templateId and recipients array are required'
+        });
+      }
+
+      const results = await badgeService.giveBadgesBulk(
+        giverId,
+        templateId,
+        recipients
+      );
+
+      res.status(207).json({ // 207 Multi-Status for partial success
+        success: true,
+        data: results
+      });
+    } catch (error) {
+      console.error('Error giving badges in bulk:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  },
+
+  /**
+   * GET /api/users/:username/allocations
+   * Get user's badge allocations
+   */
+  async getUserAllocations(req, res) {
+    try {
+      const { username } = req.params;
+      
+      // Verify the user is fetching their own allocations or is an admin
+      const user = await prisma.user.findUnique({
+        where: { username_ci: username.toLowerCase() },
+        select: { id: true }
+      });
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          error: 'User not found'
+        });
+      }
+
+      // Only allow users to see their own allocations for now
+      if (user.id !== req.user.id) {
+        return res.status(403).json({
+          success: false,
+          error: 'Cannot view other users\' allocations'
+        });
+      }
+
+      const allocations = await badgeService.getUserAllocations(user.id);
+
+      res.json({
+        success: true,
+        data: allocations
+      });
+    } catch (error) {
+      console.error('Error fetching user allocations:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  },
+
+  /**
+   * GET /api/users/:username/badges/given
+   * Get badges given by a user
+   */
+  async getUserGivenBadges(req, res) {
+    try {
+      const { username } = req.params;
+      const filters = req.query; // status, templateId, receiverUsername
+      
+      // Verify the user exists
+      const user = await prisma.user.findUnique({
+        where: { username_ci: username.toLowerCase() },
+        select: { id: true }
+      });
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          error: 'User not found'
+        });
+      }
+
+      // Only allow users to see their own given badges for now
+      if (user.id !== req.user.id) {
+        return res.status(403).json({
+          success: false,
+          error: 'Cannot view other users\' given badges'
+        });
+      }
+
+      const badges = await badgeService.getUserGivenBadges(user.id, filters);
+
+      res.json({
+        success: true,
+        data: badges
+      });
+    } catch (error) {
+      console.error('Error fetching given badges:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  },
+
+  /**
+   * Secure proxy for fetching SVG content from R2
+   * Only allows fetching from our R2 bucket to prevent SSRF attacks
+   */
+  async fetchSvgContent(req, res) {
+    try {
+      const { url } = req.query;
+      
+      if (!url) {
+        return res.status(400).json({ error: 'URL parameter is required' });
+      }
+
+      // Validate URL
+      let parsedUrl;
+      try {
+        parsedUrl = new URL(url);
+      } catch (e) {
+        return res.status(400).json({ error: 'Invalid URL format' });
+      }
+
+      // Whitelist only our R2 bucket
+      const allowedHosts = [
+        'pub-2a8c2830ac2d42478acd81b42a86bd95.r2.dev'
+      ];
+
+      if (!allowedHosts.includes(parsedUrl.hostname)) {
+        return res.status(403).json({ error: 'URL not allowed' });
+      }
+
+      // Only allow HTTPS
+      if (parsedUrl.protocol !== 'https:') {
+        return res.status(403).json({ error: 'Only HTTPS URLs are allowed' });
+      }
+
+      // Fetch with timeout and size limit
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+
+      try {
+        const response = await fetch(url, {
+          signal: controller.signal,
+          headers: {
+            'User-Agent': 'ViaGuild-Badge-Service/1.0'
+          }
+        });
+
+        clearTimeout(timeout);
+
+        if (!response.ok) {
+          return res.status(response.status).json({ error: 'Failed to fetch SVG' });
+        }
+
+        // Check content type
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('svg')) {
+          return res.status(400).json({ error: 'Content is not SVG' });
+        }
+
+        // Read response with size limit (1MB)
+        const contentLength = response.headers.get('content-length');
+        if (contentLength && parseInt(contentLength) > 1024 * 1024) {
+          return res.status(413).json({ error: 'SVG file too large' });
+        }
+
+        const svgContent = await response.text();
+        
+        // Basic SVG validation
+        if (!svgContent.trim().startsWith('<svg') && !svgContent.trim().startsWith('<?xml')) {
+          return res.status(400).json({ error: 'Invalid SVG content' });
+        }
+
+        // Return SVG content with appropriate headers
+        res.setHeader('Content-Type', 'image/svg+xml');
+        res.setHeader('Cache-Control', 'public, max-age=3600'); // Cache for 1 hour
+        res.send(svgContent);
+
+      } catch (fetchError) {
+        clearTimeout(timeout);
+        if (fetchError.name === 'AbortError') {
+          return res.status(504).json({ error: 'Request timeout' });
+        }
+        throw fetchError;
+      }
+
+    } catch (error) {
+      console.error('Error in fetchSvgContent:', error);
+      res.status(500).json({ error: 'Failed to fetch SVG content' });
     }
   }
 };

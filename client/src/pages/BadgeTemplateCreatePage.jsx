@@ -59,6 +59,9 @@ const BadgeTemplateCreatePage = () => {
     internalNotes: ''
   });
 
+  // Metadata field definitions
+  const [metadataFields, setMetadataFields] = useState([]);
+
   const [displayableForegroundSvg, setDisplayableForegroundSvg] = useState(null);
   const [uploadedIconSvg, setUploadedIconSvg] = useState(null);
   const [iconSvgColorData, setIconSvgColorData] = useState(null);
@@ -295,10 +298,78 @@ const BadgeTemplateCreatePage = () => {
     setTemplate(prev => ({ ...prev, [name]: val }));
   };
 
+  // Generate field key from label
+  const generateFieldKey = (label) => {
+    return label
+      .toLowerCase()
+      .replace(/[^\w\s]/g, '') // Remove special chars
+      .replace(/\s+/g, ' ')     // Normalize spaces
+      .trim()
+      .split(' ')
+      .filter(word => word.length > 0)
+      .map((word, i) => i === 0 ? word : word.charAt(0).toUpperCase() + word.slice(1))
+      .join('');
+  };
+
+  // Metadata field management
+  const addMetadataField = () => {
+    const newField = {
+      id: Date.now().toString(), // Temporary ID for frontend
+      fieldKeyForInstanceData: '',
+      label: '',
+      prefix: '',
+      suffix: '',
+      displayOrder: metadataFields.length,
+      customKey: false // Track if user manually set the key
+    };
+    setMetadataFields(prev => [...prev, newField]);
+  };
+
+  const updateMetadataField = (id, field, value) => {
+    setMetadataFields(prev => prev.map(f => {
+      if (f.id !== id) return f;
+      
+      const updated = { ...f, [field]: value };
+      
+      // Auto-generate key from label if not manually customized
+      if (field === 'label' && !f.customKey) {
+        updated.fieldKeyForInstanceData = generateFieldKey(value);
+      }
+      
+      return updated;
+    }));
+  };
+
+  const setCustomFieldKey = (id, customKey) => {
+    setMetadataFields(prev => prev.map(f => 
+      f.id === id ? { ...f, fieldKeyForInstanceData: customKey, customKey: true } : f
+    ));
+  };
+
+  // Check for duplicate field keys
+  const getDuplicateKeys = () => {
+    const keys = metadataFields
+      .filter(f => f.fieldKeyForInstanceData)
+      .map(f => f.fieldKeyForInstanceData);
+    return keys.filter((key, index) => keys.indexOf(key) !== index);
+  };
+
+  const removeMetadataField = (id) => {
+    setMetadataFields(prev => prev.filter(f => f.id !== id));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
     setError(null);
+
+    // Validate metadata field keys
+    const duplicateKeys = getDuplicateKeys();
+    if (duplicateKeys.length > 0) {
+      setError(`Duplicate field keys detected: ${duplicateKeys.join(', ')}. Each field key must be unique.`);
+      setIsSubmitting(false);
+      return;
+    }
 
     try {
       const templateData = {
@@ -313,7 +384,17 @@ const BadgeTemplateCreatePage = () => {
             version: 1,
             mappings: iconSvgColorData.elementColorMap
           }
-        })
+        }),
+        // Include metadata field definitions (with validation)
+        metadataFieldDefinitions: metadataFields
+          .filter(f => f.fieldKeyForInstanceData && f.label)
+          .map(f => ({
+            fieldKeyForInstanceData: f.fieldKeyForInstanceData,
+            label: f.label,
+            prefix: f.prefix || null,
+            suffix: f.suffix || null,
+            displayOrder: f.displayOrder
+          }))
       };
 
       // If we have a transformed SVG, send the content instead of upload reference
@@ -618,6 +699,25 @@ const BadgeTemplateCreatePage = () => {
                         onChange={handleInputChange}
                         placeholder="e.g., Score, Rank, Level"
                       />
+                      <small>How this metric will be labeled when displayed</small>
+                    </div>
+
+                    <div className="control-group">
+                      <label htmlFor="higherIsBetter">Value Direction:</label>
+                      <select
+                        id="higherIsBetter"
+                        name="higherIsBetter"
+                        value={template.higherIsBetter === null ? '' : template.higherIsBetter.toString()}
+                        onChange={(e) => {
+                          const value = e.target.value === '' ? null : e.target.value === 'true';
+                          setTemplate(prev => ({ ...prev, higherIsBetter: value }));
+                        }}
+                      >
+                        <option value="">Not specified</option>
+                        <option value="true">Higher values are better</option>
+                        <option value="false">Lower values are better</option>
+                      </select>
+                      <small>Whether higher or lower values represent better performance</small>
                     </div>
 
                     <div className="control-group">
@@ -629,7 +729,9 @@ const BadgeTemplateCreatePage = () => {
                         value={template.measureBest || ''}
                         onChange={handleInputChange}
                         step="any"
+                        placeholder="e.g., 100 (for scores), 1 (for ranks)"
                       />
+                      <small>The best possible value for this measure</small>
                     </div>
 
                     <div className="control-group">
@@ -641,19 +743,61 @@ const BadgeTemplateCreatePage = () => {
                         value={template.measureWorst || ''}
                         onChange={handleInputChange}
                         step="any"
+                        placeholder="e.g., 0 (for scores), 100 (for ranks)"
                       />
+                      <small>The worst possible value for this measure</small>
+                    </div>
+
+                    <div className="control-group">
+                      <label htmlFor="measureBestLabel">Best Value Label:</label>
+                      <input
+                        type="text"
+                        id="measureBestLabel"
+                        name="measureBestLabel"
+                        value={template.measureBestLabel}
+                        onChange={handleInputChange}
+                        placeholder="e.g., Perfect Score, Top Rank"
+                      />
+                      <small>How the best value is described</small>
+                    </div>
+
+                    <div className="control-group">
+                      <label htmlFor="measureWorstLabel">Worst Value Label:</label>
+                      <input
+                        type="text"
+                        id="measureWorstLabel"
+                        name="measureWorstLabel"
+                        value={template.measureWorstLabel}
+                        onChange={handleInputChange}
+                        placeholder="e.g., No Score, Lowest Rank"
+                      />
+                      <small>How the worst value is described</small>
                     </div>
 
                     <div className="control-group">
                       <label>
                         <input
                           type="checkbox"
-                          name="higherIsBetter"
-                          checked={template.higherIsBetter || false}
+                          name="measureIsNormalizable"
+                          checked={template.measureIsNormalizable || false}
                           onChange={handleInputChange}
                         />
-                        Higher values are better
+                        Values can be normalized (0-1 scale)
                       </label>
+                      <small>Whether this measure can be converted to a 0-1 scale for comparisons</small>
+                    </div>
+
+                    <div className="control-group">
+                      <label htmlFor="measureNotes">Measure Notes:</label>
+                      <textarea
+                        id="measureNotes"
+                        name="measureNotes"
+                        value={template.measureNotes}
+                        onChange={handleInputChange}
+                        rows={3}
+                        placeholder="Explain how this measure is calculated or what it represents..."
+                      />
+                      <small>Technical notes about how this measure works</small>
                     </div>
                   </>
                 )}
@@ -663,7 +807,8 @@ const BadgeTemplateCreatePage = () => {
               <div className="control-section">
                 <h3>Template Behavior</h3>
                 
-                <div className="control-group checkbox-row">
+                {/* Hidden: We're not using template propagation for now */}
+                {/* <div className="control-group checkbox-row">
                   <input
                     type="checkbox"
                     id="isModifiableByIssuer"
@@ -674,7 +819,7 @@ const BadgeTemplateCreatePage = () => {
                   <label htmlFor="isModifiableByIssuer">
                     Allow template modifications (changes apply to existing badges)
                   </label>
-                </div>
+                </div> */}
 
                 <div className="control-group checkbox-row">
                   <input
@@ -700,6 +845,141 @@ const BadgeTemplateCreatePage = () => {
                     placeholder="Private notes about this template..."
                   />
                 </div>
+              </div>
+
+              {/* Metadata Fields */}
+              <div className="control-section">
+                <h3>Metadata Fields</h3>
+                <p>Define additional information that can be collected when giving this badge.</p>
+                
+                {getDuplicateKeys().length > 0 && (
+                  <div style={{
+                    background: '#fff3cd',
+                    border: '1px solid #ffeaa7',
+                    borderRadius: '4px',
+                    padding: '10px',
+                    marginBottom: '15px',
+                    color: '#856404'
+                  }}>
+                    <strong>⚠️ Warning:</strong> Duplicate field keys detected: {getDuplicateKeys().join(', ')}
+                    <br />
+                    <small>Each field key must be unique within this template.</small>
+                  </div>
+                )}
+                
+                {metadataFields.map(field => (
+                  <div key={field.id} className="metadata-field-item" style={{
+                    border: '1px solid #ddd',
+                    padding: '15px',
+                    marginBottom: '10px',
+                    borderRadius: '4px',
+                    backgroundColor: '#f9f9f9'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                      <h4 style={{ margin: '0', fontSize: '16px' }}>Metadata Field</h4>
+                      <button
+                        type="button"
+                        onClick={() => removeMetadataField(field.id)}
+                        style={{
+                          background: '#dc3545',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '3px',
+                          padding: '5px 10px',
+                          cursor: 'pointer',
+                          fontSize: '12px'
+                        }}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                    
+                    <div className="control-group">
+                      <label>Field Label:</label>
+                      <input
+                        type="text"
+                        value={field.label}
+                        onChange={(e) => updateMetadataField(field.id, 'label', e.target.value)}
+                        placeholder="e.g., Date Achieved, Player Score"
+                      />
+                      <small>What users will see when giving this badge</small>
+                      {field.label && (
+                        <small style={{ display: 'block', marginTop: '5px', color: '#666' }}>
+                          Generated key: <code>{field.fieldKeyForInstanceData || generateFieldKey(field.label)}</code>
+                          {!field.customKey && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const customKey = prompt('Enter custom field key:', field.fieldKeyForInstanceData || generateFieldKey(field.label));
+                                if (customKey && customKey.trim() && customKey.match(/^[a-zA-Z][a-zA-Z0-9_]*$/)) {
+                                  setCustomFieldKey(field.id, customKey.trim());
+                                } else if (customKey !== null) {
+                                  alert('Field key must start with a letter and contain only letters, numbers, and underscores');
+                                }
+                              }}
+                              style={{
+                                marginLeft: '8px',
+                                padding: '2px 6px',
+                                fontSize: '11px',
+                                background: '#f8f9fa',
+                                border: '1px solid #ccc',
+                                borderRadius: '3px',
+                                cursor: 'pointer',
+                                color: '#495057'
+                              }}
+                            >
+                              ⚙️ edit
+                            </button>
+                          )}
+                          {field.customKey && (
+                            <span style={{ marginLeft: '8px', fontSize: '11px', color: '#28a745' }}>
+                              (custom)
+                            </span>
+                          )}
+                        </small>
+                      )}
+                    </div>
+                    
+                    <div style={{ display: 'flex', gap: '15px' }}>
+                      <div className="control-group" style={{ flex: 1 }}>
+                        <label>Prefix (optional):</label>
+                        <input
+                          type="text"
+                          value={field.prefix}
+                          onChange={(e) => updateMetadataField(field.id, 'prefix', e.target.value)}
+                          placeholder="e.g., $, #"
+                        />
+                      </div>
+                      
+                      <div className="control-group" style={{ flex: 1 }}>
+                        <label>Suffix (optional):</label>
+                        <input
+                          type="text"
+                          value={field.suffix}
+                          onChange={(e) => updateMetadataField(field.id, 'suffix', e.target.value)}
+                          placeholder="e.g., points, %"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                
+                <button
+                  type="button"
+                  onClick={addMetadataField}
+                  style={{
+                    background: '#28a745',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    padding: '10px 20px',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    marginTop: '10px'
+                  }}
+                >
+                  + Add Metadata Field
+                </button>
               </div>
 
               <div className="form-actions">

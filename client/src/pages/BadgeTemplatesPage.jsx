@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import BadgeNavigation from '../components/BadgeNavigation';
 import BadgeDisplay from '../components/guilds/BadgeDisplay';
 import BadgeCard from '../components/BadgeCard';
+import BadgeGiveModal from '../components/BadgeGiveModal';
 import badgeService from '../services/badgeService';
 
 const BadgeTemplatesPage = () => {
@@ -19,6 +20,8 @@ const BadgeTemplatesPage = () => {
     tier: '',
     search: ''
   });
+  const [giveModalOpen, setGiveModalOpen] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState(null);
   
   const isOwnPage = user && user.username.toLowerCase() === username.toLowerCase();
   
@@ -89,6 +92,21 @@ const BadgeTemplatesPage = () => {
       console.error('Error duplicating template:', err);
       setError(err.message);
     }
+  };
+
+  const handleGiveBadge = (template) => {
+    setSelectedTemplate(template);
+    setGiveModalOpen(true);
+  };
+
+  const handleModalClose = () => {
+    setGiveModalOpen(false);
+    setSelectedTemplate(null);
+  };
+
+  const handleBadgeGiven = () => {
+    // Optionally refresh templates to update usage count
+    fetchTemplates();
   };
 
   const filteredTemplates = templates.filter(template => {
@@ -225,12 +243,12 @@ const BadgeTemplatesPage = () => {
                 </div>
                 
                 <div className="template-actions">
-                  <Link 
-                    to={`/users/${username}/badges/give?template=${template.id}`}
+                  <button 
+                    onClick={() => handleGiveBadge(template)}
                     className="btn-primary btn-small"
                   >
                     Give Badge
-                  </Link>
+                  </button>
                   
                   <div className="template-menu">
                     <button className="btn-secondary btn-small">
@@ -275,6 +293,16 @@ const BadgeTemplatesPage = () => {
           <p>{error}</p>
           <button onClick={() => setError(null)} className="error-dismiss">×</button>
         </div>
+      )}
+
+      {/* Badge Give Modal */}
+      {giveModalOpen && selectedTemplate && (
+        <BadgeGiveModal
+          isOpen={giveModalOpen}
+          onClose={handleModalClose}
+          template={selectedTemplate}
+          onSuccess={handleBadgeGiven}
+        />
       )}
     </div>
   );

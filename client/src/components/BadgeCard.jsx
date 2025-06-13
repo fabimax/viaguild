@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import BadgeDisplay from './guilds/BadgeDisplay';
 import systemIconService from '../services/systemIcon.service';
+import { applySvgColorTransform, isSvgContent } from '../utils/svgColorTransform';
+import { useAuth } from '../contexts/AuthContext';
 
 /**
  * Individual badge card component that renders a badge with metadata
@@ -23,11 +25,15 @@ const BadgeCard = ({
   className = ''
 }) => {
   const { displayProps } = badge;
+  const { token } = useAuth();
   const [badgePropsForDisplay, setBadgePropsForDisplay] = useState(null);
   
   // Prepare badge props for BadgeDisplay component
   useEffect(() => {
     const prepareBadgeProps = async () => {
+      console.log('BadgeCard: Preparing badge props for:', displayProps.name);
+      // Don't log full displayProps as it may contain sensitive URLs
+      
       const props = {
         name: displayProps.name,
         subtitle: displayProps.subtitle,
@@ -38,6 +44,7 @@ const BadgeCard = ({
         foregroundType: displayProps.foregroundType,
         foregroundValue: displayProps.foregroundValue,
         foregroundColor: displayProps.foregroundColor,
+        foregroundColorConfig: displayProps.foregroundColorConfig,
         foregroundScale: 100
       };
       
@@ -54,14 +61,51 @@ const BadgeCard = ({
         }
       }
       
-      // For uploaded icons, the SVG is already transformed and stored in R2
-      // No additional processing needed - just use the URL directly
+      // For uploaded icons, check if we need to apply color transformations
+      console.log('BadgeCard: Checking for color transforms - Type:', displayProps.foregroundType, 'Has config:', !!displayProps.foregroundColorConfig);
+      
+      if (displayProps.foregroundType === 'UPLOADED_ICON' && displayProps.foregroundColorConfig) {
+        console.log('BadgeCard: Need to apply color transformations');
+        console.log('BadgeCard: Color config:', displayProps.foregroundColorConfig);
+        
+        // Check if foregroundValue is already SVG content or a URL
+        if (isSvgContent(displayProps.foregroundValue)) {
+          // Apply color transform to SVG content
+          console.log('BadgeCard: Applying transform to direct SVG content');
+          const transformedSvg = applySvgColorTransform(displayProps.foregroundValue, displayProps.foregroundColorConfig);
+          props.foregroundValue = transformedSvg;
+        } else if (displayProps.foregroundValue && typeof displayProps.foregroundValue === 'string' && displayProps.foregroundValue.startsWith('http')) {
+          // It's a URL, fetch through secure proxy and transform
+          console.log('BadgeCard: Fetching SVG through proxy (URL hidden for security)');
+          try {
+            const response = await fetch(`/api/fetch-svg?url=${encodeURIComponent(displayProps.foregroundValue)}`, {
+              headers: {
+                'Authorization': `Bearer ${token}`
+              }
+            });
+            
+            if (response.ok) {
+              const svgContent = await response.text();
+              if (isSvgContent(svgContent)) {
+                const transformedSvg = applySvgColorTransform(svgContent, displayProps.foregroundColorConfig);
+                props.foregroundValue = transformedSvg;
+                console.log('BadgeCard: Applied color transformation to fetched SVG');
+              }
+            } else {
+              console.error('Failed to fetch SVG through proxy:', response.status);
+            }
+          } catch (err) {
+            console.error('Failed to fetch and transform SVG:', err);
+            // Keep original URL as fallback
+          }
+        }
+      }
       
       setBadgePropsForDisplay(props);
     };
     
     prepareBadgeProps();
-  }, [displayProps]);
+  }, [displayProps, token]);
   
 
   // Format metadata for display

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import { applySvgColorTransform, isSvgContent } from '../../utils/svgColorTransform';
 
 // Helper to try and determine a good contrasting text color (very basic)
 const getContrastingTextColor = (hexBgColor) => {
@@ -23,7 +24,7 @@ const BadgeDisplay = ({ badge }) => {
     name, subtitle, shape, borderColor,
     backgroundType, backgroundValue,
     foregroundType, foregroundValue, foregroundColor,
-    foregroundScale,
+    foregroundScale, foregroundColorConfig,
   } = badge;
 
   const BORDER_WIDTH = 6; // Explicitly defined, should be 6px
@@ -184,6 +185,18 @@ const BadgeDisplay = ({ badge }) => {
 
   const currentForegroundScale = (foregroundScale && !isNaN(parseFloat(foregroundScale))) ? parseFloat(foregroundScale) / 100 : 1;
 
+  // Apply color transformations to SVG content if needed
+  const getTransformedForegroundValue = () => {
+    // For uploaded icons with color config, apply transformations
+    if (foregroundType === 'UPLOADED_ICON' && foregroundColorConfig && isSvgContent(foregroundValue)) {
+      // Only transform if we have SVG content (BadgeCard should have fetched it already)
+      return applySvgColorTransform(foregroundValue, foregroundColorConfig);
+    }
+    return foregroundValue;
+  };
+
+  const transformedForegroundValue = getTransformedForegroundValue();
+
   const renderForeground = () => (
     <div 
       className="badge-foreground-content"
@@ -212,15 +225,15 @@ const BadgeDisplay = ({ badge }) => {
         />
       )}
       {foregroundType === 'UPLOADED_ICON' && (
-        foregroundValue ? (
+        transformedForegroundValue ? (
           // Check if it's SVG content (starts with <svg) or an image URL
-          foregroundValue.trim().startsWith('<svg') ? (
+          transformedForegroundValue.trim().startsWith('<svg') ? (
             <div 
               className="badge-svg-icon"
-              dangerouslySetInnerHTML={{ __html: foregroundValue }}
+              dangerouslySetInnerHTML={{ __html: transformedForegroundValue }}
             />
           ) : (
-            <img src={foregroundValue} alt={name || 'badge icon'} className="badge-uploaded-icon" />
+            <img src={transformedForegroundValue} alt={name || 'badge icon'} className="badge-uploaded-icon" />
           )
         ) : (
           <span className="badge-icon-placeholder">IMG</span> 

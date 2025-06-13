@@ -198,6 +198,65 @@ class BadgeService {
       method: 'DELETE'
     });
   }
+
+  /**
+   * Give a badge to a user
+   * @param {string} templateId - Template ID
+   * @param {string} recipientUsername - Username of recipient
+   * @param {Object} customizations - Badge customizations
+   * @returns {Promise<Object>} Created badge instance
+   */
+  async giveBadge(templateId, recipientUsername, customizations = {}) {
+    const response = await this.makeRequest('/badges/give', {
+      method: 'POST',
+      body: JSON.stringify({
+        templateId,
+        recipientUsername,
+        customizations
+      })
+    });
+    return response.data;
+  }
+
+  /**
+   * Give badges to multiple users
+   * @param {string} templateId - Template ID
+   * @param {Array} recipients - Array of recipient data
+   * @returns {Promise<Object>} Bulk operation results
+   */
+  async giveBadgesBulk(templateId, recipients) {
+    const response = await this.makeRequest('/badges/give/bulk', {
+      method: 'POST',
+      body: JSON.stringify({
+        templateId,
+        recipients
+      })
+    });
+    return response.data;
+  }
+
+  /**
+   * Get user's badge allocations
+   * @param {string} username - Username
+   * @returns {Promise<Array>} Allocation records
+   */
+  async getUserAllocations(username) {
+    const response = await this.makeRequest(`/users/${username}/allocations`);
+    return response.data;
+  }
+
+  /**
+   * Get badges given by a user
+   * @param {string} username - Username
+   * @param {Object} filters - Optional filters
+   * @returns {Promise<Array>} Given badges
+   */
+  async getUserGivenBadges(username, filters = {}) {
+    const queryString = new URLSearchParams(filters).toString();
+    const endpoint = `/users/${username}/badges/given${queryString ? `?${queryString}` : ''}`;
+    const response = await this.makeRequest(endpoint);
+    return response.data;
+  }
 }
 
 // Export a singleton instance

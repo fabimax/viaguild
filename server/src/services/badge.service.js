@@ -421,6 +421,7 @@ class BadgeService {
       foregroundType: badgeInstance.overrideForegroundType || template.defaultForegroundType,
       foregroundValue: badgeInstance.overrideForegroundValue || template.defaultForegroundValue,
       foregroundColor: badgeInstance.overrideForegroundColor || template.defaultForegroundColor,
+      foregroundColorConfig: badgeInstance.overrideForegroundColorConfig || template.defaultForegroundColorConfig,
       textFont: badgeInstance.overrideTextFont || template.defaultTextFont,
       textSize: badgeInstance.overrideTextSize || template.defaultTextSize,
       description: badgeInstance.overrideDisplayDescription || template.defaultDisplayDescription,
@@ -492,9 +493,10 @@ class BadgeService {
       higherIsBetter,
       measureBestLabel,
       measureWorstLabel,
-      isModifiableByIssuer,
+      // isModifiableByIssuer, // Ignored - always false
       allowsPushedInstanceUpdates,
-      internalNotes
+      internalNotes,
+      metadataFieldDefinitions = []
     } = templateData;
 
     // Check if template slug already exists for this owner
@@ -664,13 +666,37 @@ class BadgeService {
         higherIsBetter: higherIsBetter || null,
         measureBestLabel: measureBestLabel || '',
         measureWorstLabel: measureWorstLabel || '',
-        isModifiableByIssuer: isModifiableByIssuer || false,
+        isModifiableByIssuer: false, // Always false - template propagation not implemented
         allowsPushedInstanceUpdates: allowsPushedInstanceUpdates || false,
         internalNotes: internalNotes || ''
       }
     });
 
-    return template;
+    // Create metadata field definitions if provided
+    if (metadataFieldDefinitions && metadataFieldDefinitions.length > 0) {
+      await prisma.metadataFieldDefinition.createMany({
+        data: metadataFieldDefinitions.map((field, index) => ({
+          badgeTemplateId: template.id,
+          fieldKeyForInstanceData: field.fieldKeyForInstanceData,
+          label: field.label,
+          prefix: field.prefix || null,
+          suffix: field.suffix || null,
+          displayOrder: field.displayOrder !== undefined ? field.displayOrder : index
+        }))
+      });
+    }
+
+    // Return template with metadata field definitions
+    const templateWithMetadata = await prisma.badgeTemplate.findUnique({
+      where: { id: template.id },
+      include: {
+        metadataFieldDefinitions: {
+          orderBy: { displayOrder: 'asc' }
+        }
+      }
+    });
+
+    return templateWithMetadata;
   }
 
   /**
@@ -692,6 +718,11 @@ class BadgeService {
       where: {
         ownerType: 'USER',
         ownerId: user.id
+      },
+      include: {
+        metadataFieldDefinitions: {
+          orderBy: { displayOrder: 'asc' }
+        }
       },
       orderBy: { createdAt: 'desc' }
     });
@@ -755,10 +786,13 @@ class BadgeService {
       }
     }
 
+    // Filter out isModifiableByIssuer to ensure it stays false
+    const { isModifiableByIssuer, ...filteredUpdateData } = updateData;
+    
     // Update the template
     const updatedTemplate = await prisma.badgeTemplate.update({
       where: { id: templateId },
-      data: updateData
+      data: filteredUpdateData
     });
 
     return updatedTemplate;
@@ -798,6 +832,276 @@ class BadgeService {
     await prisma.badgeTemplate.delete({
       where: { id: templateId }
     });
+  }
+
+  /**
+   * Give a badge to a user
+   * @param {string} giverId - ID of the user giving the badge
+   * @param {string} templateId - Template to use for the badge
+   * @param {string} recipientUsername - Username of the recipient
+   * @param {Object} customizations - Override fields for the badge instance
+   * @returns {Promise<Object>} Created badge instance
+   */
+  async giveBadge(giverId, templateId, recipientUsername, customizations = {}) {
+    // 1. Get template and verify giver has permission
+    const template = await prisma.badgeTemplate.findUnique({
+      where: { id: templateId },
+      include: {
+        metadataFieldDefinitions: true
+      }
+    });
+    
+    if (!template) {
+      throw new Error('Badge template not found');
+    }
+    
+    // Check if giver owns the template (for now, only owners can give their templates)
+    if (template.ownerType !== 'USER' || template.ownerId !== giverId) {
+      throw new Error('You can only give badges from templates you own');
+    }
+    
+    // 2. Find recipient user
+    const recipient = await prisma.user.findUnique({
+      where: { username_ci: recipientUsername.toLowerCase() },
+      select: { id: true, username: true }
+    });
+    
+    if (!recipient) {
+      throw new Error('Recipient user not found');
+    }
+    
+    // 3. Check allocation limits for tiered badges
+    if (template.inherentTier) {
+      const allocation = await prisma.userBadgeAllocation.findUnique({
+        where: { 
+          userId_tier: { 
+            userId: giverId, 
+            tier: template.inherentTier 
+          } 
+        }
+      });
+      
+      if (!allocation || allocation.remaining <= 0) {
+        throw new Error(`Insufficient ${template.inherentTier.toLowerCase()} badge allocations`);
+      }
+    }
+    
+    // 4. Create badge instance with customizations
+    const {
+      message,
+      overrideBadgeName,
+      overrideSubtitle,
+      overrideDisplayDescription,
+      overrideOuterShape,
+      overrideBorderColor,
+      overrideBackgroundType,
+      overrideBackgroundValue,
+      overrideForegroundType,
+      overrideForegroundValue,
+      overrideForegroundColor,
+      overrideForegroundColorConfig,
+      measureValue,
+      metadataValues = {}
+    } = customizations;
+    
+    // Start a transaction to ensure atomicity
+    const result = await prisma.$transaction(async (tx) => {
+      // Create the badge instance
+      const badgeInstance = await tx.badgeInstance.create({
+        data: {
+          templateId,
+          giverType: 'USER',
+          giverId,
+          receiverType: 'USER',
+          receiverId: recipient.id,
+          awardStatus: 'ACCEPTED', // Skip pending acceptance for now
+          apiVisible: false, // Stays private until user adds to badge case
+          message,
+          // Visual overrides
+          overrideBadgeName,
+          overrideSubtitle,
+          overrideDisplayDescription,
+          overrideOuterShape,
+          overrideBorderColor,
+          overrideBackgroundType,
+          overrideBackgroundValue,
+          overrideForegroundType,
+          overrideForegroundValue,
+          overrideForegroundColor,
+          overrideForegroundColorConfig,
+          // Measure value
+          measureValue: template.definesMeasure ? measureValue : null,
+          // Create metadata values
+          metadataValues: {
+            create: Object.entries(metadataValues).map(([key, value]) => ({
+              dataKey: key,
+              dataValue: String(value)
+            }))
+          }
+        },
+        include: {
+          template: true,
+          metadataValues: true
+        }
+      });
+      
+      // 5. Decrement allocation if tiered
+      if (template.inherentTier) {
+        await tx.userBadgeAllocation.update({
+          where: { 
+            userId_tier: { 
+              userId: giverId, 
+              tier: template.inherentTier 
+            } 
+          },
+          data: { 
+            remaining: { decrement: 1 } 
+          }
+        });
+      }
+      
+      // 6. Create notification for recipient
+      await tx.notification.create({
+        data: {
+          userId: recipient.id,
+          type: 'BADGE_RECEIVED',
+          title: 'New Badge Received!',
+          content: `You've received a "${badgeInstance.overrideBadgeName || template.defaultBadgeName}" badge`,
+          linkUrl: `/users/${recipient.username}/badges/inventory`,
+          sourceId: badgeInstance.id,
+          sourceType: 'badgeInstance',
+          actorId: giverId
+        }
+      });
+      
+      return badgeInstance;
+    });
+    
+    return result;
+  }
+
+  /**
+   * Give badges to multiple recipients
+   * @param {string} giverId - ID of the user giving badges
+   * @param {string} templateId - Template to use
+   * @param {Array} recipients - Array of recipient data
+   * @returns {Promise<Object>} Results of bulk operation
+   */
+  async giveBadgesBulk(giverId, templateId, recipients) {
+    const results = {
+      successful: [],
+      failed: []
+    };
+    
+    // Process each recipient
+    for (const recipientData of recipients) {
+      try {
+        const badge = await this.giveBadge(
+          giverId, 
+          templateId, 
+          recipientData.username,
+          recipientData.customizations || {}
+        );
+        results.successful.push({
+          username: recipientData.username,
+          badgeId: badge.id
+        });
+      } catch (error) {
+        results.failed.push({
+          username: recipientData.username,
+          error: error.message
+        });
+      }
+    }
+    
+    return results;
+  }
+
+  /**
+   * Get user's badge allocations
+   * @param {string} userId - User ID
+   * @returns {Promise<Array>} Allocation records
+   */
+  async getUserAllocations(userId) {
+    const allocations = await prisma.userBadgeAllocation.findMany({
+      where: { userId },
+      orderBy: { tier: 'asc' }
+    });
+    
+    // If no allocations exist, create default ones
+    if (allocations.length === 0) {
+      const defaultAllocations = await prisma.$transaction([
+        prisma.userBadgeAllocation.create({
+          data: { userId, tier: 'GOLD', remaining: 5 }
+        }),
+        prisma.userBadgeAllocation.create({
+          data: { userId, tier: 'SILVER', remaining: 10 }
+        }),
+        prisma.userBadgeAllocation.create({
+          data: { userId, tier: 'BRONZE', remaining: 20 }
+        })
+      ]);
+      return defaultAllocations;
+    }
+    
+    return allocations;
+  }
+
+  /**
+   * Get badges given by a user
+   * @param {string} userId - User ID
+   * @param {Object} filters - Optional filters
+   * @returns {Promise<Array>} Given badges
+   */
+  async getUserGivenBadges(userId, filters = {}) {
+    const where = {
+      giverType: 'USER',
+      giverId: userId
+    };
+    
+    // Apply filters
+    if (filters.status) {
+      where.awardStatus = filters.status;
+    }
+    if (filters.templateId) {
+      where.templateId = filters.templateId;
+    }
+    if (filters.receiverUsername) {
+      const receiver = await prisma.user.findUnique({
+        where: { username_ci: filters.receiverUsername.toLowerCase() },
+        select: { id: true }
+      });
+      if (receiver) {
+        where.receiverId = receiver.id;
+      }
+    }
+    
+    const badges = await prisma.badgeInstance.findMany({
+      where,
+      include: {
+        template: true,
+        metadataValues: true
+      },
+      orderBy: { assignedAt: 'desc' }
+    });
+    
+    // Fetch receiver info for USER type receivers
+    const userReceiverIds = badges
+      .filter(b => b.receiverType === 'USER')
+      .map(b => b.receiverId);
+    
+    const receivers = await prisma.user.findMany({
+      where: { id: { in: userReceiverIds } },
+      select: { id: true, username: true, displayName: true, avatar: true }
+    });
+    
+    const receiversMap = new Map(receivers.map(r => [r.id, r]));
+    
+    // Attach receiver info to badges
+    return badges.map(badge => ({
+      ...badge,
+      receiver: badge.receiverType === 'USER' ? receiversMap.get(badge.receiverId) : null
+    }));
   }
 
 }
