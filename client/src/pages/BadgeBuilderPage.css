@@ -137,6 +137,17 @@
   box-shadow: 0 2px 10px rgba(0,0,0,0.05);
 }
 
+/* Sticky preview panel on desktop */
+@media (min-width: 768px) {
+  .preview-panel {
+    position: sticky;
+    top: 20px; /* Distance from top when stuck */
+    align-self: flex-start; /* Prevent stretching to full height */
+    max-height: calc(100vh - 40px); /* Prevent it from being taller than viewport */
+    overflow-y: auto; /* Allow scrolling within panel if content is too tall */
+  }
+}
+
 .preview-panel h2 {
   font-size: 1.5em;
   margin-top: 0;

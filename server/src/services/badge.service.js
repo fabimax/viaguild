@@ -5,6 +5,18 @@ const r2Service = require('./r2.service');
 
 class BadgeService {
   /**
+   * Helper method to find a user by username
+   * @param {string} username - The username to find
+   * @returns {Promise<Object|null>} User object or null if not found
+   */
+  async findUserByUsername(username) {
+    return await prisma.user.findUnique({
+      where: { username_ci: username.toLowerCase() },
+      select: { id: true, username: true }
+    });
+  }
+
+  /**
    * Get all badges received by a user
    * @param {string} username - The username to fetch badges for
    * @returns {Promise<Array>} Array of badge instances with template data
@@ -499,17 +511,31 @@ class BadgeService {
       metadataFieldDefinitions = []
     } = templateData;
 
-    // Check if template slug already exists for this owner
-    const existingTemplate = await prisma.badgeTemplate.findFirst({
-      where: {
-        templateSlug: templateSlug,
-        ownerType: ownerType,
-        ownerId: ownerId
+    // Ensure template slug is unique for this owner (auto-increment if needed)
+    let uniqueSlug = templateSlug;
+    let counter = 1;
+    
+    while (true) {
+      const existingTemplate = await prisma.badgeTemplate.findFirst({
+        where: {
+          templateSlug: uniqueSlug,
+          ownerType: ownerType,
+          ownerId: ownerId
+        }
+      });
+      
+      if (!existingTemplate) {
+        break; // Slug is unique
       }
-    });
-
-    if (existingTemplate) {
-      throw new Error(`Template with slug '${templateSlug}' already exists for this owner`);
+      
+      // Generate incremented slug
+      uniqueSlug = `${templateSlug}-${counter}`;
+      counter++;
+      
+      // Safety check to prevent infinite loops
+      if (counter > 999) {
+        throw new Error('Unable to generate unique template slug after 999 attempts');
+      }
     }
 
     // Process upload references - convert temp uploads to permanent storage
@@ -556,7 +582,7 @@ class BadgeService {
           // Regular image or SVG without transformations - move to proper template location
           // First fetch the original content
           const response = await fetch(asset.hostedUrl);
-          const originalContent = await response.buffer();
+          const originalContent = Buffer.from(await response.arrayBuffer());
           
           // Store in proper template location
           const permanentKey = `users/${ownerId}/badge-templates/${templateSlug}-icon-${asset.id}`;
@@ -601,7 +627,7 @@ class BadgeService {
         // Move background to proper template location
         // First fetch the original content
         const response = await fetch(asset.hostedUrl);
-        const originalContent = await response.buffer();
+        const originalContent = Buffer.from(await response.arrayBuffer());
         
         // Store in proper template location
         const permanentKey = `users/${ownerId}/badge-templates/${templateSlug}-bg-${asset.id}`;
@@ -638,8 +664,8 @@ class BadgeService {
     // Create the template with processed URLs
     const template = await prisma.badgeTemplate.create({
       data: {
-        templateSlug,
-        templateSlug_ci: templateSlug.toLowerCase(),
+        templateSlug: uniqueSlug,
+        templateSlug_ci: uniqueSlug.toLowerCase(),
         ownerType,
         ownerId,
         authoredByUserId,

@@ -27,6 +27,7 @@ const BadgeTemplateCreatePage = () => {
   const [template, setTemplate] = useState({
     templateSlug: '',
     defaultBadgeName: 'New Badge Template',
+    customSlug: false, // Track if user manually set the slug
     defaultSubtitleText: 'Achievement Badge',
     defaultDisplayDescription: '',
     inherentTier: null,
@@ -66,6 +67,8 @@ const BadgeTemplateCreatePage = () => {
   const [uploadedIconSvg, setUploadedIconSvg] = useState(null);
   const [iconSvgColorData, setIconSvgColorData] = useState(null);
   const [uploadedBackgroundUrl, setUploadedBackgroundUrl] = useState(null);
+  const [slugWasIncremented, setSlugWasIncremented] = useState(false);
+  const [existingTemplateSlugs, setExistingTemplateSlugs] = useState([]);
   
   const isOwnPage = user && user.username.toLowerCase() === username.toLowerCase();
   
@@ -76,18 +79,66 @@ const BadgeTemplateCreatePage = () => {
     }
   }, [user, token, isOwnPage, navigate]);
 
-  // Auto-generate slug from badge name
+  // Fetch existing template slugs once when component loads
   useEffect(() => {
-    if (template.defaultBadgeName && !template.templateSlug) {
-      const slug = template.defaultBadgeName
-        .toLowerCase()
-        .replace(/[^a-z0-9\s-]/g, '')
-        .replace(/\s+/g, '-')
-        .replace(/-+/g, '-')
-        .trim();
-      setTemplate(prev => ({ ...prev, templateSlug: slug }));
+    if (isOwnPage && user && token) {
+      const fetchExistingSlugs = async () => {
+        try {
+          const response = await fetch(`/api/users/${username}/badge-templates`, {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            const slugs = data.data.map(t => t.templateSlug);
+            setExistingTemplateSlugs(slugs);
+          }
+        } catch (error) {
+          console.error('Error fetching existing template slugs:', error);
+          // Continue without slug checking if this fails
+        }
+      };
+      
+      fetchExistingSlugs();
     }
-  }, [template.defaultBadgeName, template.templateSlug]);
+  }, [isOwnPage, user, token, username]);
+
+  // Auto-generate slug from badge name with instant local duplicate checking
+  useEffect(() => {
+    if (template.defaultBadgeName && !template.customSlug) {
+      const baseSlug = generateTemplateSlug(template.defaultBadgeName);
+      
+      if (!baseSlug) {
+        setTemplate(prev => ({ ...prev, templateSlug: '' }));
+        setSlugWasIncremented(false);
+        return;
+      }
+
+      // Find unique slug with auto-increment (instant - no API call)
+      let uniqueSlug = baseSlug;
+      let counter = 1;
+      let wasIncremented = false;
+      
+      while (existingTemplateSlugs.includes(uniqueSlug)) {
+        uniqueSlug = `${baseSlug}-${counter}`;
+        counter++;
+        wasIncremented = true;
+        
+        // Safety check
+        if (counter > 999) break;
+      }
+      
+      setTemplate(prev => ({ ...prev, templateSlug: uniqueSlug }));
+      setSlugWasIncremented(wasIncremented);
+    }
+  }, [template.defaultBadgeName, template.customSlug, existingTemplateSlugs]);
+
+  // Helper to set custom slug
+  const setCustomSlug = (customSlug) => {
+    setTemplate(prev => ({ ...prev, templateSlug: customSlug, customSlug: true }));
+  };
 
   // Fetch system icon SVG for preview
   useEffect(() => {
@@ -311,6 +362,17 @@ const BadgeTemplateCreatePage = () => {
       .join('');
   };
 
+  // Generate template slug from badge name
+  const generateTemplateSlug = (badgeName) => {
+    return badgeName
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, '') // Remove chars that aren't letters, numbers, spaces, or hyphens
+      .replace(/\s+/g, '-')         // Replace spaces with hyphens
+      .replace(/-+/g, '-')          // Collapse multiple hyphens
+      .replace(/^-+|-+$/g, '')      // Remove leading/trailing hyphens
+      .trim();
+  };
+
   // Metadata field management
   const addMetadataField = () => {
     const newField = {
@@ -481,18 +543,57 @@ const BadgeTemplateCreatePage = () => {
                 </div>
 
                 <div className="control-group">
-                  <label htmlFor="templateSlug">Template Slug:</label>
-                  <input
-                    type="text"
-                    id="templateSlug"
-                    name="templateSlug"
-                    value={template.templateSlug}
-                    onChange={handleInputChange}
-                    pattern="[a-z0-9-]+"
-                    title="Only lowercase letters, numbers, and hyphens allowed"
-                    required
-                  />
-                  <small>Unique identifier for this template (auto-generated from name if empty)</small>
+                  <label>Template Slug:</label>
+                  <div style={{ marginTop: '5px' }}>
+                    <code style={{ 
+                      background: '#f8f9fa', 
+                      padding: '4px 8px', 
+                      borderRadius: '3px',
+                      border: '1px solid #e9ecef',
+                      fontSize: '14px'
+                    }}>
+                      {template.templateSlug || (template.defaultBadgeName ? generateTemplateSlug(template.defaultBadgeName) : 'enter-badge-name')}
+                    </code>
+                    {slugWasIncremented && !template.customSlug && (
+                      <span style={{ marginLeft: '8px', fontSize: '11px', color: '#ffc107' }}>
+                        ⚠️ (duplicate found; number appended)
+                      </span>
+                    )}
+                    {template.defaultBadgeName && !template.customSlug && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const customSlug = prompt('Enter custom template slug:', template.templateSlug || generateTemplateSlug(template.defaultBadgeName));
+                          if (customSlug && customSlug.trim() && customSlug.match(/^[a-z0-9-]+$/)) {
+                            setCustomSlug(customSlug.trim());
+                            setSlugWasIncremented(false); // Reset increment flag when manually set
+                          } else if (customSlug !== null) {
+                            alert('Template slug must contain only lowercase letters, numbers, and hyphens');
+                          }
+                        }}
+                        style={{
+                          marginLeft: '8px',
+                          padding: '2px 6px',
+                          fontSize: '11px',
+                          background: '#f8f9fa',
+                          border: '1px solid #ccc',
+                          borderRadius: '3px',
+                          cursor: 'pointer',
+                          color: '#495057'
+                        }}
+                      >
+                        ⚙️ edit
+                      </button>
+                    )}
+                    {template.customSlug && (
+                      <span style={{ marginLeft: '8px', fontSize: '11px', color: '#28a745' }}>
+                        ✓ custom
+                      </span>
+                    )}
+                  </div>
+                  <small style={{ color: '#6c757d', fontSize: '12px' }}>
+                    Unique identifier for this template (used in URLs)
+                  </small>
                 </div>
 
                 <div className="control-group">
@@ -670,9 +771,26 @@ const BadgeTemplateCreatePage = () => {
                 )}
               </div>
 
-              {/* Measure Configuration */}
-              <div className="control-section">
-                <h3>Measure Configuration</h3>
+              {/* Advanced Settings - Collapsible Section */}
+              <details className="control-section" style={{ marginTop: '30px' }}>
+                <summary style={{ 
+                  cursor: 'pointer', 
+                  fontSize: '18px', 
+                  fontWeight: 'bold',
+                  marginBottom: '20px',
+                  outline: 'none',
+                  padding: '10px',
+                  backgroundColor: '#f8f9fa',
+                  border: '1px solid #e9ecef',
+                  borderRadius: '6px',
+                  userSelect: 'none'
+                }}>
+                  ⚙️ Advanced Settings
+                </summary>
+                
+                {/* Measure Configuration */}
+                <div className="control-section" style={{ marginTop: '20px' }}>
+                  <h3>Measure Configuration</h3>
                 
                 <div className="control-group checkbox-row">
                   <input
@@ -981,6 +1099,8 @@ const BadgeTemplateCreatePage = () => {
                   + Add Metadata Field
                 </button>
               </div>
+              
+              </details>
 
               <div className="form-actions">
                 <button type="submit" disabled={isSubmitting} className="btn-primary">
@@ -1011,16 +1131,29 @@ const BadgeTemplateCreatePage = () => {
                 </div>
               </div>
               
+              {/* Template Details - commented out as redundant with form content
               <div className="preview-info">
                 <h3>Template Details</h3>
                 <p><strong>Slug:</strong> {template.templateSlug}</p>
                 <p><strong>Tier:</strong> {template.inherentTier || 'None'}</p>
                 <p><strong>Measure Tracking:</strong> {template.definesMeasure ? 'Enabled' : 'Disabled'}</p>
               </div>
+              */}
 
-              <div className="api-preview-section">
-                <h3>Third-Party API Integration</h3>
-                <p>Use this JSON to create this badge template via API:</p>
+              <details className="api-preview-section" style={{ marginTop: '20px' }}>
+                <summary style={{ 
+                  cursor: 'pointer', 
+                  fontSize: '16px', 
+                  fontWeight: 'bold',
+                  marginBottom: '10px',
+                  outline: 'none'
+                }}>
+                  🔌 API Integration (Advanced)
+                </summary>
+                <div style={{ marginTop: '15px' }}>
+                  <p style={{ fontSize: '14px', color: '#666', marginBottom: '10px' }}>
+                    Use this JSON to create badge templates programmatically:
+                  </p>
                 
                 <div className="code-block" style={{
                   border: '1px solid #ddd',
@@ -1093,7 +1226,8 @@ const BadgeTemplateCreatePage = () => {
   -d '${JSON.stringify(generateApiPayload(), null, 2).replace(/'/g, "\\'")}'`}
                   </pre>
                 </details>
-              </div>
+                </div>
+              </details>
             </div>
           </div>
         </form>

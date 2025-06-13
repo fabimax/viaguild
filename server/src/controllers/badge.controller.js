@@ -1,6 +1,4 @@
 const badgeService = require('../services/badge.service');
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
 
 const badgeController = {
   /**
@@ -554,11 +552,8 @@ const badgeController = {
     try {
       const { username } = req.params;
       
-      // Verify the user is fetching their own allocations or is an admin
-      const user = await prisma.user.findUnique({
-        where: { username_ci: username.toLowerCase() },
-        select: { id: true }
-      });
+      // Use badgeService to find user and get allocations
+      const user = await badgeService.findUserByUsername(username);
 
       if (!user) {
         return res.status(404).json({
@@ -599,11 +594,8 @@ const badgeController = {
       const { username } = req.params;
       const filters = req.query; // status, templateId, receiverUsername
       
-      // Verify the user exists
-      const user = await prisma.user.findUnique({
-        where: { username_ci: username.toLowerCase() },
-        select: { id: true }
-      });
+      // Use badgeService to find user
+      const user = await badgeService.findUserByUsername(username);
 
       if (!user) {
         return res.status(404).json({
