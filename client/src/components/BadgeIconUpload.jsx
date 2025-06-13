@@ -684,6 +684,16 @@ function BadgeIconUpload({
             current: normalizedFill
           };
         }
+      } else if (element.tagName.toLowerCase() === 'path' || element.tagName.toLowerCase() === 'circle' || 
+                 element.tagName.toLowerCase() === 'rect' || element.tagName.toLowerCase() === 'ellipse' ||
+                 element.tagName.toLowerCase() === 'polygon') {
+        // Only add unspecified fill for actual drawing elements that typically need fill
+        if (!colorMap[elementPath]) colorMap[elementPath] = {};
+        colorMap[elementPath].fill = {
+          original: 'UNSPECIFIED', // Special marker for unspecified colors
+          current: '#000000FF', // Default to black
+          isUnspecified: true
+        };
       }
       
       // Check stroke color
@@ -698,6 +708,15 @@ function BadgeIconUpload({
             current: normalizedStroke
           };
         }
+      } else if (element.tagName.toLowerCase() === 'line' || element.tagName.toLowerCase() === 'polyline' ||
+                 element.tagName.toLowerCase() === 'path') {
+        // Only add unspecified stroke for elements that commonly use strokes
+        if (!colorMap[elementPath]) colorMap[elementPath] = {};
+        colorMap[elementPath].stroke = {
+          original: 'UNSPECIFIED', // Special marker for unspecified colors
+          current: '#000000FF', // Default to black
+          isUnspecified: true
+        };
       }
     };
 
@@ -1075,11 +1094,13 @@ function BadgeIconUpload({
     // Reset color slot for UI
     const updatedSlots = svgColorData.colorSlots.map(slot => {
       if (slot.id === slotIdToReset) {
+        // For unspecified colors, reset to black instead of the 'UNSPECIFIED' string
+        const resetColor = slot.originalColor === 'UNSPECIFIED' ? '#000000FF' : slot.originalColor;
         return {
           ...slot,
-          currentColor: slot.originalColor,
-          rgba: svgCustomizer.current.hexToRgba(slot.originalColor),
-          hasTransparency: svgCustomizer.current.hasTransparency(slot.originalColor),
+          currentColor: resetColor,
+          rgba: svgCustomizer.current.hexToRgba(resetColor),
+          hasTransparency: svgCustomizer.current.hasTransparency(resetColor),
         };
       }
       return slot;
@@ -1091,7 +1112,9 @@ function BadgeIconUpload({
     if (resetSlot) {
       const { elementPath, colorType } = resetSlot;
       if (updatedElementColorMap[elementPath] && updatedElementColorMap[elementPath][colorType]) {
-        updatedElementColorMap[elementPath][colorType].current = resetSlot.originalColor;
+        // For unspecified colors, reset to black instead of the 'UNSPECIFIED' string
+        const resetColor = resetSlot.originalColor === 'UNSPECIFIED' ? '#000000FF' : resetSlot.originalColor;
+        updatedElementColorMap[elementPath][colorType].current = resetColor;
       }
     }
     
@@ -1299,13 +1322,15 @@ function BadgeIconUpload({
             <>
               <h4>Detected SVG Colors:</h4>
               {(() => {
-                // Group slots by original color
+                // Group slots by original color, with special handling for unspecified colors
                 const colorGroups = {};
                 svgColorData.colorSlots.forEach(slot => {
-                  if (!colorGroups[slot.originalColor]) {
-                    colorGroups[slot.originalColor] = [];
+                  // Group unspecified colors together under a special key
+                  const groupKey = slot.originalColor === 'UNSPECIFIED' ? 'UNSPECIFIED_GROUP' : slot.originalColor;
+                  if (!colorGroups[groupKey]) {
+                    colorGroups[groupKey] = [];
                   }
-                  colorGroups[slot.originalColor].push(slot);
+                  colorGroups[groupKey].push(slot);
                 });
                 
                 const toggleGroup = (color) => {
@@ -1384,11 +1409,13 @@ function BadgeIconUpload({
                     // Check if this slot should be reset (belongs to this group)
                     const shouldReset = slotsToReset.some(groupSlot => groupSlot.id === slot.id);
                     if (shouldReset) {
+                      // For unspecified colors, reset to black instead of the 'UNSPECIFIED' string
+                      const resetColor = slot.originalColor === 'UNSPECIFIED' ? '#000000FF' : slot.originalColor;
                       return {
                         ...slot,
-                        currentColor: slot.originalColor,
-                        rgba: svgCustomizer.current.hexToRgba(slot.originalColor),
-                        hasTransparency: svgCustomizer.current.hasTransparency(slot.originalColor)
+                        currentColor: resetColor,
+                        rgba: svgCustomizer.current.hexToRgba(resetColor),
+                        hasTransparency: svgCustomizer.current.hasTransparency(resetColor)
                       };
                     }
                     return slot;
@@ -1399,7 +1426,9 @@ function BadgeIconUpload({
                   slotsToReset.forEach(slot => {
                     const { elementPath, colorType } = slot;
                     if (updatedElementColorMap[elementPath] && updatedElementColorMap[elementPath][colorType]) {
-                      updatedElementColorMap[elementPath][colorType].current = slot.originalColor;
+                      // For unspecified colors, reset to black instead of the 'UNSPECIFIED' string
+                      const resetColor = slot.originalColor === 'UNSPECIFIED' ? '#000000FF' : slot.originalColor;
+                      updatedElementColorMap[elementPath][colorType].current = resetColor;
                     }
                   });
                   
@@ -1427,11 +1456,16 @@ function BadgeIconUpload({
                 };
                 
                 return Object.entries(colorGroups).map(([originalColor, slots]) => {
+                  // Handle special unspecified group
+                  const isUnspecifiedGroup = originalColor === 'UNSPECIFIED_GROUP';
+                  const displayGroupName = isUnspecifiedGroup ? 'Unspecified (defaults to black)' : originalColor;
+                  const groupDisplayColor = isUnspecifiedGroup ? '#000000FF' : originalColor;
+                  
                   // Check if all slots in group have same current color
                   const allSameColor = slots.every(slot => slot.currentColor === slots[0].currentColor);
                   
                   // For group controls, only show unified values when all colors are the same
-                  const groupCurrentColor = allSameColor ? slots[0].currentColor : originalColor;
+                  const groupCurrentColor = allSameColor ? slots[0].currentColor : groupDisplayColor;
                   const parsedCurrent = parseColorString(groupCurrentColor);
                   const currentHex = parsedCurrent.hex;
                   const currentAlpha = parsedCurrent.alpha;
@@ -1463,31 +1497,33 @@ function BadgeIconUpload({
                             display: 'inline-block',
                             width: '1.5em',
                             height: '1.5em',
-                            backgroundColor: originalColor,
+                            backgroundColor: groupDisplayColor,
                             border: '2px solid #ccc',
                             borderRadius: '3px'
                           }}></span>
                           <label style={{ fontWeight: 'bold' }}>
-                            {originalColor} - {slots.length} element{slots.length > 1 ? 's' : ''}
+                            {displayGroupName} - {slots.length} element{slots.length > 1 ? 's' : ''}
                           </label>
                         </div>
                         
                         <div className="control-group svg-color-control" style={{ marginTop: '8px', paddingLeft: '30px' }}>
                           <input 
                             type="color" 
-                            value={currentHex}
+                            value={allSameColor ? currentHex : '#000000'}
                             onChange={(e) => handleGroupColorChange(originalColor, e.target.value, currentAlpha)}
                             disabled={isComponentLoading || !allSameColor}
+                            style={{ opacity: allSameColor ? 1 : 0.5 }}
                           />
                           <input 
                             type="range" 
                             min="0" max="1" step="0.01" 
-                            value={currentAlpha}
+                            value={allSameColor ? currentAlpha : 1}
                             onChange={(e) => handleGroupColorChange(originalColor, currentHex, parseFloat(e.target.value))}
                             disabled={isComponentLoading || !allSameColor}
+                            style={{ opacity: allSameColor ? 1 : 0.5 }}
                           />
                           <span className="color-display-hex8">
-                            {allSameColor ? groupCurrentColor : `${originalColor} (mixed - expand to edit individually)`}
+                            {allSameColor ? groupCurrentColor : `Mixed colors - expand to edit individually`}
                           </span>
                           <button 
                             type="button" 
@@ -1502,7 +1538,7 @@ function BadgeIconUpload({
                       
                       {isExpanded && (
                         <div className="color-group-items" style={{ paddingLeft: '30px', marginTop: '10px' }}>
-                          {slots.map((slot, index) => {
+                          {slots.map((slot) => {
                             const slotParsed = parseColorString(slot.currentColor);
                             const slotHex = slotParsed.hex;
                             const slotAlpha = slotParsed.alpha;

@@ -44,7 +44,7 @@ function getSystemIconId(name: string, allSystemIcons: SystemIcon[]): string {
 }
 
 
-interface BadgeTemplateSeedData extends Omit<BadgeTemplate, 'id' | 'createdAt' | 'updatedAt' | 'instances' | 'metadataFieldDefinitions' | 'templateSlug_ci' | 'authoredByUser' | 'ownedByUser' | 'ownedByGuild' | 'definesCredential' | 'credentialLabel' | 'credentialBest' | 'credentialWorst' | 'credentialNotes' | 'credentialIsNormalizable' | 'higherIsBetter' | 'measureBestLabel' | 'measureWorstLabel' | 'ownedByUserId' | 'ownedByGuildId' | 'ownerType' | 'ownerId' | 'defaultForegroundColorConfig'> { 
+interface BadgeTemplateSeedData extends Omit<BadgeTemplate, 'id' | 'createdAt' | 'updatedAt' | 'instances' | 'metadataFieldDefinitions' | 'templateSlug_ci' | 'authoredByUser' | 'ownedByUser' | 'ownedByGuild' | 'definesCredential' | 'credentialLabel' | 'credentialBest' | 'credentialWorst' | 'credentialNotes' | 'credentialIsNormalizable' | 'higherIsBetter' | 'measureBestLabel' | 'measureWorstLabel' | 'ownedByUserId' | 'ownedByGuildId' | 'ownerType' | 'ownerId' | 'defaultBorderColor' | 'defaultForegroundColor' | 'defaultForegroundColorConfig' | 'defaultBorderConfig' | 'defaultBackgroundConfig' | 'defaultForegroundConfig'> { 
   templateSlug: string;
   authoredByUserId: string | null;
   // Legacy fields for backward compatibility during transition
@@ -64,7 +64,33 @@ interface BadgeTemplateSeedData extends Omit<BadgeTemplate, 'id' | 'createdAt' |
   measureBestLabel: string | null;
   measureWorstLabel: string | null;
   metadataFields?: Omit<MetadataFieldDefinition, 'id' | 'badgeTemplateId' | 'badgeTemplate'>[];
-  defaultForegroundColorConfig?: Prisma.JsonValue | null; // Optional for seed data
+  
+  // Legacy fields (will be removed after migration)
+  defaultBorderColor?: string;
+  defaultForegroundColor?: string;
+  defaultForegroundColorConfig?: Prisma.JsonValue | null;
+  
+  // New unified config fields (required for seeds)
+  defaultBorderConfig: Prisma.JsonValue | null;
+  defaultBackgroundConfig: Prisma.JsonValue | null;
+  defaultForegroundConfig: Prisma.JsonValue | null;
+}
+
+// Helper functions for creating config objects
+function createSimpleColorConfig(color: string): Prisma.JsonValue {
+  return {
+    type: 'simple-color',
+    version: 1,
+    color: color
+  };
+}
+
+function createHostedAssetConfig(url: string): Prisma.JsonValue {
+  return {
+    type: 'hosted-asset',
+    version: 1,
+    url: url
+  };
 }
 
 export async function seedBadgeTemplates(prisma: PrismaClient) {
@@ -112,12 +138,19 @@ export async function seedBadgeTemplates(prisma: PrismaClient) {
       defaultBadgeName: 'Site Pioneer',
       defaultSubtitleText: 'Early Adopter',
       defaultOuterShape: BadgeShape.HEXAGON,
+      // Legacy fields (will be removed after migration)
       defaultBorderColor: '#FFD700',
+      defaultForegroundColor: '#FFD700',
+      
+      // New unified config fields
+      defaultBorderConfig: createSimpleColorConfig('#FFD700'),
+      defaultBackgroundConfig: createSimpleColorConfig('#4A0404'),
+      defaultForegroundConfig: createSimpleColorConfig('#FFD700'),
+      
       defaultBackgroundType: BackgroundContentType.SOLID_COLOR,
       defaultBackgroundValue: '#4A0404',
       defaultForegroundType: ForegroundContentType.SYSTEM_ICON,
       defaultForegroundValue: getSystemIconId('Glowing Star', allSystemIcons),
-      defaultForegroundColor: '#FFD700',
       defaultTextFont: null,
       defaultTextSize: null,
       defaultDisplayDescription: 'This badge is awarded to users who joined ViaGuild in its very early days, recognizing their foundational support.',
@@ -166,12 +199,19 @@ export async function seedBadgeTemplates(prisma: PrismaClient) {
       defaultBadgeName: 'Nexus Visionary',
       defaultSubtitleText: `Founder of ${SPECIAL_GUILD_NAME}`,
       defaultOuterShape: BadgeShape.SQUARE,
+      // Legacy fields (will be removed after migration)
       defaultBorderColor: '#C0C0C0',
+      defaultForegroundColor: '#FFFFFF',
+      
+      // New unified config fields
+      defaultBorderConfig: createSimpleColorConfig('#C0C0C0'),
+      defaultBackgroundConfig: createHostedAssetConfig(getAssetUrl('BADGE_BACKGROUND_IMAGE_10')),
+      defaultForegroundConfig: createSimpleColorConfig('#FFFFFF'),
+      
       defaultBackgroundType: BackgroundContentType.HOSTED_IMAGE,
       defaultBackgroundValue: getAssetUrl('BADGE_BACKGROUND_IMAGE_10'), 
       defaultForegroundType: ForegroundContentType.SYSTEM_ICON,
       defaultForegroundValue: getSystemIconId('Shield', allSystemIcons),
-      defaultForegroundColor: '#FFFFFF',
       defaultTextFont: null,
       defaultTextSize: null,
       defaultDisplayDescription: `Awarded to the esteemed founder of ${SPECIAL_GUILD_NAME}, for their vision and leadership.`,
@@ -212,12 +252,19 @@ export async function seedBadgeTemplates(prisma: PrismaClient) {
         defaultBadgeName: 'Project Complete',
         defaultSubtitleText: 'Milestone Achieved',
         defaultOuterShape: BadgeShape.CIRCLE,
+        // Legacy fields (will be removed after migration)
         defaultBorderColor: '#0284c7',
+        defaultForegroundColor: '#0284c7',
+        
+        // New unified config fields
+        defaultBorderConfig: createSimpleColorConfig('#0284c7'),
+        defaultBackgroundConfig: createSimpleColorConfig('#e0f2fe'),
+        defaultForegroundConfig: createSimpleColorConfig('#0284c7'),
+        
         defaultBackgroundType: BackgroundContentType.SOLID_COLOR,
         defaultBackgroundValue: '#e0f2fe',
         defaultForegroundType: ForegroundContentType.SYSTEM_ICON,
         defaultForegroundValue: getSystemIconId('Checkmark Seal', allSystemIcons),
-        defaultForegroundColor: '#0284c7',
         defaultTextFont: null,
         defaultTextSize: null,
         defaultDisplayDescription: 'Awarded upon successful completion of a significant project phase or the entire project.',
@@ -273,12 +320,19 @@ export async function seedBadgeTemplates(prisma: PrismaClient) {
       defaultBadgeName: 'Nexus Contributor',
       defaultSubtitleText: 'Valued Member',
       defaultOuterShape: BadgeShape.HEART,
+      // Legacy fields (will be removed after migration)
       defaultBorderColor: '#A0A0A0', // Silver-ish
+      defaultForegroundColor: '#CD7F32', // Bronze-like color for the heart on silver
+      
+      // New unified config fields
+      defaultBorderConfig: createSimpleColorConfig('#A0A0A0'),
+      defaultBackgroundConfig: createSimpleColorConfig('#E9E9E9'),
+      defaultForegroundConfig: createSimpleColorConfig('#CD7F32'),
+      
       defaultBackgroundType: BackgroundContentType.SOLID_COLOR,
       defaultBackgroundValue: '#E9E9E9', // Light Gray
       defaultForegroundType: ForegroundContentType.SYSTEM_ICON,
       defaultForegroundValue: getSystemIconId('Filled Heart', allSystemIcons),
-      defaultForegroundColor: '#CD7F32', // Bronze-like color for the heart on silver
       defaultTextFont: null,
       defaultTextSize: null,
       defaultDisplayDescription: 'Awarded to members who consistently make positive contributions to The Nexus Hub community, discussions, or projects.',
@@ -324,12 +378,19 @@ export async function seedBadgeTemplates(prisma: PrismaClient) {
       defaultBadgeName: 'Participant',
       defaultSubtitleText: 'Thank You!',
       defaultOuterShape: BadgeShape.CIRCLE,
+      // Legacy fields (will be removed after migration)
       defaultBorderColor: '#6B7280', // Gray-500
+      defaultForegroundColor: '#4B5563', // Gray-600
+      
+      // New unified config fields
+      defaultBorderConfig: createSimpleColorConfig('#6B7280'),
+      defaultBackgroundConfig: createSimpleColorConfig('#F3F4F6'),
+      defaultForegroundConfig: createSimpleColorConfig('#4B5563'),
+      
       defaultBackgroundType: BackgroundContentType.SOLID_COLOR,
       defaultBackgroundValue: '#F3F4F6', // Gray-100
       defaultForegroundType: ForegroundContentType.SYSTEM_ICON,
       defaultForegroundValue: getSystemIconId('Checkmark Seal', allSystemIcons), // Generic check/success icon
-      defaultForegroundColor: '#4B5563', // Gray-600
       defaultTextFont: null,
       defaultTextSize: null,
       defaultDisplayDescription: 'This badge acknowledges participation in an event or activity.',
@@ -368,12 +429,19 @@ export async function seedBadgeTemplates(prisma: PrismaClient) {
       defaultBadgeName: 'Current Rank',
       defaultSubtitleText: 'Player Standing',
       defaultOuterShape: BadgeShape.SQUARE,
+      // Legacy fields (will be removed after migration)
       defaultBorderColor: '#3B82F6', // Blue
+      defaultForegroundColor: '#FFFFFF',
+      
+      // New unified config fields
+      defaultBorderConfig: createSimpleColorConfig('#3B82F6'),
+      defaultBackgroundConfig: createHostedAssetConfig(getAssetUrl('BADGE_BACKGROUND_IMAGE_20')),
+      defaultForegroundConfig: createSimpleColorConfig('#FFFFFF'),
+      
       defaultBackgroundType: BackgroundContentType.HOSTED_IMAGE,
       defaultBackgroundValue: getAssetUrl('BADGE_BACKGROUND_IMAGE_20'), // Dynamic-looking background
       defaultForegroundType: ForegroundContentType.TEXT, // Will be overridden by instance typically, or shows a placeholder
       defaultForegroundValue: '-', // Placeholder for rank number/tier name if instanceData is missing override
-      defaultForegroundColor: '#FFFFFF',
       defaultTextFont: 'Impact_Approved', // Example chunky font for rank
       defaultTextSize: 24,
       defaultDisplayDescription: 'Displays the current competitive ranking, updated periodically.',
@@ -419,12 +487,19 @@ export async function seedBadgeTemplates(prisma: PrismaClient) {
       defaultBadgeName: 'Bronze Craftsmanship',
       defaultSubtitleText: 'Artisan Guild Award',
       defaultOuterShape: BadgeShape.HEXAGON,
+      // Legacy fields (will be removed after migration)
       defaultBorderColor: '#CD7F32', // Bronze
+      defaultForegroundColor: '#CD7F32', // Bronze icon
+      
+      // New unified config fields
+      defaultBorderConfig: createSimpleColorConfig('#CD7F32'),
+      defaultBackgroundConfig: createSimpleColorConfig('#6B4226'),
+      defaultForegroundConfig: createSimpleColorConfig('#CD7F32'),
+      
       defaultBackgroundType: BackgroundContentType.SOLID_COLOR,
       defaultBackgroundValue: '#6B4226', // Darker Brown
       defaultForegroundType: ForegroundContentType.SYSTEM_ICON,
       defaultForegroundValue: getSystemIconId('Ribbon Award', allSystemIcons),
-      defaultForegroundColor: '#CD7F32', // Bronze icon
       defaultTextFont: null,
       defaultTextSize: null,
       defaultDisplayDescription: 'Recognizes foundational skill and dedication in craftsmanship within the Artisan Guild.',
@@ -463,12 +538,19 @@ export async function seedBadgeTemplates(prisma: PrismaClient) {
       defaultBadgeName: 'Lore Keeper',
       defaultSubtitleText: 'Hub Historian',
       defaultOuterShape: BadgeShape.CIRCLE,
+      // Legacy fields (will be removed after migration)
       defaultBorderColor: '#71717a', // Zinc 500
+      defaultForegroundColor: '#27272a', // Zinc 800
+      
+      // New unified config fields
+      defaultBorderConfig: createSimpleColorConfig('#71717a'),
+      defaultBackgroundConfig: createHostedAssetConfig(getAssetUrl('BADGE_BACKGROUND_IMAGE_30')),
+      defaultForegroundConfig: createSimpleColorConfig('#27272a'),
+      
       defaultBackgroundType: BackgroundContentType.HOSTED_IMAGE,
       defaultBackgroundValue: getAssetUrl('BADGE_BACKGROUND_IMAGE_30'), // e.g., an old paper/scroll texture
       defaultForegroundType: ForegroundContentType.TEXT,
       defaultForegroundValue: 'LORE', // Prominent text
-      defaultForegroundColor: '#27272a', // Zinc 800
       defaultTextFont: 'Georgia_Approved', // Serif font
       defaultTextSize: 22,
       defaultDisplayDescription: 'Bestowed upon those who have delved deep into the annals of TheNexusHub, preserving its history and tales.',

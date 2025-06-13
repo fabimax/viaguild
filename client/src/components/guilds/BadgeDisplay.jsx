@@ -1,5 +1,12 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { applySvgColorTransform, isSvgContent } from '../../utils/svgColorTransform';
+import { 
+  extractColor, 
+  extractBackgroundStyle, 
+  extractBorderStyle,
+  mergeLegacyColor,
+  convertLegacyBackground 
+} from '../../utils/colorConfig';
 
 // Helper to try and determine a good contrasting text color (very basic)
 const getContrastingTextColor = (hexBgColor) => {
@@ -21,16 +28,29 @@ const BadgeDisplay = ({ badge }) => {
   if (!badge) return null;
 
   const {
-    name, subtitle, shape, borderColor,
-    backgroundType, backgroundValue,
-    foregroundType, foregroundValue, foregroundColor,
-    foregroundScale, foregroundColorConfig,
+    name, subtitle, shape, 
+    // Legacy fields
+    borderColor, backgroundType, backgroundValue,
+    foregroundType, foregroundValue, foregroundColor, foregroundColorConfig,
+    // New unified config fields
+    borderConfig, backgroundConfig, foregroundConfig,
+    foregroundScale,
   } = badge;
 
   const BORDER_WIDTH = 6; // Explicitly defined, should be 6px
   const BADGE_SIZE_PX = 100;
   const SIMPLE_SHAPE_PADDING_PX = 5;
   const COMPLEX_SHAPE_INNER_PADDING_PX = 2;
+
+  // Resolve unified config objects with legacy fallbacks
+  const resolvedBorderConfig = mergeLegacyColor(borderColor, borderConfig);
+  const resolvedBackgroundConfig = backgroundConfig || convertLegacyBackground(backgroundType, backgroundValue);
+  const resolvedForegroundConfig = mergeLegacyColor(foregroundColor, foregroundConfig || foregroundColorConfig);
+
+  // Extract resolved colors and styles
+  const resolvedBorderColor = extractColor(resolvedBorderConfig, '#000000');
+  const resolvedBackgroundStyles = extractBackgroundStyle(resolvedBackgroundConfig);
+  const resolvedForegroundColor = extractColor(resolvedForegroundConfig, foregroundColor);
 
   // Base styles for the main container that will show the shape
   let badgeContainerStyles = {
@@ -57,15 +77,21 @@ const BadgeDisplay = ({ badge }) => {
   
   let isComplexShape = false;
 
-  // Apply background (image or color) to the correct element based on shape complexity
+  // Apply background styles using resolved config
   const applyBackgroundStyles = (targetStyles) => {
-    if (backgroundType === 'SOLID_COLOR') {
-      targetStyles.backgroundColor = backgroundValue || '#dddddd';
-    } else if (backgroundType === 'HOSTED_IMAGE') {
-      targetStyles.backgroundColor = '#cccccc'; // Fallback for image
-      targetStyles.backgroundImage = `url(${backgroundValue})`;
-      targetStyles.backgroundSize = 'cover';
-      targetStyles.backgroundPosition = 'center';
+    // Apply the resolved background styles from config
+    Object.assign(targetStyles, resolvedBackgroundStyles);
+    
+    // Fallback to legacy logic if no config styles were applied
+    if (!resolvedBackgroundStyles || Object.keys(resolvedBackgroundStyles).length === 0) {
+      if (backgroundType === 'SOLID_COLOR') {
+        targetStyles.backgroundColor = backgroundValue || '#dddddd';
+      } else if (backgroundType === 'HOSTED_IMAGE') {
+        targetStyles.backgroundColor = '#cccccc'; // Fallback for image
+        targetStyles.backgroundImage = `url(${backgroundValue})`;
+        targetStyles.backgroundSize = 'cover';
+        targetStyles.backgroundPosition = 'center';
+      }
     }
   };
 
@@ -75,20 +101,20 @@ const BadgeDisplay = ({ badge }) => {
   switch (shape) {
     case 'CIRCLE':
       badgeContainerStyles.borderRadius = '50%';
-      badgeContainerStyles.border = `${BORDER_WIDTH}px solid ${borderColor || '#000000'}`;
+      badgeContainerStyles.border = `${BORDER_WIDTH}px solid ${resolvedBorderColor}`;
       badgeContainerStyles.overflow = 'hidden'; // Circles clip content directly
       applyBackgroundStyles(badgeContainerStyles); // Background on outer for simple shapes
       // Inner content for circle doesn't need separate shaping, it inherits from parent clip
       break;
     case 'SQUARE':
       badgeContainerStyles.borderRadius = '10%';
-      badgeContainerStyles.border = `${BORDER_WIDTH}px solid ${borderColor || '#000000'}`;
+      badgeContainerStyles.border = `${BORDER_WIDTH}px solid ${resolvedBorderColor}`;
       badgeContainerStyles.overflow = 'hidden';
       applyBackgroundStyles(badgeContainerStyles); // Background on outer for simple shapes
       break;
     case 'STAR':
       isComplexShape = true;
-      badgeContainerStyles.backgroundColor = borderColor || '#000000'; // Outer acts as border color
+      badgeContainerStyles.backgroundColor = resolvedBorderColor; // Outer acts as border color
       badgeContainerStyles.clipPath = shapePaths.STAR;
       badgeInnerContentStyles.clipPath = shapePaths.STAR; // Inner also needs clipping
       badgeInnerContentStyles.width = `calc(100% - ${BORDER_WIDTH * 2}px)`;
@@ -97,7 +123,7 @@ const BadgeDisplay = ({ badge }) => {
       break;
     case 'HEXAGON':
       isComplexShape = true;
-      badgeContainerStyles.backgroundColor = borderColor || '#000000';
+      badgeContainerStyles.backgroundColor = resolvedBorderColor;
       badgeContainerStyles.clipPath = shapePaths.HEXAGON;
       badgeInnerContentStyles.clipPath = shapePaths.HEXAGON;
       badgeInnerContentStyles.width = `calc(100% - ${BORDER_WIDTH * 2}px)`;
@@ -106,7 +132,7 @@ const BadgeDisplay = ({ badge }) => {
       break;
     case 'HEART':
       isComplexShape = true;
-      badgeContainerStyles.backgroundColor = borderColor || '#000000';
+      badgeContainerStyles.backgroundColor = resolvedBorderColor;
       const heartMaskUrl = `url("data:image/svg+xml,%3Csvg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='${shapePaths.HEART_SVG_PATH}' fill='black'/%3E%3C/svg%3E")`;
       badgeContainerStyles.WebkitMaskImage = heartMaskUrl;
       badgeContainerStyles.maskImage = heartMaskUrl;
@@ -132,12 +158,15 @@ const BadgeDisplay = ({ badge }) => {
       break;
     default: // Default to CIRCLE
       badgeContainerStyles.borderRadius = '50%';
-      badgeContainerStyles.border = `${BORDER_WIDTH}px solid ${borderColor || '#000000'}`;
+      badgeContainerStyles.border = `${BORDER_WIDTH}px solid ${resolvedBorderColor}`;
       badgeContainerStyles.overflow = 'hidden';
       applyBackgroundStyles(badgeContainerStyles); // Background on outer for simple shapes
   }
 
-  const fgTextColor = foregroundColor || (backgroundType === 'SOLID_COLOR' ? getContrastingTextColor(backgroundValue) : '#FFFFFF');
+  // Determine foreground text color using resolved config
+  const fgTextColor = resolvedForegroundColor || 
+    (resolvedBackgroundStyles.backgroundColor ? getContrastingTextColor(resolvedBackgroundStyles.backgroundColor) : 
+    (backgroundType === 'SOLID_COLOR' ? getContrastingTextColor(backgroundValue) : '#FFFFFF'));
 
   let textContainerWidthPercentage = 0.85; // Default for Circle/Square
   if (shape === 'STAR' || shape === 'HEXAGON' || shape === 'HEART') {
@@ -188,9 +217,13 @@ const BadgeDisplay = ({ badge }) => {
   // Apply color transformations to SVG content if needed
   const getTransformedForegroundValue = () => {
     // For uploaded icons with color config, apply transformations
-    if (foregroundType === 'UPLOADED_ICON' && foregroundColorConfig && isSvgContent(foregroundValue)) {
-      // Only transform if we have SVG content (BadgeCard should have fetched it already)
-      return applySvgColorTransform(foregroundValue, foregroundColorConfig);
+    if (foregroundType === 'UPLOADED_ICON' && isSvgContent(foregroundValue)) {
+      // Check for config in new unified format first, then legacy format
+      const colorConfig = resolvedForegroundConfig || foregroundColorConfig;
+      if (colorConfig) {
+        // Only transform if we have SVG content (BadgeCard should have fetched it already)
+        return applySvgColorTransform(foregroundValue, colorConfig);
+      }
     }
     return foregroundValue;
   };

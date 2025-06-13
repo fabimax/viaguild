@@ -2,6 +2,13 @@ const { PrismaClient } = require('@prisma/client');
 const { DeleteObjectCommand } = require('@aws-sdk/client-s3');
 const prisma = new PrismaClient();
 const r2Service = require('./r2.service');
+const { 
+  extractColor, 
+  extractBackgroundStyle, 
+  extractBorderStyle,
+  mergeLegacyColor,
+  convertLegacyBackground 
+} = require('../utils/colorConfig');
 
 class BadgeService {
   /**
@@ -417,23 +424,54 @@ class BadgeService {
       'BRONZE': '#CD7F32'
     };
     
-    // For tiered badges, enforce tier colors (ignore overrides)
-    // For non-tiered badges, allow custom colors
-    const borderColor = template.inherentTier && tierBorderColors[template.inherentTier] 
-      ? tierBorderColors[template.inherentTier]
-      : (badgeInstance.overrideBorderColor || template.defaultBorderColor);
+    // Get unified config objects with legacy fallbacks
+    const borderConfig = mergeLegacyColor(
+      badgeInstance.overrideBorderColor || template.defaultBorderColor,
+      badgeInstance.overrideBorderConfig || template.defaultBorderConfig
+    );
+    
+    const backgroundConfig = badgeInstance.overrideBackgroundConfig || 
+                           template.defaultBackgroundConfig ||
+                           convertLegacyBackground(
+                             badgeInstance.overrideBackgroundType || template.defaultBackgroundType,
+                             badgeInstance.overrideBackgroundValue || template.defaultBackgroundValue
+                           );
+    
+    const foregroundConfig = mergeLegacyColor(
+      badgeInstance.overrideForegroundColor || template.defaultForegroundColor,
+      badgeInstance.overrideForegroundConfig || 
+      template.defaultForegroundConfig ||
+      badgeInstance.overrideForegroundColorConfig || 
+      template.defaultForegroundColorConfig
+    );
+    
+    // Extract colors for legacy compatibility
+    let borderColor = extractColor(borderConfig, '#000000');
+    
+    // For tiered badges, enforce tier colors (ignore config overrides)
+    if (template.inherentTier && tierBorderColors[template.inherentTier]) {
+      borderColor = tierBorderColors[template.inherentTier];
+    }
     
     return {
       name: badgeInstance.overrideBadgeName || template.defaultBadgeName,
       subtitle: badgeInstance.overrideSubtitle || template.defaultSubtitleText,
       shape: badgeInstance.overrideOuterShape || template.defaultOuterShape,
+      
+      // Legacy color fields (for backward compatibility)
       borderColor: borderColor,
       backgroundType: badgeInstance.overrideBackgroundType || template.defaultBackgroundType,
       backgroundValue: badgeInstance.overrideBackgroundValue || template.defaultBackgroundValue,
       foregroundType: badgeInstance.overrideForegroundType || template.defaultForegroundType,
       foregroundValue: badgeInstance.overrideForegroundValue || template.defaultForegroundValue,
-      foregroundColor: badgeInstance.overrideForegroundColor || template.defaultForegroundColor,
+      foregroundColor: extractColor(foregroundConfig, '#FFFFFF'),
       foregroundColorConfig: badgeInstance.overrideForegroundColorConfig || template.defaultForegroundColorConfig,
+      
+      // New unified config objects
+      borderConfig: borderConfig,
+      backgroundConfig: backgroundConfig,
+      foregroundConfig: foregroundConfig,
+      
       textFont: badgeInstance.overrideTextFont || template.defaultTextFont,
       textSize: badgeInstance.overrideTextSize || template.defaultTextSize,
       description: badgeInstance.overrideDisplayDescription || template.defaultDisplayDescription,

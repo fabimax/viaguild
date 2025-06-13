@@ -7,6 +7,11 @@ import BadgeIconUpload from '../components/BadgeIconUpload';
 import BadgeBackgroundUpload from '../components/BadgeBackgroundUpload';
 import SystemIconService from '../services/systemIcon.service';
 import badgeService from '../services/badgeService';
+import { 
+  createSimpleColorConfig,
+  createHostedAssetConfig,
+  createElementPathConfig 
+} from '../utils/colorConfig';
 import './BadgeBuilderPage.css';
 
 // Enums matching the database schema
@@ -275,7 +280,7 @@ const BadgeTemplateCreatePage = () => {
       ownerId: user?.id || 'user_id',
       authoredByUserId: user?.id || 'user_id',
       
-      // Visual properties
+      // Visual properties (legacy)
       defaultOuterShape: template.defaultOuterShape,
       defaultBorderColor: template.defaultBorderColor,
       defaultBackgroundType: template.defaultBackgroundType,
@@ -285,6 +290,15 @@ const BadgeTemplateCreatePage = () => {
       defaultForegroundColor: template.defaultForegroundColor,
       defaultTextFont: template.defaultTextFont,
       defaultTextSize: template.defaultTextSize,
+      
+      // New unified config objects
+      defaultBorderConfig: createSimpleColorConfig(template.defaultBorderColor),
+      defaultBackgroundConfig: template.defaultBackgroundType === BackgroundContentType.HOSTED_IMAGE
+        ? createHostedAssetConfig(template.defaultBackgroundValue)
+        : createSimpleColorConfig(template.defaultBackgroundValue),
+      defaultForegroundConfig: (iconSvgColorData && iconSvgColorData.elementColorMap && Object.keys(iconSvgColorData.elementColorMap).length > 0)
+        ? createElementPathConfig(iconSvgColorData.elementColorMap)
+        : createSimpleColorConfig(template.defaultForegroundColor),
       
       // Tier
       ...(template.inherentTier && { inherentTier: template.inherentTier }),
@@ -307,7 +321,7 @@ const BadgeTemplateCreatePage = () => {
       allowsPushedInstanceUpdates: template.allowsPushedInstanceUpdates,
       internalNotes: template.internalNotes,
       
-      // Foreground color configuration (if applicable)
+      // Legacy foreground color configuration (for backward compatibility during transition)
       ...(iconSvgColorData && iconSvgColorData.elementColorMap && Object.keys(iconSvgColorData.elementColorMap).length > 0 && {
         defaultForegroundColorConfig: {
           type: 'element-path',
@@ -439,7 +453,17 @@ const BadgeTemplateCreatePage = () => {
         ownerType: 'USER',
         ownerId: user.id,
         authoredByUserId: user.id,
-        // Include color config if applicable
+        
+        // New unified config objects
+        defaultBorderConfig: createSimpleColorConfig(template.defaultBorderColor),
+        defaultBackgroundConfig: template.defaultBackgroundType === BackgroundContentType.HOSTED_IMAGE
+          ? createHostedAssetConfig(template.defaultBackgroundValue)
+          : createSimpleColorConfig(template.defaultBackgroundValue),
+        defaultForegroundConfig: (iconSvgColorData && iconSvgColorData.elementColorMap && Object.keys(iconSvgColorData.elementColorMap).length > 0)
+          ? createElementPathConfig(iconSvgColorData.elementColorMap)
+          : createSimpleColorConfig(template.defaultForegroundColor),
+        
+        // Include legacy color config if applicable (for backward compatibility during transition)
         ...(iconSvgColorData && iconSvgColorData.elementColorMap && Object.keys(iconSvgColorData.elementColorMap).length > 0 && {
           defaultForegroundColorConfig: {
             type: 'element-path',
@@ -447,6 +471,7 @@ const BadgeTemplateCreatePage = () => {
             mappings: iconSvgColorData.elementColorMap
           }
         }),
+        
         // Include metadata field definitions (with validation)
         metadataFieldDefinitions: metadataFields
           .filter(f => f.fieldKeyForInstanceData && f.label)
@@ -489,6 +514,8 @@ const BadgeTemplateCreatePage = () => {
     name: template.defaultBadgeName,
     subtitle: template.defaultSubtitleText,
     shape: template.defaultOuterShape,
+    
+    // Legacy fields for backward compatibility
     borderColor: template.defaultBorderColor,
     backgroundType: template.defaultBackgroundType,
     backgroundValue: template.defaultBackgroundType === BackgroundContentType.HOSTED_IMAGE && uploadedBackgroundUrl
@@ -504,6 +531,25 @@ const BadgeTemplateCreatePage = () => {
     foregroundColor: template.defaultForegroundType === ForegroundContentType.UPLOADED_ICON 
       ? '#000000' // Use black fallback color for uploaded icons (matches BadgeIconUpload default)
       : template.defaultForegroundColor,
+    foregroundColorConfig: iconSvgColorData && iconSvgColorData.elementColorMap && Object.keys(iconSvgColorData.elementColorMap).length > 0 
+      ? {
+          type: 'element-path',
+          version: 1,
+          mappings: iconSvgColorData.elementColorMap
+        }
+      : null,
+    
+    // New unified config objects for preview
+    borderConfig: createSimpleColorConfig(template.defaultBorderColor),
+    backgroundConfig: template.defaultBackgroundType === BackgroundContentType.HOSTED_IMAGE
+      ? createHostedAssetConfig(uploadedBackgroundUrl || template.defaultBackgroundValue)
+      : createSimpleColorConfig(template.defaultBackgroundValue),
+    foregroundConfig: (iconSvgColorData && iconSvgColorData.elementColorMap && Object.keys(iconSvgColorData.elementColorMap).length > 0)
+      ? createElementPathConfig(iconSvgColorData.elementColorMap)
+      : createSimpleColorConfig(template.defaultForegroundType === ForegroundContentType.UPLOADED_ICON 
+          ? '#000000' 
+          : template.defaultForegroundColor),
+    
     foregroundScale: 100
   };
 

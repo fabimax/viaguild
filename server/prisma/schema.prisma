@@ -567,13 +567,19 @@ model BadgeTemplate {
   defaultBadgeName          String // Default display name
   defaultSubtitleText       String? // Default subtitle text
   defaultOuterShape         BadgeShape            @default(CIRCLE)
-  defaultBorderColor        String                @default("#000000")
+  defaultBorderColor        String                @default("#000000") // LEGACY - will be removed after migration
   defaultBackgroundType     BackgroundContentType @default(SOLID_COLOR)
   defaultBackgroundValue    String // Hex color or HostedAsset.hostedUrl
   defaultForegroundType     ForegroundContentType @default(SYSTEM_ICON)
   defaultForegroundValue    String // Text, SystemIcon.id, or HostedAsset.hostedUrl
-  defaultForegroundColor    String? // Hex
-  defaultForegroundColorConfig     Json? // Element-path based color mappings for SVG customization
+  defaultForegroundColor    String? // Hex (LEGACY - will be removed after migration)
+  defaultForegroundColorConfig     Json? // Element-path based color mappings for SVG customization (LEGACY - will be merged into defaultForegroundConfig)
+  
+  // --- Unified Visual Configuration (NEW) ---
+  defaultBorderConfig       Json? // All border styling: simple colors, gradients, effects
+  defaultBackgroundConfig   Json? // All background styling: colors, images, patterns
+  defaultForegroundConfig   Json? // All foreground styling: colors, element mappings, effects
+  
   defaultTextFont           String? // If foreground type is TEXT (from approved list)
   defaultTextSize           Int? // If foreground type is TEXT (e.g., in pixels)
   defaultDisplayDescription String?               @db.Text // Default user-facing description for this badge type
@@ -647,13 +653,19 @@ model BadgeInstance {
   overrideBadgeName          String?
   overrideSubtitle           String?
   overrideOuterShape         BadgeShape?
-  overrideBorderColor        String? // Hex
+  overrideBorderColor        String? // Hex (LEGACY - will be removed after migration)
   overrideBackgroundType     BackgroundContentType?
   overrideBackgroundValue    String? // Hex or HostedAsset.hostedUrl
   overrideForegroundType     ForegroundContentType?
   overrideForegroundValue    String? // Text, SystemIcon.id, or HostedAsset.hostedUrl
-  overrideForegroundColor    String? // Hex
-  overrideForegroundColorConfig Json? // Element-path based color mappings override
+  overrideForegroundColor    String? // Hex (LEGACY - will be removed after migration)
+  overrideForegroundColorConfig Json? // Element-path based color mappings override (LEGACY - will be merged into overrideForegroundConfig)
+  
+  // --- Unified Visual Configuration Overrides (NEW) ---
+  overrideBorderConfig       Json? // Border styling overrides
+  overrideBackgroundConfig   Json? // Background styling overrides  
+  overrideForegroundConfig   Json? // Foreground styling overrides
+  
   overrideTextFont           String?
   overrideTextSize           Int?
   overrideDisplayDescription String?                @db.Text

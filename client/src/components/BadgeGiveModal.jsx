@@ -4,6 +4,11 @@ import BadgeDisplay from './guilds/BadgeDisplay';
 import badgeService from '../services/badgeService';
 import userService from '../services/userService';
 import { applySvgColorTransform, isSvgContent } from '../utils/svgColorTransform';
+import { 
+  createSimpleColorConfig,
+  createHostedAssetConfig,
+  createElementPathConfig 
+} from '../utils/colorConfig';
 import '../styles/badge-give-modal.css';
 
 // Helper to parse a color string into { hex: #RRGGBB, alpha: number (0-1) }
@@ -46,6 +51,7 @@ const BadgeGiveModal = ({ isOpen, onClose, template, onSuccess }) => {
   const [searchError, setSearchError] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [selectedSearchIndex, setSelectedSearchIndex] = useState(-1);
+  const [svgExpandedGroups, setSvgExpandedGroups] = useState({}); // For SVG color group expand/collapse
   
   // Customization fields
   const [customizations, setCustomizations] = useState({
@@ -54,7 +60,7 @@ const BadgeGiveModal = ({ isOpen, onClose, template, onSuccess }) => {
     overrideDisplayDescription: '',
     message: '',
     measureValue: null,
-    // Visual overrides
+    // Legacy visual overrides
     overrideOuterShape: '',
     overrideBorderColor: '',
     overrideBackgroundType: '',
@@ -63,6 +69,10 @@ const BadgeGiveModal = ({ isOpen, onClose, template, onSuccess }) => {
     overrideForegroundValue: '',
     overrideForegroundColor: '',
     overrideForegroundColorConfig: null,
+    // New unified config overrides
+    overrideBorderConfig: null,
+    overrideBackgroundConfig: null,
+    overrideForegroundConfig: null,
     // Metadata values
     metadataValues: {}
   });
@@ -163,6 +173,9 @@ const BadgeGiveModal = ({ isOpen, onClose, template, onSuccess }) => {
         overrideForegroundValue: '',
         overrideForegroundColor: '',
         overrideForegroundColorConfig: null,
+        overrideBorderConfig: null,
+        overrideBackgroundConfig: null,
+        overrideForegroundConfig: null,
         metadataValues: {}
       });
       setError('');
@@ -254,11 +267,12 @@ const BadgeGiveModal = ({ isOpen, onClose, template, onSuccess }) => {
       // Filter out empty customizations
       const filteredCustomizations = Object.entries(customizations).reduce((acc, [key, value]) => {
         // Special handling for complex objects
-        if (key === 'overrideForegroundColorConfig') {
-          // Include if it has mappings with actual data
-          if (value && value.mappings && Object.keys(value.mappings).length > 0) {
+        if (key === 'overrideForegroundColorConfig' || key.endsWith('Config')) {
+          // Include if it has mappings with actual data or proper config structure
+          if (value && ((value.mappings && Object.keys(value.mappings).length > 0) || 
+                      (value.type && (value.color || value.url)))) {
             acc[key] = value;
-            console.log('Including foreground color config:', value);
+            console.log(`Including ${key}:`, value);
           }
         } else if (key === 'metadataValues') {
           // Include if it has any metadata values
@@ -271,6 +285,29 @@ const BadgeGiveModal = ({ isOpen, onClose, template, onSuccess }) => {
         }
         return acc;
       }, {});
+
+      // Generate new config objects from legacy overrides if they exist
+      if (customizations.overrideBorderColor && !filteredCustomizations.overrideBorderConfig) {
+        filteredCustomizations.overrideBorderConfig = createSimpleColorConfig(customizations.overrideBorderColor);
+      }
+      
+      if ((customizations.overrideBackgroundType || customizations.overrideBackgroundValue) && 
+          !filteredCustomizations.overrideBackgroundConfig) {
+        if (customizations.overrideBackgroundType === 'HOSTED_IMAGE') {
+          filteredCustomizations.overrideBackgroundConfig = createHostedAssetConfig(
+            customizations.overrideBackgroundValue || template.defaultBackgroundValue
+          );
+        } else {
+          filteredCustomizations.overrideBackgroundConfig = createSimpleColorConfig(
+            customizations.overrideBackgroundValue || template.defaultBackgroundValue
+          );
+        }
+      }
+      
+      if (customizations.overrideForegroundColor && !filteredCustomizations.overrideForegroundConfig && 
+          !filteredCustomizations.overrideForegroundColorConfig) {
+        filteredCustomizations.overrideForegroundConfig = createSimpleColorConfig(customizations.overrideForegroundColor);
+      }
 
       console.log('Sending badge customizations:', filteredCustomizations);
 
@@ -343,12 +380,31 @@ const BadgeGiveModal = ({ isOpen, onClose, template, onSuccess }) => {
       subtitle: customizations.overrideSubtitle || template.defaultSubtitleText,
       description: customizations.overrideDisplayDescription || template.defaultDisplayDescription,
       shape: customizations.overrideOuterShape || template.defaultOuterShape,
+      
+      // Legacy fields for backward compatibility
       borderColor: customizations.overrideBorderColor || template.defaultBorderColor,
       backgroundType: customizations.overrideBackgroundType || template.defaultBackgroundType,
       backgroundValue: customizations.overrideBackgroundValue || template.defaultBackgroundValue,
       foregroundType: effectiveForegroundType,
       foregroundValue: effectiveForegroundValue,
       foregroundColor: customizations.overrideForegroundColor || template.defaultForegroundColor,
+      foregroundColorConfig: customizations.overrideForegroundColorConfig || template.defaultForegroundColorConfig,
+      
+      // New unified config objects
+      borderConfig: customizations.overrideBorderConfig || 
+        (customizations.overrideBorderColor ? createSimpleColorConfig(customizations.overrideBorderColor) : 
+        (template.defaultBorderConfig || createSimpleColorConfig(template.defaultBorderColor))),
+      backgroundConfig: customizations.overrideBackgroundConfig || 
+        template.defaultBackgroundConfig || 
+        (customizations.overrideBackgroundType === 'HOSTED_IMAGE' 
+          ? createHostedAssetConfig(customizations.overrideBackgroundValue || template.defaultBackgroundValue)
+          : createSimpleColorConfig(customizations.overrideBackgroundValue || template.defaultBackgroundValue)),
+      foregroundConfig: customizations.overrideForegroundConfig || 
+        customizations.overrideForegroundColorConfig ||
+        template.defaultForegroundConfig ||
+        template.defaultForegroundColorConfig ||
+        createSimpleColorConfig(customizations.overrideForegroundColor || template.defaultForegroundColor),
+      
       tier: template.inherentTier,
       measureValue: customizations.measureValue,
       measureLabel: template.measureLabel
@@ -563,137 +619,490 @@ const BadgeGiveModal = ({ isOpen, onClose, template, onSuccess }) => {
                         value={customizations.overrideBorderColor || template.defaultBorderColor}
                         onChange={(e) => setCustomizations(prev => ({
                           ...prev,
-                          overrideBorderColor: e.target.value
+                          overrideBorderColor: e.target.value,
+                          overrideBorderConfig: createSimpleColorConfig(e.target.value)
                         }))}
                       />
                     </div>
 
-                    {/* SVG Color Customization */}
+                    {/* SVG Color Customization - Using BadgeIconUpload style */}
                     {template.defaultForegroundType === 'UPLOADED_ICON' && 
                      template.defaultForegroundColorConfig && 
                      template.defaultForegroundColorConfig.mappings ? (
                       <div className="svg-color-customization">
                         <label>Icon Colors</label>
-                        <div className="svg-color-slots">
-                          {Object.entries(template.defaultForegroundColorConfig.mappings).map(([elementPath, elementColors]) => {
-                            // Create color slots for both fill and stroke if they exist
-                            const colorSlots = [];
-                            
+                        {(() => {
+                          // Convert template mappings to color slots format (like BadgeIconUpload)
+                          const colorSlots = [];
+                          Object.entries(template.defaultForegroundColorConfig.mappings).forEach(([elementPath, elementColors]) => {
                             if (elementColors.fill) {
                               colorSlots.push({
                                 id: `${elementPath}-fill`,
-                                path: elementPath,
-                                type: 'fill',
-                                color: elementColors.fill.current || elementColors.fill.original,
-                                label: `${elementPath} (fill)`
+                                label: `${elementPath} (fill)`,
+                                originalColor: elementColors.fill.original,
+                                currentColor: elementColors.fill.current,
+                                elementPath: elementPath,
+                                colorType: 'fill'
                               });
                             }
-                            
                             if (elementColors.stroke) {
                               colorSlots.push({
                                 id: `${elementPath}-stroke`,
-                                path: elementPath,
-                                type: 'stroke', 
-                                color: elementColors.stroke.current || elementColors.stroke.original,
-                                label: `${elementPath} (stroke)`
+                                label: `${elementPath} (stroke)`,
+                                originalColor: elementColors.stroke.original,
+                                currentColor: elementColors.stroke.current,
+                                elementPath: elementPath,
+                                colorType: 'stroke'
                               });
                             }
+                          });
+
+                          // Group slots by original color, with special handling for unspecified colors
+                          const colorGroups = {};
+                          colorSlots.forEach(slot => {
+                            // Group unspecified colors together under a special key
+                            const groupKey = slot.originalColor === 'UNSPECIFIED' ? 'UNSPECIFIED_GROUP' : slot.originalColor;
+                            if (!colorGroups[groupKey]) {
+                              colorGroups[groupKey] = [];
+                            }
+                            colorGroups[groupKey].push(slot);
+                          });
+
+                          const handleGroupColorChange = (originalColor, newHex, newAlpha) => {
+                            const newFormattedColor = formatHexWithAlpha(newHex, newAlpha);
+                            const slotsToUpdate = colorGroups[originalColor];
                             
-                            return colorSlots.map((slot, slotIndex) => {
-                              const currentConfig = customizations.overrideForegroundColorConfig?.mappings || {};
-                              const currentElementColors = currentConfig[slot.path] || template.defaultForegroundColorConfig.mappings[slot.path];
-                              const currentColor = currentElementColors?.[slot.type]?.current || slot.color;
-                              const { hex, alpha } = parseColorString(currentColor);
+                            setCustomizations(prev => {
+                              // Create a deep copy of the mappings to prevent reference issues
+                              const newMappings = {};
                               
-                              return (
-                                <div key={slot.id} className="color-slot" style={{ marginBottom: '15px' }}>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '5px' }}>
-                                    <input
-                                      type="color"
-                                      value={hex}
-                                      onChange={(e) => {
-                                        const newColor = formatHexWithAlpha(e.target.value, alpha);
-                                        setCustomizations(prev => {
-                                          const newMappings = { ...prev.overrideForegroundColorConfig?.mappings };
-                                          
-                                          // Initialize element if it doesn't exist
-                                          if (!newMappings[slot.path]) {
-                                            newMappings[slot.path] = { ...template.defaultForegroundColorConfig.mappings[slot.path] };
-                                          }
-                                          
-                                          // Initialize color type if it doesn't exist
-                                          if (!newMappings[slot.path][slot.type]) {
-                                            newMappings[slot.path][slot.type] = { ...template.defaultForegroundColorConfig.mappings[slot.path][slot.type] };
-                                          }
-                                          
-                                          // Update the current color
-                                          newMappings[slot.path][slot.type].current = newColor;
-                                          
-                                          return {
-                                            ...prev,
-                                            overrideForegroundColorConfig: {
-                                              type: 'element-path',
-                                              version: 1,
-                                              mappings: newMappings
-                                            }
-                                          };
-                                        });
-                                      }}
-                                      style={{ width: '50px', height: '30px' }}
-                                    />
-                                    <span style={{ fontSize: '0.85rem', color: '#666', minWidth: '120px' }}>
-                                      {slot.type === 'fill' ? 'Fill' : 'Stroke'} {Math.floor(slotIndex / 2) + 1}
-                                    </span>
-                                    <span style={{ fontSize: '0.75rem', color: '#999', fontFamily: 'monospace' }}>
-                                      {hex}{alpha < 1 ? ` (${Math.round(alpha * 100)}%)` : ''}
-                                    </span>
-                                  </div>
-                                  {alpha < 1 && (
-                                    <div style={{ paddingLeft: '60px' }}>
-                                      <label style={{ fontSize: '0.75rem', color: '#666' }}>Opacity:</label>
-                                      <input
-                                        type="range"
-                                        min="0"
-                                        max="1"
-                                        step="0.01"
-                                        value={alpha}
-                                        onChange={(e) => {
-                                          const newColor = formatHexWithAlpha(hex, parseFloat(e.target.value));
-                                          setCustomizations(prev => {
-                                            const newMappings = { ...prev.overrideForegroundColorConfig?.mappings };
-                                            
-                                            if (!newMappings[slot.path]) {
-                                              newMappings[slot.path] = { ...template.defaultForegroundColorConfig.mappings[slot.path] };
-                                            }
-                                            
-                                            if (!newMappings[slot.path][slot.type]) {
-                                              newMappings[slot.path][slot.type] = { ...template.defaultForegroundColorConfig.mappings[slot.path][slot.type] };
-                                            }
-                                            
-                                            newMappings[slot.path][slot.type].current = newColor;
-                                            
-                                            return {
-                                              ...prev,
-                                              overrideForegroundColorConfig: {
-                                                type: 'element-path',
-                                                version: 1,
-                                                mappings: newMappings
-                                              }
-                                            };
-                                          });
-                                        }}
-                                        style={{ width: '100px', marginLeft: '10px' }}
-                                      />
-                                      <span style={{ marginLeft: '10px', fontSize: '0.75rem' }}>
-                                        {Math.round(alpha * 100)}%
-                                      </span>
-                                    </div>
-                                  )}
-                                </div>
-                              );
+                              // Copy existing overrides if any
+                              if (prev.overrideForegroundColorConfig?.mappings) {
+                                Object.keys(prev.overrideForegroundColorConfig.mappings).forEach(path => {
+                                  newMappings[path] = {};
+                                  Object.keys(prev.overrideForegroundColorConfig.mappings[path]).forEach(type => {
+                                    newMappings[path][type] = { 
+                                      ...prev.overrideForegroundColorConfig.mappings[path][type] 
+                                    };
+                                  });
+                                });
+                              }
+                              
+                              // Update all slots in this group
+                              slotsToUpdate.forEach(slot => {
+                                if (!newMappings[slot.elementPath]) {
+                                  newMappings[slot.elementPath] = {};
+                                  // Copy from template if it exists
+                                  if (template.defaultForegroundColorConfig.mappings[slot.elementPath]) {
+                                    Object.keys(template.defaultForegroundColorConfig.mappings[slot.elementPath]).forEach(type => {
+                                      newMappings[slot.elementPath][type] = { 
+                                        ...template.defaultForegroundColorConfig.mappings[slot.elementPath][type] 
+                                      };
+                                    });
+                                  }
+                                }
+                                
+                                if (!newMappings[slot.elementPath][slot.colorType]) {
+                                  newMappings[slot.elementPath][slot.colorType] = { 
+                                    original: slot.originalColor,
+                                    current: slot.currentColor
+                                  };
+                                }
+                                
+                                newMappings[slot.elementPath][slot.colorType].current = newFormattedColor;
+                              });
+                              
+                              return {
+                                ...prev,
+                                overrideForegroundColorConfig: {
+                                  type: 'element-path',
+                                  version: 1,
+                                  mappings: newMappings
+                                },
+                                overrideForegroundConfig: {
+                                  type: 'element-path',
+                                  version: 1,
+                                  mappings: newMappings
+                                }
+                              };
                             });
-                          }).flat()}
-                        </div>
+                          };
+
+                          const handleIndividualColorChange = (slotId, newHex, newAlpha) => {
+                            const newFormattedColor = formatHexWithAlpha(newHex, newAlpha);
+                            const slot = colorSlots.find(s => s.id === slotId);
+                            if (!slot) return;
+                            
+                            setCustomizations(prev => {
+                              // Create a deep copy of the mappings to prevent reference issues
+                              const newMappings = {};
+                              
+                              // Copy existing overrides if any
+                              if (prev.overrideForegroundColorConfig?.mappings) {
+                                Object.keys(prev.overrideForegroundColorConfig.mappings).forEach(path => {
+                                  newMappings[path] = {};
+                                  Object.keys(prev.overrideForegroundColorConfig.mappings[path]).forEach(type => {
+                                    newMappings[path][type] = { 
+                                      ...prev.overrideForegroundColorConfig.mappings[path][type] 
+                                    };
+                                  });
+                                });
+                              }
+                              
+                              // Initialize element if it doesn't exist
+                              if (!newMappings[slot.elementPath]) {
+                                newMappings[slot.elementPath] = {};
+                                // Copy from template if it exists
+                                if (template.defaultForegroundColorConfig.mappings[slot.elementPath]) {
+                                  Object.keys(template.defaultForegroundColorConfig.mappings[slot.elementPath]).forEach(type => {
+                                    newMappings[slot.elementPath][type] = { 
+                                      ...template.defaultForegroundColorConfig.mappings[slot.elementPath][type] 
+                                    };
+                                  });
+                                }
+                              }
+                              
+                              // Initialize color type if it doesn't exist
+                              if (!newMappings[slot.elementPath][slot.colorType]) {
+                                newMappings[slot.elementPath][slot.colorType] = { 
+                                  original: slot.originalColor,
+                                  current: slot.currentColor
+                                };
+                              }
+                              
+                              // Update only this specific slot
+                              newMappings[slot.elementPath][slot.colorType].current = newFormattedColor;
+                              
+                              return {
+                                ...prev,
+                                overrideForegroundColorConfig: {
+                                  type: 'element-path',
+                                  version: 1,
+                                  mappings: newMappings
+                                },
+                                overrideForegroundConfig: {
+                                  type: 'element-path',
+                                  version: 1,
+                                  mappings: newMappings
+                                }
+                              };
+                            });
+                          };
+
+                          const toggleSvgGroup = (color) => {
+                            setSvgExpandedGroups(prev => ({
+                              ...prev,
+                              [color]: !prev[color]
+                            }));
+                          };
+
+                          const handleResetGroup = (originalColor) => {
+                            const slotsToReset = colorGroups[originalColor];
+                            
+                            setCustomizations(prev => {
+                              // Create a deep copy of the mappings
+                              const newMappings = {};
+                              
+                              // Copy existing overrides if any
+                              if (prev.overrideForegroundColorConfig?.mappings) {
+                                Object.keys(prev.overrideForegroundColorConfig.mappings).forEach(path => {
+                                  newMappings[path] = {};
+                                  Object.keys(prev.overrideForegroundColorConfig.mappings[path]).forEach(type => {
+                                    newMappings[path][type] = { 
+                                      ...prev.overrideForegroundColorConfig.mappings[path][type] 
+                                    };
+                                  });
+                                });
+                              }
+                              
+                              // Reset all slots in this group to their original colors
+                              slotsToReset.forEach(slot => {
+                                if (!newMappings[slot.elementPath]) {
+                                  newMappings[slot.elementPath] = {};
+                                }
+                                
+                                if (!newMappings[slot.elementPath][slot.colorType]) {
+                                  newMappings[slot.elementPath][slot.colorType] = {
+                                    original: slot.originalColor,
+                                    current: slot.currentColor
+                                  };
+                                }
+                                
+                                // Reset to original color (handle unspecified colors)
+                                const resetColor = slot.originalColor === 'UNSPECIFIED' ? '#000000FF' : slot.originalColor;
+                                newMappings[slot.elementPath][slot.colorType].current = resetColor;
+                              });
+                              
+                              return {
+                                ...prev,
+                                overrideForegroundColorConfig: {
+                                  type: 'element-path',
+                                  version: 1,
+                                  mappings: newMappings
+                                },
+                                overrideForegroundConfig: {
+                                  type: 'element-path',
+                                  version: 1,
+                                  mappings: newMappings
+                                }
+                              };
+                            });
+                          };
+
+                          const handleResetIndividual = (slotId) => {
+                            const slot = colorSlots.find(s => s.id === slotId);
+                            if (!slot) return;
+                            
+                            setCustomizations(prev => {
+                              // Create a deep copy of the mappings
+                              const newMappings = {};
+                              
+                              // Copy existing overrides if any
+                              if (prev.overrideForegroundColorConfig?.mappings) {
+                                Object.keys(prev.overrideForegroundColorConfig.mappings).forEach(path => {
+                                  newMappings[path] = {};
+                                  Object.keys(prev.overrideForegroundColorConfig.mappings[path]).forEach(type => {
+                                    newMappings[path][type] = { 
+                                      ...prev.overrideForegroundColorConfig.mappings[path][type] 
+                                    };
+                                  });
+                                });
+                              }
+                              
+                              // Initialize element if it doesn't exist
+                              if (!newMappings[slot.elementPath]) {
+                                newMappings[slot.elementPath] = {};
+                              }
+                              
+                              if (!newMappings[slot.elementPath][slot.colorType]) {
+                                newMappings[slot.elementPath][slot.colorType] = {
+                                  original: slot.originalColor,
+                                  current: slot.currentColor
+                                };
+                              }
+                              
+                              // Reset to original color (handle unspecified colors)
+                              const resetColor = slot.originalColor === 'UNSPECIFIED' ? '#000000FF' : slot.originalColor;
+                              newMappings[slot.elementPath][slot.colorType].current = resetColor;
+                              
+                              return {
+                                ...prev,
+                                overrideForegroundColorConfig: {
+                                  type: 'element-path',
+                                  version: 1,
+                                  mappings: newMappings
+                                },
+                                overrideForegroundConfig: {
+                                  type: 'element-path',
+                                  version: 1,
+                                  mappings: newMappings
+                                }
+                              };
+                            });
+                          };
+
+                          return (
+                            <div className="svg-color-groups">
+                              {Object.entries(colorGroups).map(([originalColor, slots]) => {
+                                // Handle special unspecified group
+                                const isUnspecifiedGroup = originalColor === 'UNSPECIFIED_GROUP';
+                                const displayGroupName = isUnspecifiedGroup ? 'Unspecified (defaults to black)' : originalColor;
+                                const groupDisplayColor = isUnspecifiedGroup ? '#000000FF' : originalColor;
+                                
+                                // Check if all slots in group have same current color
+                                const allSameColor = slots.every(slot => {
+                                  // Get current color from overrides or default
+                                  const currentConfig = customizations.overrideForegroundColorConfig?.mappings || {};
+                                  let currentColor = slot.currentColor;
+                                  if (currentConfig[slot.elementPath] && currentConfig[slot.elementPath][slot.colorType]) {
+                                    currentColor = currentConfig[slot.elementPath][slot.colorType].current;
+                                  }
+                                  return currentColor === (
+                                    currentConfig[slots[0].elementPath] && currentConfig[slots[0].elementPath][slots[0].colorType] 
+                                      ? currentConfig[slots[0].elementPath][slots[0].colorType].current 
+                                      : slots[0].currentColor
+                                  );
+                                });
+                                
+                                // Get group current color
+                                const firstSlot = slots[0];
+                                const currentConfig = customizations.overrideForegroundColorConfig?.mappings || {};
+                                let groupCurrentColor = firstSlot.currentColor;
+                                if (currentConfig[firstSlot.elementPath] && currentConfig[firstSlot.elementPath][firstSlot.colorType]) {
+                                  groupCurrentColor = currentConfig[firstSlot.elementPath][firstSlot.colorType].current;
+                                }
+                                if (!allSameColor) {
+                                  groupCurrentColor = groupDisplayColor;
+                                }
+                                
+                                const parsedCurrent = parseColorString(groupCurrentColor);
+                                const currentHex = parsedCurrent.hex;
+                                const currentAlpha = parsedCurrent.alpha;
+                                
+                                return (
+                                  <div key={originalColor} className="color-group" style={{ marginBottom: '15px', border: '1px solid #ddd', padding: '10px', borderRadius: '4px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+                                      <button 
+                                        type="button"
+                                        onClick={() => toggleSvgGroup(originalColor)}
+                                        style={{
+                                          background: '#f0f0f0',
+                                          border: '1px solid #ccc',
+                                          borderRadius: '3px',
+                                          cursor: 'pointer',
+                                          fontSize: '16px',
+                                          padding: '2px 8px',
+                                          minWidth: '30px',
+                                          lineHeight: '1',
+                                          color: '#4f46e5'
+                                        }}
+                                        title={svgExpandedGroups[originalColor] ? 'Collapse' : 'Expand'}
+                                      >
+                                        {svgExpandedGroups[originalColor] ? '−' : '+'}
+                                      </button>
+                                      <span style={{
+                                        display: 'inline-block',
+                                        width: '1.5em',
+                                        height: '1.5em',
+                                        backgroundColor: groupDisplayColor,
+                                        border: '2px solid #ccc',
+                                        borderRadius: '3px'
+                                      }}></span>
+                                      <label style={{ fontWeight: 'bold', fontSize: '14px' }}>
+                                        {displayGroupName} - {slots.length} element{slots.length > 1 ? 's' : ''}
+                                      </label>
+                                    </div>
+                                    
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px', padding: '8px', backgroundColor: '#f5f5f5', borderRadius: '4px' }}>
+                                      <div style={{ fontSize: '12px', color: '#666', fontWeight: 'bold', minWidth: '80px' }}>
+                                        Group Control:
+                                      </div>
+                                      <input 
+                                        type="color" 
+                                        value={allSameColor ? currentHex : '#000000'}
+                                        onChange={(e) => handleGroupColorChange(originalColor, e.target.value, currentAlpha)}
+                                        disabled={!allSameColor}
+                                        style={{ 
+                                          width: '50px', 
+                                          height: '25px',
+                                          padding: '0',
+                                          border: 'none',
+                                          borderRadius: '0',
+                                          cursor: allSameColor ? 'pointer' : 'not-allowed',
+                                          opacity: allSameColor ? 1 : 0.5
+                                        }}
+                                      />
+                                      <input 
+                                        type="range" 
+                                        min="0" max="1" step="0.01" 
+                                        value={allSameColor ? currentAlpha : 1}
+                                        onChange={(e) => handleGroupColorChange(originalColor, currentHex, parseFloat(e.target.value))}
+                                        disabled={!allSameColor}
+                                        style={{ 
+                                          width: '100px', 
+                                          opacity: allSameColor ? 1 : 0.5,
+                                          cursor: allSameColor ? 'pointer' : 'not-allowed'
+                                        }}
+                                      />
+                                      <span style={{ 
+                                        fontSize: '12px', 
+                                        fontFamily: 'monospace',
+                                        backgroundColor: '#fff', 
+                                        padding: '4px 8px', 
+                                        borderRadius: '3px', 
+                                        border: '1px solid #ddd',
+                                        minWidth: '100px'
+                                      }}>
+                                        {allSameColor ? groupCurrentColor : `Mixed colors - edit individually`}
+                                      </span>
+                                      <button 
+                                        type="button" 
+                                        onClick={() => handleResetGroup(originalColor)} 
+                                        style={{
+                                          padding: '4px 8px',
+                                          fontSize: '11px',
+                                          backgroundColor: '#dc3545',
+                                          color: 'white',
+                                          border: 'none',
+                                          borderRadius: '3px',
+                                          cursor: 'pointer'
+                                        }}
+                                      >
+                                        Reset All
+                                      </button>
+                                    </div>
+                                    
+                                    {/* Individual slot controls */}
+                                    {svgExpandedGroups[originalColor] && (
+                                      <div style={{ paddingLeft: '20px', borderTop: '1px solid #eee', paddingTop: '10px' }}>
+                                        <div style={{ fontSize: '12px', color: '#666', marginBottom: '8px', fontWeight: 'bold' }}>
+                                          Individual Controls:
+                                        </div>
+                                        {slots.map((slot) => {
+                                        // Get current color for this specific slot
+                                        const currentConfig = customizations.overrideForegroundColorConfig?.mappings || {};
+                                        let slotCurrentColor = slot.currentColor;
+                                        if (currentConfig[slot.elementPath] && currentConfig[slot.elementPath][slot.colorType]) {
+                                          slotCurrentColor = currentConfig[slot.elementPath][slot.colorType].current;
+                                        }
+                                        const slotParsed = parseColorString(slotCurrentColor);
+                                        const slotHex = slotParsed.hex;
+                                        const slotAlpha = slotParsed.alpha;
+                                        
+                                        return (
+                                          <div key={slot.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', padding: '4px', backgroundColor: '#f9f9f9', borderRadius: '3px' }}>
+                                            <input 
+                                              type="color" 
+                                              value={slotHex}
+                                              onChange={(e) => handleIndividualColorChange(slot.id, e.target.value, slotAlpha)}
+                                              style={{ 
+                                                width: '50px', 
+                                                height: '25px',
+                                                padding: '0',
+                                                border: 'none',
+                                                borderRadius: '0',
+                                                cursor: 'pointer'
+                                              }}
+                                            />
+                                            <input 
+                                              type="range" 
+                                              min="0" max="1" step="0.01" 
+                                              value={slotAlpha}
+                                              onChange={(e) => handleIndividualColorChange(slot.id, slotHex, parseFloat(e.target.value))}
+                                              style={{ width: '60px' }}
+                                            />
+                                            <span style={{ fontSize: '12px', color: '#666', minWidth: '100px' }}>
+                                              {slot.label}
+                                            </span>
+                                            <span style={{ fontSize: '11px', color: '#999', fontFamily: 'monospace', backgroundColor: '#fff', padding: '2px 4px', borderRadius: '2px', border: '1px solid #ddd' }}>
+                                              {slotCurrentColor}
+                                            </span>
+                                            <button 
+                                              type="button" 
+                                              onClick={() => handleResetIndividual(slot.id)} 
+                                              style={{
+                                                padding: '2px 6px',
+                                                fontSize: '10px',
+                                                backgroundColor: '#6c757d',
+                                                color: 'white',
+                                                border: 'none',
+                                                borderRadius: '2px',
+                                                cursor: 'pointer'
+                                              }}
+                                            >
+                                              Reset
+                                            </button>
+                                          </div>
+                                        );
+                                      })}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          );
+                        })()}
                       </div>
                     ) : (
                       <div className="form-group">
@@ -703,7 +1112,8 @@ const BadgeGiveModal = ({ isOpen, onClose, template, onSuccess }) => {
                           value={customizations.overrideForegroundColor || template.defaultForegroundColor}
                           onChange={(e) => setCustomizations(prev => ({
                             ...prev,
-                            overrideForegroundColor: e.target.value
+                            overrideForegroundColor: e.target.value,
+                            overrideForegroundConfig: createSimpleColorConfig(e.target.value)
                           }))}
                         />
                       </div>

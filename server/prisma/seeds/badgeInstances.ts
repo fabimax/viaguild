@@ -8,8 +8,13 @@ import { faker } from '@faker-js/faker';
 import { TEST_USER_PRIME_USERNAME } from './users';
 import { SPECIAL_GUILD_NAME } from './guilds';
 import { seededUploadedAssets } from './uploadedAssets';
-// We might need to fetch systemIcon details if overrides use system icon IDs
-// For simplicity, let's assume we have a few known system icon IDs/names
+// Import color config utilities
+const {
+  createSimpleColorConfig,
+  createHostedAssetConfig,
+  createElementPathConfig,
+  convertLegacyBackground
+} = require('../../src/utils/colorConfig');
 
 // Helper to get a specific seeded asset URL by its key used in uploadedAssets.ts
 function getAssetUrl(key: string): string | undefined {
@@ -30,7 +35,7 @@ interface BadgeInstanceSeedEntry {
   apiVisible?: boolean;
   message?: string;
   revokedAt?: Date | null;
-  // Visual Overrides
+  // Visual Overrides (Legacy)
   overrideBadgeName?: string | null;
   overrideSubtitle?: string | null;
   overrideOuterShape?: BadgeShape | null;
@@ -43,6 +48,10 @@ interface BadgeInstanceSeedEntry {
   overrideTextFont?: string | null;
   overrideTextSize?: number | null;
   overrideDisplayDescription?: string | null;
+  // New unified config overrides
+  overrideBorderConfig?: any | null;
+  overrideBackgroundConfig?: any | null;
+  overrideForegroundConfig?: any | null;
   // Measure Value & Overrides
   measureValue?: number | null; // Using number for Float compatibility
   overrideMeasureBest?: number | null;
@@ -139,6 +148,7 @@ export async function seedBadgeInstances(prisma: PrismaClient) {
       apiVisible: false,
       message: `For founding and leading ${SPECIAL_GUILD_NAME} with unparalleled vision.`,
       overrideBorderColor: '#FFD700',
+      overrideBorderConfig: createSimpleColorConfig('#FFD700'), // New config format
       metadataValues: { foundingDate: '2024-01-01' },
     },
     // Scenario 3: TestUserPrime awards "Project Completion" to another user (WITH OVERRIDES FOR MEASURE)
@@ -248,7 +258,9 @@ export async function seedBadgeInstances(prisma: PrismaClient) {
       apiVisible: true, 
       message: `TheNexusHub successfully completed the 'Community Onboarding Module' project!`,
       measureValue: 9, 
+      overrideBackgroundType: BackgroundContentType.HOSTED_IMAGE,
       overrideBackgroundValue: getAssetUrl('BADGE_BACKGROUND_IMAGE_40'),
+      overrideBackgroundConfig: createHostedAssetConfig(getAssetUrl('BADGE_BACKGROUND_IMAGE_40') || ''), // New config format
       metadataValues: {
         projectName: 'Community Onboarding Module',
         completionDate: faker.date.recent({days: 5}).toISOString().split('T')[0],
@@ -599,6 +611,7 @@ export async function seedBadgeInstances(prisma: PrismaClient) {
               ? true : false),
         message: instanceEntry.message,
         revokedAt: instanceEntry.revokedAt,
+        // Legacy fields
         overrideBadgeName: instanceEntry.overrideBadgeName,
         overrideSubtitle: instanceEntry.overrideSubtitle,
         overrideOuterShape: instanceEntry.overrideOuterShape,
@@ -611,6 +624,16 @@ export async function seedBadgeInstances(prisma: PrismaClient) {
         overrideTextFont: instanceEntry.overrideTextFont,
         overrideTextSize: instanceEntry.overrideTextSize,
         overrideDisplayDescription: instanceEntry.overrideDisplayDescription,
+        // New unified config objects
+        overrideBorderConfig: instanceEntry.overrideBorderConfig || 
+          (instanceEntry.overrideBorderColor ? createSimpleColorConfig(instanceEntry.overrideBorderColor) : null),
+        overrideBackgroundConfig: instanceEntry.overrideBackgroundConfig || 
+          (instanceEntry.overrideBackgroundType && instanceEntry.overrideBackgroundValue 
+            ? convertLegacyBackground(instanceEntry.overrideBackgroundType, instanceEntry.overrideBackgroundValue)
+            : null),
+        overrideForegroundConfig: instanceEntry.overrideForegroundConfig || 
+          (instanceEntry.overrideForegroundColor ? createSimpleColorConfig(instanceEntry.overrideForegroundColor) : null),
+        // Measure fields
         measureValue: instanceEntry.measureValue,
         overrideMeasureBest: instanceEntry.overrideMeasureBest,
         overrideMeasureWorst: instanceEntry.overrideMeasureWorst,
