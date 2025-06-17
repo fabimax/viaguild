@@ -3,10 +3,9 @@ import { applySvgColorTransform, isSvgContent } from '../../utils/svgColorTransf
 import { 
   extractColor, 
   extractBackgroundStyle, 
-  extractBorderStyle,
-  mergeLegacyColor,
-  convertLegacyBackground 
+  extractBorderStyle
 } from '../../utils/colorConfig';
+import SystemIconService from '../../services/systemIcon.service';
 
 // Helper to try and determine a good contrasting text color (very basic)
 const getContrastingTextColor = (hexBgColor) => {
@@ -25,32 +24,102 @@ const shapePaths = {
 };
 
 const BadgeDisplay = ({ badge }) => {
+  
   if (!badge) return null;
 
   const {
     name, subtitle, shape, 
-    // Legacy fields
-    borderColor, backgroundType, backgroundValue,
-    foregroundType, foregroundValue, foregroundColor, foregroundColorConfig,
-    // New unified config fields
+    // Config objects
     borderConfig, backgroundConfig, foregroundConfig,
     foregroundScale,
+    // Keep these for preview override
+    foregroundType: foregroundTypeOverride, 
+    foregroundValue: foregroundValueOverride
   } = badge;
+
+  const [currentFg, setCurrentFg] = useState({ 
+    type: foregroundTypeOverride, 
+    value: foregroundValueOverride 
+  });
+
+  useEffect(() => {
+    let isMounted = true;
+    let type = foregroundTypeOverride;
+    let value = foregroundValueOverride;
+
+    // If override isn't provided, derive from config
+    if (!type && foregroundConfig) {
+      switch (foregroundConfig.type) {
+        case 'text':
+          type = 'TEXT';
+          value = foregroundConfig.value;
+          break;
+        case 'system-icon':
+          type = 'SYSTEM_ICON';
+          value = foregroundConfig.value; // This is a name, e.g., "Shield"
+          break;
+        case 'static-image-asset':
+        case 'customizable-svg':
+          type = 'UPLOADED_ICON';
+          value = foregroundConfig.url; // This is a URL
+          break;
+      }
+    }
+    
+    // If we have a system icon name, fetch its SVG content
+    if (type === 'SYSTEM_ICON' && value && !isSvgContent(value)) {
+      SystemIconService.getSystemIconSvg(value)
+        .then(svgContent => {
+          if (isMounted) setCurrentFg({ type, value: svgContent });
+        })
+        .catch(err => {
+          console.error(`Failed to fetch system icon '${value}':`, err);
+          if (isMounted) setCurrentFg({ type, value: '' });
+        });
+    } else if (type === 'UPLOADED_ICON' && value && !isSvgContent(value) && foregroundConfig?.type === 'customizable-svg') {
+      // For customizable SVGs, fetch the SVG content through our server proxy to avoid CORS
+      console.log('BadgeDisplay: Fetching customizable SVG from:', value);
+      import('../../services/api.js').then(({ default: api }) => {
+        return api.get('/fetch-svg', { params: { url: value } });
+      })
+        .then(response => {
+          console.log('BadgeDisplay: SVG fetch successful:', response.data);
+          if (isMounted) setCurrentFg({ type, value: response.data });
+        })
+        .catch(err => {
+          console.error(`Failed to fetch customizable SVG from '${value}':`, err);
+          if (isMounted) setCurrentFg({ type, value: '' });
+        });
+    } else {
+      setCurrentFg({ type, value });
+    }
+
+    return () => { isMounted = false; };
+  }, [
+    foregroundConfig, 
+    foregroundTypeOverride, 
+    foregroundValueOverride
+  ]);
+
+  const { type: foregroundType, value: foregroundValue } = currentFg;
+
+
 
   const BORDER_WIDTH = 6; // Explicitly defined, should be 6px
   const BADGE_SIZE_PX = 100;
   const SIMPLE_SHAPE_PADDING_PX = 5;
   const COMPLEX_SHAPE_INNER_PADDING_PX = 2;
 
-  // Resolve unified config objects with legacy fallbacks
-  const resolvedBorderConfig = mergeLegacyColor(borderColor, borderConfig);
-  const resolvedBackgroundConfig = backgroundConfig || convertLegacyBackground(backgroundType, backgroundValue);
-  const resolvedForegroundConfig = mergeLegacyColor(foregroundColor, foregroundConfig || foregroundColorConfig);
+  // Use config objects directly (config-only approach)
+  const resolvedBorderConfig = borderConfig;
+  const resolvedBackgroundConfig = backgroundConfig;
+  const resolvedForegroundConfig = foregroundConfig;
 
   // Extract resolved colors and styles
   const resolvedBorderColor = extractColor(resolvedBorderConfig, '#000000');
   const resolvedBackgroundStyles = extractBackgroundStyle(resolvedBackgroundConfig);
-  const resolvedForegroundColor = extractColor(resolvedForegroundConfig, foregroundColor);
+  const resolvedForegroundColor = extractColor(resolvedForegroundConfig, '#FFFFFF');
+
 
   // Base styles for the main container that will show the shape
   let badgeContainerStyles = {
@@ -81,22 +150,11 @@ const BadgeDisplay = ({ badge }) => {
   const applyBackgroundStyles = (targetStyles) => {
     // Apply the resolved background styles from config
     Object.assign(targetStyles, resolvedBackgroundStyles);
-    
-    // Fallback to legacy logic if no config styles were applied
-    if (!resolvedBackgroundStyles || Object.keys(resolvedBackgroundStyles).length === 0) {
-      if (backgroundType === 'SOLID_COLOR') {
-        targetStyles.backgroundColor = backgroundValue || '#dddddd';
-      } else if (backgroundType === 'HOSTED_IMAGE') {
-        targetStyles.backgroundColor = '#cccccc'; // Fallback for image
-        targetStyles.backgroundImage = `url(${backgroundValue})`;
-        targetStyles.backgroundSize = 'cover';
-        targetStyles.backgroundPosition = 'center';
-      }
-    }
   };
 
   // Determine padding for the content area based on shape type
   const currentContentPadding = isComplexShape ? COMPLEX_SHAPE_INNER_PADDING_PX : SIMPLE_SHAPE_PADDING_PX;
+
 
   switch (shape) {
     case 'CIRCLE':
@@ -165,8 +223,7 @@ const BadgeDisplay = ({ badge }) => {
 
   // Determine foreground text color using resolved config
   const fgTextColor = resolvedForegroundColor || 
-    (resolvedBackgroundStyles.backgroundColor ? getContrastingTextColor(resolvedBackgroundStyles.backgroundColor) : 
-    (backgroundType === 'SOLID_COLOR' ? getContrastingTextColor(backgroundValue) : '#FFFFFF'));
+    (resolvedBackgroundStyles.backgroundColor ? getContrastingTextColor(resolvedBackgroundStyles.backgroundColor) : '#FFFFFF');
 
   let textContainerWidthPercentage = 0.85; // Default for Circle/Square
   if (shape === 'STAR' || shape === 'HEXAGON' || shape === 'HEART') {
@@ -218,11 +275,17 @@ const BadgeDisplay = ({ badge }) => {
   const getTransformedForegroundValue = () => {
     // For uploaded icons with color config, apply transformations
     if (foregroundType === 'UPLOADED_ICON' && isSvgContent(foregroundValue)) {
-      // Check for config in new unified format first, then legacy format
-      const colorConfig = resolvedForegroundConfig || foregroundColorConfig;
-      if (colorConfig) {
-        // Only transform if we have SVG content (BadgeCard should have fetched it already)
-        return applySvgColorTransform(foregroundValue, colorConfig);
+      if (resolvedForegroundConfig) {
+        // For customizable-svg that was fetched from server, the SVG is already transformed
+        // Only apply transformations for other cases (like preview mode)
+        if (resolvedForegroundConfig.type === 'customizable-svg' && foregroundValue.includes('fill=')) {
+          // SVG already has colors applied, don't transform again
+          console.log('BadgeDisplay: Skipping transformation - SVG already has colors applied');
+          return foregroundValue;
+        }
+        // Only transform if we have SVG content that needs transformation
+        console.log('BadgeDisplay: Applying SVG color transformation');
+        return applySvgColorTransform(foregroundValue, resolvedForegroundConfig);
       }
     }
     return foregroundValue;
@@ -292,4 +355,4 @@ const BadgeDisplay = ({ badge }) => {
   );
 };
 
-export default BadgeDisplay; 
+export default BadgeDisplay;

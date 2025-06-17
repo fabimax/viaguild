@@ -223,8 +223,12 @@ function BadgeIconUpload({
                 currentColor: elementColors.fill.current,
                 elementPath: path,
                 colorType: 'fill',
-                rgba: svgCustomizer.current.hexToRgba(elementColors.fill.original),
-                hasTransparency: svgCustomizer.current.hasTransparency(elementColors.fill.original)
+                rgba: svgCustomizer.current.hexToRgba(
+                  elementColors.fill.original === 'UNSPECIFIED' ? '#000000FF' : elementColors.fill.original
+                ),
+                hasTransparency: svgCustomizer.current.hasTransparency(
+                  elementColors.fill.original === 'UNSPECIFIED' ? '#000000FF' : elementColors.fill.original
+                )
               });
             }
             
@@ -236,8 +240,12 @@ function BadgeIconUpload({
                 currentColor: elementColors.stroke.current,
                 elementPath: path,
                 colorType: 'stroke',
-                rgba: svgCustomizer.current.hexToRgba(elementColors.stroke.original),
-                hasTransparency: svgCustomizer.current.hasTransparency(elementColors.stroke.original)
+                rgba: svgCustomizer.current.hexToRgba(
+                  elementColors.stroke.original === 'UNSPECIFIED' ? '#000000FF' : elementColors.stroke.original
+                ),
+                hasTransparency: svgCustomizer.current.hasTransparency(
+                  elementColors.stroke.original === 'UNSPECIFIED' ? '#000000FF' : elementColors.stroke.original
+                )
               });
             }
           });
@@ -708,9 +716,8 @@ function BadgeIconUpload({
             current: normalizedStroke
           };
         }
-      } else if (element.tagName.toLowerCase() === 'line' || element.tagName.toLowerCase() === 'polyline' ||
-                 element.tagName.toLowerCase() === 'path') {
-        // Only add unspecified stroke for elements that commonly use strokes
+      } else if (element.tagName.toLowerCase() === 'line' || element.tagName.toLowerCase() === 'polyline') {
+        // Only add unspecified stroke for elements that commonly use strokes (excluding path)
         if (!colorMap[elementPath]) colorMap[elementPath] = {};
         colorMap[elementPath].stroke = {
           original: 'UNSPECIFIED', // Special marker for unspecified colors
@@ -809,6 +816,16 @@ function BadgeIconUpload({
         const elementColorMap = buildElementColorMap(svgText);
         console.log('Element color map:', elementColorMap);
         console.log('Original SVG:', svgText);
+        
+        // Debug: Check for unspecified colors
+        Object.entries(elementColorMap).forEach(([path, colors]) => {
+          if (colors.fill?.original === 'UNSPECIFIED') {
+            console.log(`UNSPECIFIED fill found at ${path}, current:`, colors.fill.current);
+          }
+          if (colors.stroke?.original === 'UNSPECIFIED') {
+            console.log(`UNSPECIFIED stroke found at ${path}, current:`, colors.stroke.current);
+          }
+        });
         
         // Now process the SVG (adds currentColor to unfilled elements)
         const processedSvg = processSvg(svgText);

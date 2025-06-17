@@ -6,8 +6,7 @@ import userService from '../services/userService';
 import { applySvgColorTransform, isSvgContent } from '../utils/svgColorTransform';
 import { 
   createSimpleColorConfig,
-  createHostedAssetConfig,
-  createElementPathConfig 
+  createHostedAssetConfig
 } from '../utils/colorConfig';
 import '../styles/badge-give-modal.css';
 
@@ -53,26 +52,24 @@ const BadgeGiveModal = ({ isOpen, onClose, template, onSuccess }) => {
   const [selectedSearchIndex, setSelectedSearchIndex] = useState(-1);
   const [svgExpandedGroups, setSvgExpandedGroups] = useState({}); // For SVG color group expand/collapse
   
-  // Customization fields
+  // Customization fields (config-only approach)
   const [customizations, setCustomizations] = useState({
     overrideBadgeName: '',
     overrideSubtitle: '',
     overrideDisplayDescription: '',
     message: '',
     measureValue: null,
-    // Legacy visual overrides
+    // Visual overrides (UI state for form controls)
     overrideOuterShape: '',
     overrideBorderColor: '',
     overrideBackgroundType: '',
     overrideBackgroundValue: '',
-    overrideForegroundType: '',
-    overrideForegroundValue: '',
     overrideForegroundColor: '',
-    overrideForegroundColorConfig: null,
-    // New unified config overrides
+    // Config overrides (what gets sent to API)
     overrideBorderConfig: null,
     overrideBackgroundConfig: null,
     overrideForegroundConfig: null,
+    overrideForegroundColorConfig: null, // For SVG color customization (legacy field name)
     // Metadata values
     metadataValues: {}
   });
@@ -83,9 +80,9 @@ const BadgeGiveModal = ({ isOpen, onClose, template, onSuccess }) => {
   
   // Live preview state
   const [previewSvgContent, setPreviewSvgContent] = useState(null);
-  const [svgFetched, setSvgFetched] = useState(false);
   const [transformedSvgContent, setTransformedSvgContent] = useState(null);
   const [previewBlobUrl, setPreviewBlobUrl] = useState(null);
+  const [svgColorData, setSvgColorData] = useState(null); // For SVG color analysis like BadgeTemplateCreatePage
 
   // Load allocations when modal opens
   useEffect(() => {
@@ -101,8 +98,9 @@ const BadgeGiveModal = ({ isOpen, onClose, template, onSuccess }) => {
       console.log('BadgeGiveModal: Template opened:', {
         foregroundType: template.defaultForegroundType,
         foregroundValue: template.defaultForegroundValue?.substring(0, 100) + '...',
-        hasColorConfig: !!template.defaultForegroundColorConfig,
-        colorConfigKeys: template.defaultForegroundColorConfig ? Object.keys(template.defaultForegroundColorConfig.mappings || {}) : []
+        hasColorConfig: !!(template.defaultForegroundColorConfig || (template.defaultForegroundConfig && template.defaultForegroundConfig.colorMappings)),
+        colorConfigKeys: (template.defaultForegroundColorConfig ? Object.keys(template.defaultForegroundColorConfig.mappings || {}) : 
+                         (template.defaultForegroundConfig && template.defaultForegroundConfig.colorMappings ? Object.keys(template.defaultForegroundConfig.colorMappings) : []))
       });
       
       // Check if template has SVG content directly (some implementations might include it)
@@ -110,13 +108,15 @@ const BadgeGiveModal = ({ isOpen, onClose, template, onSuccess }) => {
         console.log('Found SVG content directly in template!');
         setPreviewSvgContent(template.defaultForegroundSvgContent);
         setSvgFetched(true);
-      } else if (template.defaultForegroundType === 'UPLOADED_ICON' && 
-          template.defaultForegroundValue && !isSvgContent(template.defaultForegroundValue)) {
+      } else if ((template.defaultForegroundType === 'UPLOADED_ICON' || template.defaultForegroundConfig?.type === 'customizable-svg') && 
+          (template.defaultForegroundValue || template.defaultForegroundConfig?.url) && 
+          !isSvgContent(template.defaultForegroundValue || template.defaultForegroundConfig?.url)) {
         
-        console.log('Fetching SVG content through secure proxy:', template.defaultForegroundValue);
+        const svgUrl = template.defaultForegroundValue || template.defaultForegroundConfig?.url;
+        console.log('Fetching SVG content through secure proxy:', svgUrl);
         
         // Use our secure backend proxy to fetch SVG content
-        fetch(`/api/fetch-svg?url=${encodeURIComponent(template.defaultForegroundValue)}`, {
+        fetch(`/api/fetch-svg?url=${encodeURIComponent(svgUrl)}`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -129,28 +129,139 @@ const BadgeGiveModal = ({ isOpen, onClose, template, onSuccess }) => {
             if (isSvgContent(svgContent)) {
               console.log('SVG content fetched successfully through proxy:', svgContent.substring(0, 100) + '...');
               setPreviewSvgContent(svgContent);
-              setSvgFetched(true);
             } else {
               throw new Error('Fetched content is not valid SVG');
             }
           })
           .catch(err => {
             console.error('Error fetching SVG content through proxy:', err);
-            setSvgFetched(true); // Mark as attempted
           });
-      } else if (template.defaultForegroundType === 'UPLOADED_ICON' && 
-                 isSvgContent(template.defaultForegroundValue)) {
+      } else if ((template.defaultForegroundType === 'UPLOADED_ICON' || template.defaultForegroundConfig?.type === 'customizable-svg') && 
+                 isSvgContent(template.defaultForegroundValue || template.defaultForegroundConfig?.url)) {
         // Direct SVG content
+        const svgContent = template.defaultForegroundValue || template.defaultForegroundConfig?.url;
         console.log('Using direct SVG content from template');
-        setPreviewSvgContent(template.defaultForegroundValue);
-        setSvgFetched(true);
+        setPreviewSvgContent(svgContent);
       } else {
         console.log('No SVG content to fetch - not UPLOADED_ICON or no value');
         setPreviewSvgContent(null);
-        setSvgFetched(false);
       }
     }
   }, [isOpen, template, token]);
+
+  // Analyze SVG for color customization when content changes (like BadgeTemplateCreatePage does)
+  useEffect(() => {
+    if (previewSvgContent && isSvgContent(previewSvgContent)) {
+      console.log('BadgeGiveModal: Analyzing SVG for color customization');
+      
+      // Use the same analysis logic as BadgeIconUpload
+      try {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(previewSvgContent, 'image/svg+xml');
+        const svgElement = doc.documentElement;
+        
+        // Check for parser errors
+        const parserError = svgElement.querySelector('parsererror');
+        if (parserError) {
+          console.error('SVG parsing error:', parserError.textContent);
+          setSvgColorData(null);
+          return;
+        }
+        
+        const colorMap = {};
+        const colorableElements = svgElement.querySelectorAll('path, circle, rect, ellipse, polygon, line, polyline');
+        
+        // Helper to get color from element
+        const getElementColor = (element, colorType) => {
+          let color = element.getAttribute(colorType);
+          if (!color) {
+            const style = element.getAttribute('style');
+            if (style) {
+              const match = style.match(new RegExp(`${colorType}\\\\s*:\\\\s*([^;]+)`, 'i'));
+              if (match) color = match[1].trim();
+            }
+          }
+          return color;
+        };
+        
+        // Helper to normalize color
+        const parseAndNormalizeColor = (colorStr) => {
+          if (!colorStr || colorStr === 'none' || colorStr === 'transparent') return null;
+          if (colorStr.startsWith('#') && (colorStr.length === 4 || colorStr.length === 7)) {
+            return colorStr.length === 4 ? 
+              `#${colorStr[1]}${colorStr[1]}${colorStr[2]}${colorStr[2]}${colorStr[3]}${colorStr[3]}FF` :
+              `${colorStr}FF`;
+          }
+          return null;
+        };
+        
+        // Helper to get element path
+        const getElementPath = (element, root) => {
+          if (element === root) return 'svg';
+          const tagName = element.tagName.toLowerCase();
+          const parent = element.parentElement;
+          const siblings = Array.from(parent.children).filter(el => el.tagName.toLowerCase() === tagName);
+          const index = siblings.indexOf(element);
+          const basePath = parent === root ? 'svg' : getElementPath(parent, root);
+          return basePath === 'svg' ? `${tagName}[${index}]` : `${basePath}/${tagName}[${index}]`;
+        };
+        
+        // Process elements for colors
+        colorableElements.forEach(el => {
+          const elementPath = getElementPath(el, svgElement);
+          
+          const fillRaw = getElementColor(el, 'fill');
+          const strokeRaw = getElementColor(el, 'stroke');
+          
+          if (fillRaw || strokeRaw || ['path', 'circle', 'rect', 'ellipse', 'polygon'].includes(el.tagName.toLowerCase())) {
+            if (!colorMap[elementPath]) colorMap[elementPath] = {};
+            
+            if (fillRaw) {
+              const normalizedFill = parseAndNormalizeColor(fillRaw);
+              if (normalizedFill) {
+                colorMap[elementPath].fill = {
+                  original: normalizedFill,
+                  current: normalizedFill
+                };
+              }
+            } else if (['path', 'circle', 'rect', 'ellipse', 'polygon'].includes(el.tagName.toLowerCase())) {
+              colorMap[elementPath].fill = {
+                original: 'UNSPECIFIED',
+                current: '#000000FF',
+                isUnspecified: true
+              };
+            }
+            
+            if (strokeRaw) {
+              const normalizedStroke = parseAndNormalizeColor(strokeRaw);
+              if (normalizedStroke) {
+                colorMap[elementPath].stroke = {
+                  original: normalizedStroke,
+                  current: normalizedStroke
+                };
+              }
+            }
+          }
+        });
+        
+        console.log('BadgeGiveModal: Generated color map:', colorMap);
+        
+        if (Object.keys(colorMap).length > 0) {
+          setSvgColorData({
+            elementColorMap: colorMap
+          });
+        } else {
+          setSvgColorData(null);
+        }
+        
+      } catch (error) {
+        console.error('Error analyzing SVG:', error);
+        setSvgColorData(null);
+      }
+    } else {
+      setSvgColorData(null);
+    }
+  }, [previewSvgContent]);
 
   // Reset state when modal closes
   useEffect(() => {
@@ -169,18 +280,15 @@ const BadgeGiveModal = ({ isOpen, onClose, template, onSuccess }) => {
         overrideBorderColor: '',
         overrideBackgroundType: '',
         overrideBackgroundValue: '',
-        overrideForegroundType: '',
-        overrideForegroundValue: '',
         overrideForegroundColor: '',
-        overrideForegroundColorConfig: null,
         overrideBorderConfig: null,
         overrideBackgroundConfig: null,
         overrideForegroundConfig: null,
+        overrideForegroundColorConfig: null,
         metadataValues: {}
       });
       setError('');
       setPreviewSvgContent(null);
-      setSvgFetched(false);
       setTransformedSvgContent(null);
       if (previewBlobUrl) {
         URL.revokeObjectURL(previewBlobUrl);
@@ -264,10 +372,10 @@ const BadgeGiveModal = ({ isOpen, onClose, template, onSuccess }) => {
     setError('');
 
     try {
-      // Filter out empty customizations
+      // Filter out empty customizations and convert UI state to config objects
       const filteredCustomizations = Object.entries(customizations).reduce((acc, [key, value]) => {
-        // Special handling for complex objects
-        if (key === 'overrideForegroundColorConfig' || key.endsWith('Config')) {
+        // Special handling for config objects
+        if (key.endsWith('Config')) {
           // Include if it has mappings with actual data or proper config structure
           if (value && ((value.mappings && Object.keys(value.mappings).length > 0) || 
                       (value.type && (value.color || value.url)))) {
@@ -280,13 +388,15 @@ const BadgeGiveModal = ({ isOpen, onClose, template, onSuccess }) => {
             acc[key] = value;
           }
         } else if (value !== '' && value !== null && value !== undefined) {
-          // Regular filtering for simple values
-          acc[key] = value;
+          // Regular filtering for simple values (exclude UI-only color fields)
+          if (!['overrideBorderColor', 'overrideBackgroundType', 'overrideBackgroundValue', 'overrideForegroundColor'].includes(key)) {
+            acc[key] = value;
+          }
         }
         return acc;
       }, {});
 
-      // Generate new config objects from legacy overrides if they exist
+      // Generate config objects from UI state if they exist
       if (customizations.overrideBorderColor && !filteredCustomizations.overrideBorderConfig) {
         filteredCustomizations.overrideBorderConfig = createSimpleColorConfig(customizations.overrideBorderColor);
       }
@@ -304,8 +414,7 @@ const BadgeGiveModal = ({ isOpen, onClose, template, onSuccess }) => {
         }
       }
       
-      if (customizations.overrideForegroundColor && !filteredCustomizations.overrideForegroundConfig && 
-          !filteredCustomizations.overrideForegroundColorConfig) {
+      if (customizations.overrideForegroundColor && !filteredCustomizations.overrideForegroundConfig) {
         filteredCustomizations.overrideForegroundConfig = createSimpleColorConfig(customizations.overrideForegroundColor);
       }
 
@@ -334,11 +443,23 @@ const BadgeGiveModal = ({ isOpen, onClose, template, onSuccess }) => {
 
   // Real-time SVG transformation (like BadgeIconUpload does)
   useEffect(() => {
-    if (previewSvgContent && customizations.overrideForegroundColorConfig) {
-      console.log('Transforming SVG with color config:', customizations.overrideForegroundColorConfig);
+    if (previewSvgContent && (customizations.overrideForegroundColorConfig || 
+                              template.defaultForegroundColorConfig || 
+                              (template.defaultForegroundConfig && template.defaultForegroundConfig.colorMappings))) {
+      // Use override config if available, otherwise use template's default config
+      const colorConfig = customizations.overrideForegroundColorConfig || 
+                         template.defaultForegroundColorConfig ||
+                         (template.defaultForegroundConfig && template.defaultForegroundConfig.colorMappings ? {
+                           type: 'element-path',
+                           version: 1,
+                           mappings: template.defaultForegroundConfig.colorMappings
+                         } : null);
+      
+      console.log('Transforming SVG with color config:', colorConfig);
       
       // Transform the SVG (same as BadgeIconUpload does)
-      const transformedSvg = applySvgColorTransform(previewSvgContent, customizations.overrideForegroundColorConfig);
+      const transformedSvg = applySvgColorTransform(previewSvgContent, colorConfig);
+      console.log('SVG transformation result length:', transformedSvg?.length || 0);
       setTransformedSvgContent(transformedSvg);
       
       // Create blob URL for preview (same as BadgeIconUpload does)
@@ -352,8 +473,8 @@ const BadgeGiveModal = ({ isOpen, onClose, template, onSuccess }) => {
       
       setPreviewBlobUrl(newBlobUrl);
       console.log('Created transformed SVG blob URL:', newBlobUrl);
-    } else if (previewSvgContent) {
-      // No color overrides, use original SVG
+    } else {
+      // No color config, use original SVG
       setTransformedSvgContent(previewSvgContent);
       
       if (previewBlobUrl) {
@@ -361,14 +482,14 @@ const BadgeGiveModal = ({ isOpen, onClose, template, onSuccess }) => {
         setPreviewBlobUrl(null);
       }
     }
-  }, [previewSvgContent, customizations.overrideForegroundColorConfig]);
+  }, [previewSvgContent, customizations.overrideForegroundColorConfig, template.defaultForegroundColorConfig, template.defaultForegroundConfig]);
 
   const getPreviewProps = () => {
     // Use the transformed SVG content (like BadgeTemplateCreatePage does)
-    let effectiveForegroundValue = customizations.overrideForegroundValue || template.defaultForegroundValue;
-    let effectiveForegroundType = customizations.overrideForegroundType || template.defaultForegroundType;
+    let effectiveForegroundValue = template.defaultForegroundValue;
+    let effectiveForegroundType = template.defaultForegroundType;
     
-    if (template.defaultForegroundType === 'UPLOADED_ICON' && transformedSvgContent) {
+    if ((template.defaultForegroundType === 'UPLOADED_ICON' || template.defaultForegroundConfig?.type === 'customizable-svg') && transformedSvgContent) {
       // Use transformed SVG content as SYSTEM_ICON (same trick as BadgeTemplateCreatePage)
       effectiveForegroundType = 'SYSTEM_ICON';
       effectiveForegroundValue = transformedSvgContent;
@@ -381,16 +502,11 @@ const BadgeGiveModal = ({ isOpen, onClose, template, onSuccess }) => {
       description: customizations.overrideDisplayDescription || template.defaultDisplayDescription,
       shape: customizations.overrideOuterShape || template.defaultOuterShape,
       
-      // Legacy fields for backward compatibility
-      borderColor: customizations.overrideBorderColor || template.defaultBorderColor,
-      backgroundType: customizations.overrideBackgroundType || template.defaultBackgroundType,
-      backgroundValue: customizations.overrideBackgroundValue || template.defaultBackgroundValue,
+      // For rendering
       foregroundType: effectiveForegroundType,
       foregroundValue: effectiveForegroundValue,
-      foregroundColor: customizations.overrideForegroundColor || template.defaultForegroundColor,
-      foregroundColorConfig: customizations.overrideForegroundColorConfig || template.defaultForegroundColorConfig,
       
-      // New unified config objects
+      // Config objects
       borderConfig: customizations.overrideBorderConfig || 
         (customizations.overrideBorderColor ? createSimpleColorConfig(customizations.overrideBorderColor) : 
         (template.defaultBorderConfig || createSimpleColorConfig(template.defaultBorderColor))),
@@ -400,9 +516,12 @@ const BadgeGiveModal = ({ isOpen, onClose, template, onSuccess }) => {
           ? createHostedAssetConfig(customizations.overrideBackgroundValue || template.defaultBackgroundValue)
           : createSimpleColorConfig(customizations.overrideBackgroundValue || template.defaultBackgroundValue)),
       foregroundConfig: customizations.overrideForegroundConfig || 
-        customizations.overrideForegroundColorConfig ||
         template.defaultForegroundConfig ||
-        template.defaultForegroundColorConfig ||
+        (template.defaultForegroundColorConfig ? {
+          type: 'element-path',
+          version: 1,
+          mappings: template.defaultForegroundColorConfig.mappings
+        } : null) ||
         createSimpleColorConfig(customizations.overrideForegroundColor || template.defaultForegroundColor),
       
       tier: template.inherentTier,
@@ -498,12 +617,6 @@ const BadgeGiveModal = ({ isOpen, onClose, template, onSuccess }) => {
               
               <div className="badge-preview-section">
                 <h4>Preview</h4>
-                <div style={{ marginBottom: '10px', fontSize: '12px', color: '#666' }}>
-                  Debug: SVG fetched: {svgFetched ? 'Yes' : 'No'}, 
-                  Has content: {previewSvgContent ? 'Yes' : 'No'}, 
-                  Has transform: {transformedSvgContent ? 'Yes' : 'No'},
-                  Has overrides: {customizations.overrideForegroundColorConfig ? 'Yes' : 'No'}
-                </div>
                 <BadgeDisplay badge={getPreviewProps()} />
               </div>
 
@@ -616,7 +729,7 @@ const BadgeGiveModal = ({ isOpen, onClose, template, onSuccess }) => {
                       <label>Border Color</label>
                       <input
                         type="color"
-                        value={customizations.overrideBorderColor || template.defaultBorderColor}
+                        value={customizations.overrideBorderColor || template.defaultBorderColor || template.defaultBorderConfig?.color || '#FFD700'}
                         onChange={(e) => setCustomizations(prev => ({
                           ...prev,
                           overrideBorderColor: e.target.value,
@@ -625,16 +738,43 @@ const BadgeGiveModal = ({ isOpen, onClose, template, onSuccess }) => {
                       />
                     </div>
 
-                    {/* SVG Color Customization - Using BadgeIconUpload style */}
-                    {template.defaultForegroundType === 'UPLOADED_ICON' && 
-                     template.defaultForegroundColorConfig && 
-                     template.defaultForegroundColorConfig.mappings ? (
+                    <div className="form-group">
+                      <label>Background Color</label>
+                      <input
+                        type="color"
+                        value={customizations.overrideBackgroundValue || template.defaultBackgroundValue || template.defaultBackgroundConfig?.color || '#4A97FC'}
+                        onChange={(e) => setCustomizations(prev => ({
+                          ...prev,
+                          overrideBackgroundValue: e.target.value,
+                          overrideBackgroundConfig: createSimpleColorConfig(e.target.value)
+                        }))}
+                      />
+                    </div>
+
+                    {/* Debug info */}
+                    <div style={{ fontSize: '12px', color: '#666', marginBottom: '10px' }}>
+                      Debug: FG Type: {template.defaultForegroundType || 'undefined'}, 
+                      FG Config Type: {template.defaultForegroundConfig?.type || 'undefined'},
+                      FG Value: {template.defaultForegroundValue ? template.defaultForegroundValue.substring(0, 50) + '...' : 'undefined'},
+                      Has SVG Data: {svgColorData ? 'Yes' : 'No'}, 
+                      Color Map Keys: {svgColorData?.elementColorMap ? Object.keys(svgColorData.elementColorMap).length : 0},
+                      Has Template Mappings: {template.defaultForegroundConfig?.colorMappings ? Object.keys(template.defaultForegroundConfig.colorMappings).length : 0}
+                    </div>
+
+                    {/* SVG Color Customization - Using analyzed SVG data OR template mappings */}
+                    {(template.defaultForegroundType === 'UPLOADED_ICON' || template.defaultForegroundConfig?.type === 'customizable-svg') && 
+                     ((svgColorData && svgColorData.elementColorMap && Object.keys(svgColorData.elementColorMap).length > 0) ||
+                      (template.defaultForegroundConfig?.colorMappings && Object.keys(template.defaultForegroundConfig.colorMappings).length > 0)) ? (
                       <div className="svg-color-customization">
                         <label>Icon Colors</label>
                         {(() => {
-                          // Convert template mappings to color slots format (like BadgeIconUpload)
+                          // Prefer template mappings over analyzed SVG data (which might be already transformed)
                           const colorSlots = [];
-                          Object.entries(template.defaultForegroundColorConfig.mappings).forEach(([elementPath, elementColors]) => {
+                          const elementColorMap = template.defaultForegroundConfig?.colorMappings || svgColorData?.elementColorMap || {};
+                          
+                          console.log('BadgeGiveModal: Using elementColorMap:', elementColorMap);
+                          
+                          Object.entries(elementColorMap).forEach(([elementPath, elementColors]) => {
                             if (elementColors.fill) {
                               colorSlots.push({
                                 id: `${elementPath}-fill`,
@@ -692,11 +832,12 @@ const BadgeGiveModal = ({ isOpen, onClose, template, onSuccess }) => {
                               slotsToUpdate.forEach(slot => {
                                 if (!newMappings[slot.elementPath]) {
                                   newMappings[slot.elementPath] = {};
-                                  // Copy from template if it exists
-                                  if (template.defaultForegroundColorConfig.mappings[slot.elementPath]) {
-                                    Object.keys(template.defaultForegroundColorConfig.mappings[slot.elementPath]).forEach(type => {
+                                  // Copy from template mappings or analyzed SVG data if it exists  
+                                  const sourceColorMap = template.defaultForegroundConfig?.colorMappings || svgColorData?.elementColorMap || {};
+                                  if (sourceColorMap[slot.elementPath]) {
+                                    Object.keys(sourceColorMap[slot.elementPath]).forEach(type => {
                                       newMappings[slot.elementPath][type] = { 
-                                        ...template.defaultForegroundColorConfig.mappings[slot.elementPath][type] 
+                                        ...sourceColorMap[slot.elementPath][type] 
                                       };
                                     });
                                   }
@@ -752,11 +893,12 @@ const BadgeGiveModal = ({ isOpen, onClose, template, onSuccess }) => {
                               // Initialize element if it doesn't exist
                               if (!newMappings[slot.elementPath]) {
                                 newMappings[slot.elementPath] = {};
-                                // Copy from template if it exists
-                                if (template.defaultForegroundColorConfig.mappings[slot.elementPath]) {
-                                  Object.keys(template.defaultForegroundColorConfig.mappings[slot.elementPath]).forEach(type => {
+                                // Copy from template mappings or analyzed SVG data if it exists
+                                const sourceColorMap = template.defaultForegroundConfig?.colorMappings || svgColorData?.elementColorMap || {};
+                                if (sourceColorMap[slot.elementPath]) {
+                                  Object.keys(sourceColorMap[slot.elementPath]).forEach(type => {
                                     newMappings[slot.elementPath][type] = { 
-                                      ...template.defaultForegroundColorConfig.mappings[slot.elementPath][type] 
+                                      ...sourceColorMap[slot.elementPath][type] 
                                     };
                                   });
                                 }
@@ -901,8 +1043,18 @@ const BadgeGiveModal = ({ isOpen, onClose, template, onSuccess }) => {
                             });
                           };
 
+                          console.log('BadgeGiveModal: Color slots:', colorSlots);
+                          console.log('BadgeGiveModal: Color groups:', colorGroups);
+                          
+                          if (Object.keys(colorGroups).length === 0) {
+                            return <div>No color groups found</div>;
+                          }
+                          
                           return (
                             <div className="svg-color-groups">
+                              <div style={{ marginBottom: '10px', fontSize: '12px', color: 'blue' }}>
+                                Rendering {Object.keys(colorGroups).length} color groups
+                              </div>
                               {Object.entries(colorGroups).map(([originalColor, slots]) => {
                                 // Handle special unspecified group
                                 const isUnspecifiedGroup = originalColor === 'UNSPECIFIED_GROUP';
@@ -1109,7 +1261,7 @@ const BadgeGiveModal = ({ isOpen, onClose, template, onSuccess }) => {
                         <label>Foreground Color</label>
                         <input
                           type="color"
-                          value={customizations.overrideForegroundColor || template.defaultForegroundColor}
+                          value={customizations.overrideForegroundColor || template.defaultForegroundColor || template.defaultForegroundConfig?.color || '#FFFFFF'}
                           onChange={(e) => setCustomizations(prev => ({
                             ...prev,
                             overrideForegroundColor: e.target.value,

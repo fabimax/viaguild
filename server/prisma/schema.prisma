@@ -56,16 +56,6 @@ enum BadgeTier {
 
 // --- Configuration Enums (for validating badge display properties) ---
 
-enum BackgroundContentType {
-  SOLID_COLOR // The 'value' will be a hex color string.
-  HOSTED_IMAGE // The 'value' will be a hostedUrl from an UploadedAsset.
-}
-
-enum ForegroundContentType {
-  TEXT // The 'value' will be a string of text.
-  SYSTEM_ICON // The 'value' will be an id or unique name referencing a SystemIcon record.
-  UPLOADED_ICON // The 'value' will be a hostedUrl from an UploadedAsset (typically an SVG or small raster icon).
-}
 
 // Optional: Describes a predefined visual style for text elements.
 // enum TextStyle {
@@ -567,21 +557,51 @@ model BadgeTemplate {
   defaultBadgeName          String // Default display name
   defaultSubtitleText       String? // Default subtitle text
   defaultOuterShape         BadgeShape            @default(CIRCLE)
-  defaultBorderColor        String                @default("#000000") // LEGACY - will be removed after migration
-  defaultBackgroundType     BackgroundContentType @default(SOLID_COLOR)
-  defaultBackgroundValue    String // Hex color or HostedAsset.hostedUrl
-  defaultForegroundType     ForegroundContentType @default(SYSTEM_ICON)
-  defaultForegroundValue    String // Text, SystemIcon.id, or HostedAsset.hostedUrl
-  defaultForegroundColor    String? // Hex (LEGACY - will be removed after migration)
-  defaultForegroundColorConfig     Json? // Element-path based color mappings for SVG customization (LEGACY - will be merged into defaultForegroundConfig)
   
   // --- Unified Visual Configuration (NEW) ---
-  defaultBorderConfig       Json? // All border styling: simple colors, gradients, effects
-  defaultBackgroundConfig   Json? // All background styling: colors, images, patterns
-  defaultForegroundConfig   Json? // All foreground styling: colors, element mappings, effects
+  // These JSON config objects provide flexible styling while maintaining queryable type/value fields above.
+  // They serve as the "source of truth" for rich styling, while type/value fields enable fast queries.
   
-  defaultTextFont           String? // If foreground type is TEXT (from approved list)
-  defaultTextSize           Int? // If foreground type is TEXT (e.g., in pixels)
+  defaultBorderConfig       Json? // Border styling configuration object
+  // Structure: { type: "simple-color", version: 1, color: "#RRGGBB" | "#RRGGBBAA" }
+  // Future: { type: "gradient", version: 1, colors: [...], direction?: string }
+  // Future: { type: "pattern", version: 1, patternUrl: string, color: string }
+  
+  defaultBackgroundConfig   Json? // Background styling configuration object - will replace defaultBackgroundType/Value fields
+  // Structure for solid colors: { type: "simple-color", version: 1, color: "#RRGGBB" | "#RRGGBBAA" }
+  // Structure for uploaded images: { type: "static-image-asset", version: 1, url: "upload://asset-id", scale?: number }
+  // Note: type field replaces defaultBackgroundType enum, url/color replaces defaultBackgroundValue
+  // Future: { type: "gradient", version: 1, colors: [...], direction?: string }
+  // Future: { type: "pattern", version: 1, patternUrl: string, opacity?: number }
+  
+  defaultForegroundConfig   Json? // Foreground styling configuration object - will replace defaultForegroundType/Value fields
+  // Structure for simple colors: { type: "simple-color", version: 1, color: "#RRGGBB" | "#RRGGBBAA" }
+  // Structure for text: { type: "text", version: 1, value: string, color: "#RRGGBB", font?: string, size?: number, scale?: number }
+  // Structure for system icons: { type: "system-icon", version: 1, value: string, color?: "#RRGGBB", scale?: number }
+  // Structure for uploaded images: { type: "static-image-asset", version: 1, url: "upload://asset-id", scale?: number }
+  // Structure for customizable SVGs: { 
+  //   type: "customizable-svg", 
+  //   version: 1,
+  //   url: "upload://asset-id",
+  //   scale?: number,
+  //   colorMappings: {
+  //     "[element-path-selector]": { 
+  //       fill?: { original: string, current: string }, 
+  //       stroke?: { original: string, current: string } 
+  //     }
+  //   }
+  // }
+  // Example: {
+  //   type: "customizable-svg", version: 1, url: "upload://asset-id", scale: 0.8,
+  //   colorMappings: {
+  //     "g[0]/path[0]": { fill: { original: "#ff0000", current: "#00ff00" }, stroke: { original: "UNSPECIFIED", current: "#000000" } },
+  //     "g[0]/circle[0]": { fill: { original: "UNSPECIFIED", current: "#ffffff" } }
+  //   }
+  // }
+  // Note: type field replaces defaultForegroundType enum, value/url replaces defaultForegroundValue, font/size replace defaultTextFont/Size
+  // Future: { type: "gradient", version: 1, colors: [...], direction?: string }
+  // Future: { type: "shadow", version: 1, color: string, offsetX: number, offsetY: number, blur: number }
+  
   defaultDisplayDescription String?               @db.Text // Default user-facing description for this badge type
 
   // --- Programmatic Credential Configuration ---
@@ -653,21 +673,16 @@ model BadgeInstance {
   overrideBadgeName          String?
   overrideSubtitle           String?
   overrideOuterShape         BadgeShape?
-  overrideBorderColor        String? // Hex (LEGACY - will be removed after migration)
-  overrideBackgroundType     BackgroundContentType?
-  overrideBackgroundValue    String? // Hex or HostedAsset.hostedUrl
-  overrideForegroundType     ForegroundContentType?
-  overrideForegroundValue    String? // Text, SystemIcon.id, or HostedAsset.hostedUrl
-  overrideForegroundColor    String? // Hex (LEGACY - will be removed after migration)
-  overrideForegroundColorConfig Json? // Element-path based color mappings override (LEGACY - will be merged into overrideForegroundConfig)
   
   // --- Unified Visual Configuration Overrides (NEW) ---
-  overrideBorderConfig       Json? // Border styling overrides
-  overrideBackgroundConfig   Json? // Background styling overrides  
-  overrideForegroundConfig   Json? // Foreground styling overrides
+  // These JSON config objects override the template's default styling for this specific badge instance.
+  // They follow the same structure as the template default configs above.
   
-  overrideTextFont           String?
-  overrideTextSize           Int?
+  overrideBorderConfig       Json? // Border styling overrides - same structure as defaultBorderConfig
+  overrideBackgroundConfig   Json? // Background styling overrides - same structure as defaultBackgroundConfig  
+  overrideForegroundConfig   Json? // Foreground styling overrides - same structure as defaultForegroundConfig
+  // See defaultBorderConfig, defaultBackgroundConfig, and defaultForegroundConfig above for complete structure documentation
+  
   overrideDisplayDescription String?                @db.Text
 
   // Overrides for measure properties from the template

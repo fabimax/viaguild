@@ -3,6 +3,7 @@ import BadgeDisplay from './guilds/BadgeDisplay';
 import systemIconService from '../services/systemIcon.service';
 import { applySvgColorTransform, isSvgContent } from '../utils/svgColorTransform';
 import { useAuth } from '../contexts/AuthContext';
+import badgeService from '../services/badgeService';
 
 /**
  * Individual badge card component that renders a badge with metadata
@@ -24,97 +25,66 @@ const BadgeCard = ({
   isInCase = false,
   className = ''
 }) => {
-  const { displayProps } = badge;
   const { token } = useAuth();
-  const [badgePropsForDisplay, setBadgePropsForDisplay] = useState(null);
+  const [resolvedBadge, setResolvedBadge] = useState(null);
   
-  // Prepare badge props for BadgeDisplay component
   useEffect(() => {
-    const prepareBadgeProps = async () => {
-      console.log('BadgeCard: Preparing badge props for:', displayProps.name);
-      // Don't log full displayProps as it may contain sensitive URLs
-      
-      const props = {
-        name: displayProps.name,
-        subtitle: displayProps.subtitle,
-        shape: displayProps.shape,
-        borderColor: displayProps.borderColor,
-        backgroundType: displayProps.backgroundType,
-        backgroundValue: displayProps.backgroundValue,
-        foregroundType: displayProps.foregroundType,
-        foregroundValue: displayProps.foregroundValue,
-        foregroundColor: displayProps.foregroundColor,
-        foregroundColorConfig: displayProps.foregroundColorConfig,
-        foregroundScale: 100
-      };
-      
-      // If it's a system icon, load the SVG content
-      if (displayProps.foregroundType === 'SYSTEM_ICON' && displayProps.foregroundValue) {
+    const resolveBadgeUrls = async () => {
+      // Handle both direct config (legacy) and displayProps structure
+      const foregroundConfig = badge.foregroundConfig || badge.displayProps?.foregroundConfig;
+      let resolvedFgConfig = foregroundConfig;
+
+      // If the foreground is an uploaded icon, resolve its URL
+      if (
+        foregroundConfig &&
+        (foregroundConfig.type === 'static-image-asset' || foregroundConfig.type === 'customizable-svg') &&
+        foregroundConfig.url &&
+        foregroundConfig.url.startsWith('upload://')
+      ) {
         try {
-          const svg = await systemIconService.getSystemIconSvg(displayProps.foregroundValue);
-          // Replace currentColor with the specified foreground color
-          const coloredSvg = svg.replace(/currentColor/g, displayProps.foregroundColor || '#000000');
-          props.foregroundValue = coloredSvg;
-        } catch (err) {
-          console.error('Failed to load system icon:', err);
-          props.foregroundValue = null;
-        }
-      }
-      
-      // For uploaded icons, check if we need to apply color transformations
-      console.log('BadgeCard: Checking for color transforms - Type:', displayProps.foregroundType, 'Has config:', !!displayProps.foregroundColorConfig);
-      
-      if (displayProps.foregroundType === 'UPLOADED_ICON' && displayProps.foregroundColorConfig) {
-        console.log('BadgeCard: Need to apply color transformations');
-        console.log('BadgeCard: Color config:', displayProps.foregroundColorConfig);
-        
-        // Check if foregroundValue is already SVG content or a URL
-        if (isSvgContent(displayProps.foregroundValue)) {
-          // Apply color transform to SVG content
-          console.log('BadgeCard: Applying transform to direct SVG content');
-          const transformedSvg = applySvgColorTransform(displayProps.foregroundValue, displayProps.foregroundColorConfig);
-          props.foregroundValue = transformedSvg;
-        } else if (displayProps.foregroundValue && typeof displayProps.foregroundValue === 'string' && displayProps.foregroundValue.startsWith('http')) {
-          // It's a URL, fetch through secure proxy and transform
-          console.log('BadgeCard: Fetching SVG through proxy (URL hidden for security)');
-          try {
-            const response = await fetch(`/api/fetch-svg?url=${encodeURIComponent(displayProps.foregroundValue)}`, {
-              headers: {
-                'Authorization': `Bearer ${token}`
-              }
-            });
-            
-            if (response.ok) {
-              const svgContent = await response.text();
-              if (isSvgContent(svgContent)) {
-                const transformedSvg = applySvgColorTransform(svgContent, displayProps.foregroundColorConfig);
-                props.foregroundValue = transformedSvg;
-                console.log('BadgeCard: Applied color transformation to fetched SVG');
-              }
-            } else {
-              console.error('Failed to fetch SVG through proxy:', response.status);
-            }
-          } catch (err) {
-            console.error('Failed to fetch and transform SVG:', err);
-            // Keep original URL as fallback
+          const assetId = foregroundConfig.url.replace('upload://', '');
+          const realUrl = await badgeService.getAssetUrl(assetId);
+          
+          if (realUrl) {
+            resolvedFgConfig = { ...foregroundConfig, url: realUrl };
+          } else {
+            // Asset doesn't exist, remove the URL to prevent broken display
+            resolvedFgConfig = { ...foregroundConfig, url: null };
           }
+        } catch (error) {
+          console.warn('Failed to resolve asset URL:', error);
+          // Asset resolution failed, remove the URL to prevent broken display
+          resolvedFgConfig = { ...foregroundConfig, url: null };
         }
       }
-      
-      setBadgePropsForDisplay(props);
+
+      // Update the resolved badge with the proper structure
+      if (badge.displayProps) {
+        setResolvedBadge({
+          ...badge,
+          displayProps: {
+            ...badge.displayProps,
+            foregroundConfig: resolvedFgConfig
+          }
+        });
+      } else {
+        setResolvedBadge({
+          ...badge,
+          foregroundConfig: resolvedFgConfig
+        });
+      }
     };
-    
-    prepareBadgeProps();
-  }, [displayProps, token]);
-  
+
+    resolveBadgeUrls();
+  }, [badge]);
 
   // Format metadata for display
   const formatMetadata = () => {
-    if (!displayProps.metadata || displayProps.metadata.length === 0) {
+    if (!badge.metadata || badge.metadata.length === 0) {
       return null;
     }
     
-    return displayProps.metadata.map((meta, index) => (
+    return badge.metadata.map((meta, index) => (
       <div key={meta.key || index} className="badge-metadata-item">
         <span className="badge-metadata-label">{meta.label}</span>
         <span className="badge-metadata-value">
@@ -126,21 +96,21 @@ const BadgeCard = ({
 
   // Format measure value if present
   const formatMeasure = () => {
-    if (displayProps.measureValue === null || displayProps.measureValue === undefined) {
+    if (badge.measureValue === null || badge.measureValue === undefined) {
       return null;
     }
 
     return (
       <div className="badge-measure">
         <span className="badge-measure-label">
-          {displayProps.measureLabel || 'Score'}:
+          {badge.measureLabel || 'Score'}:
         </span>
         <span className="badge-measure-value">
-          {displayProps.measureValue}
+          {badge.measureValue}
         </span>
-        {displayProps.measureBest && (
+        {badge.measureBest && (
           <span className="badge-measure-range">
-            / {displayProps.measureBest}
+            / {badge.measureBest}
           </span>
         )}
       </div>
@@ -150,30 +120,30 @@ const BadgeCard = ({
   return (
     <div className={`badge-card ${className}`}>
       <div className="badge-card-visual">
-        {badgePropsForDisplay ? (
-          <BadgeDisplay badge={badgePropsForDisplay} />
+        {resolvedBadge ? (
+          <BadgeDisplay badge={resolvedBadge.displayProps} />
         ) : (
           <div className="badge-loading" style={{ width: 100, height: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <span>Loading...</span>
           </div>
         )}
         
-        {displayProps.tier && (
-          <div className={`badge-tier badge-tier-${displayProps.tier.toLowerCase()}`}>
-            {displayProps.tier}
+        {badge.tier && (
+          <div className={`badge-tier badge-tier-${badge.tier.toLowerCase()}`}>
+            {badge.tier}
           </div>
         )}
       </div>
 
       <div className="badge-card-content">
-        <h3 className="badge-card-title">{displayProps.name}</h3>
+        <h3 className="badge-card-title">{badge.name}</h3>
         
-        {displayProps.subtitle && (
-          <p className="badge-card-subtitle">{displayProps.subtitle}</p>
+        {badge.subtitle && (
+          <p className="badge-card-subtitle">{badge.subtitle}</p>
         )}
         
-        {displayProps.description && (
-          <p className="badge-card-description">{displayProps.description}</p>
+        {badge.description && (
+          <p className="badge-card-description">{badge.description}</p>
         )}
 
         {formatMeasure()}

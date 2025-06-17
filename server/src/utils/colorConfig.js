@@ -18,6 +18,9 @@ function extractColor(config, fallback = '#000000') {
     case 'simple-color':
       return config.color || fallback;
       
+    case 'system-icon':
+      return config.color || fallback;
+      
     case 'element-path':
       // Extract representative color from element mappings
       if (config.mappings && typeof config.mappings === 'object') {
@@ -134,6 +137,10 @@ function validateColorConfig(config) {
     case 'simple-color':
       return typeof config.color === 'string' && config.color.startsWith('#');
       
+    case 'system-icon':
+      return typeof config.value === 'string' && config.value.length > 0 && 
+             (!config.color || (typeof config.color === 'string' && config.color.startsWith('#')));
+      
     case 'hosted-asset':
       return typeof config.url === 'string' && config.url.length > 0;
       
@@ -145,46 +152,6 @@ function validateColorConfig(config) {
   }
 }
 
-/**
- * Merge a legacy color field into a config object for backward compatibility
- * @param {string|null} legacyColor - Legacy hex color string
- * @param {Object|null} existingConfig - Existing config object
- * @returns {Object|null} Merged configuration object
- */
-function mergeLegacyColor(legacyColor, existingConfig) {
-  // If we have a config object, prefer it
-  if (existingConfig && validateColorConfig(existingConfig)) {
-    return existingConfig;
-  }
-  
-  // Fall back to legacy color if available
-  if (legacyColor && typeof legacyColor === 'string') {
-    return createSimpleColorConfig(legacyColor);
-  }
-  
-  return null;
-}
-
-/**
- * Convert legacy background type/value to config object
- * @param {string} backgroundType - 'SOLID_COLOR' or 'HOSTED_IMAGE'
- * @param {string} backgroundValue - Color hex or image URL
- * @returns {Object|null} Background configuration object
- */
-function convertLegacyBackground(backgroundType, backgroundValue) {
-  if (!backgroundType || !backgroundValue) return null;
-  
-  switch (backgroundType) {
-    case 'SOLID_COLOR':
-      return createSimpleColorConfig(backgroundValue);
-      
-    case 'HOSTED_IMAGE':
-      return createHostedAssetConfig(backgroundValue);
-      
-    default:
-      return null;
-  }
-}
 
 module.exports = {
   extractColor,
@@ -193,7 +160,5 @@ module.exports = {
   createSimpleColorConfig,
   createHostedAssetConfig,
   createElementPathConfig,
-  validateColorConfig,
-  mergeLegacyColor,
-  convertLegacyBackground
+  validateColorConfig
 };

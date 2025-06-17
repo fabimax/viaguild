@@ -5,9 +5,7 @@ const r2Service = require('./r2.service');
 const { 
   extractColor, 
   extractBackgroundStyle, 
-  extractBorderStyle,
-  mergeLegacyColor,
-  convertLegacyBackground 
+  extractBorderStyle
 } = require('../utils/colorConfig');
 
 class BadgeService {
@@ -60,6 +58,7 @@ class BadgeService {
       orderBy: { assignedAt: 'desc' }
     });
     
+    
     return badges;
   }
 
@@ -84,33 +83,7 @@ class BadgeService {
         badges: {
           include: {
             badge: {
-              select: {
-                id: true,
-                templateId: true,
-                assignedAt: true,
-                message: true,
-                giverType: true,
-                giverId: true,
-                awardStatus: true,
-                apiVisible: true,
-                overrideBadgeName: true,
-                overrideSubtitle: true,
-                overrideOuterShape: true,
-                overrideBorderColor: true,
-                overrideBackgroundType: true,
-                overrideBackgroundValue: true,
-                overrideForegroundType: true,
-                overrideForegroundValue: true,
-                overrideForegroundColor: true,
-                overrideTextFont: true,
-                overrideTextSize: true,
-                overrideDisplayDescription: true,
-                measureValue: true,
-                overrideMeasureBest: true,
-                overrideMeasureWorst: true,
-                overrideMeasureIsNormalizable: true,
-                overrideMeasureBestLabel: true,
-                overrideMeasureWorstLabel: true,
+              include: {
                 template: {
                   include: {
                     metadataFieldDefinitions: {
@@ -417,6 +390,7 @@ class BadgeService {
   getBadgeDisplayProps(badgeInstance) {
     const template = badgeInstance.template;
     
+    
     // Define tier-enforced border colors
     const tierBorderColors = {
       'GOLD': '#FFD700',
@@ -424,28 +398,12 @@ class BadgeService {
       'BRONZE': '#CD7F32'
     };
     
-    // Get unified config objects with legacy fallbacks
-    const borderConfig = mergeLegacyColor(
-      badgeInstance.overrideBorderColor || template.defaultBorderColor,
-      badgeInstance.overrideBorderConfig || template.defaultBorderConfig
-    );
+    // Get unified config objects (config-only approach)
+    const borderConfig = badgeInstance.overrideBorderConfig || template.defaultBorderConfig;
+    const backgroundConfig = badgeInstance.overrideBackgroundConfig || template.defaultBackgroundConfig;
+    const foregroundConfig = badgeInstance.overrideForegroundConfig || template.defaultForegroundConfig;
     
-    const backgroundConfig = badgeInstance.overrideBackgroundConfig || 
-                           template.defaultBackgroundConfig ||
-                           convertLegacyBackground(
-                             badgeInstance.overrideBackgroundType || template.defaultBackgroundType,
-                             badgeInstance.overrideBackgroundValue || template.defaultBackgroundValue
-                           );
-    
-    const foregroundConfig = mergeLegacyColor(
-      badgeInstance.overrideForegroundColor || template.defaultForegroundColor,
-      badgeInstance.overrideForegroundConfig || 
-      template.defaultForegroundConfig ||
-      badgeInstance.overrideForegroundColorConfig || 
-      template.defaultForegroundColorConfig
-    );
-    
-    // Extract colors for legacy compatibility
+    // Extract colors from configs
     let borderColor = extractColor(borderConfig, '#000000');
     
     // For tiered badges, enforce tier colors (ignore config overrides)
@@ -458,22 +416,11 @@ class BadgeService {
       subtitle: badgeInstance.overrideSubtitle || template.defaultSubtitleText,
       shape: badgeInstance.overrideOuterShape || template.defaultOuterShape,
       
-      // Legacy color fields (for backward compatibility)
-      borderColor: borderColor,
-      backgroundType: badgeInstance.overrideBackgroundType || template.defaultBackgroundType,
-      backgroundValue: badgeInstance.overrideBackgroundValue || template.defaultBackgroundValue,
-      foregroundType: badgeInstance.overrideForegroundType || template.defaultForegroundType,
-      foregroundValue: badgeInstance.overrideForegroundValue || template.defaultForegroundValue,
-      foregroundColor: extractColor(foregroundConfig, '#FFFFFF'),
-      foregroundColorConfig: badgeInstance.overrideForegroundColorConfig || template.defaultForegroundColorConfig,
-      
-      // New unified config objects
+      // Config objects (primary)
       borderConfig: borderConfig,
       backgroundConfig: backgroundConfig,
       foregroundConfig: foregroundConfig,
       
-      textFont: badgeInstance.overrideTextFont || template.defaultTextFont,
-      textSize: badgeInstance.overrideTextSize || template.defaultTextSize,
       description: badgeInstance.overrideDisplayDescription || template.defaultDisplayDescription,
       tier: template.inherentTier,
       measureValue: badgeInstance.measureValue,
@@ -484,6 +431,7 @@ class BadgeService {
       metadata: this.formatMetadata(badgeInstance, template)
     };
   }
+
 
   /**
    * Format metadata values based on field definitions
@@ -523,16 +471,11 @@ class BadgeService {
       defaultSubtitleText,
       defaultDisplayDescription,
       defaultOuterShape,
-      defaultBorderColor,
-      defaultBackgroundType,
-      defaultBackgroundValue,
-      defaultForegroundType,
-      defaultForegroundValue,
-      defaultForegroundColor,
-      defaultForegroundColorConfig,
+      // Config objects only (unified approach)
+      defaultBorderConfig,
+      defaultBackgroundConfig,
+      defaultForegroundConfig,
       transformedForegroundSvgContent,
-      defaultTextFont,
-      defaultTextSize,
       inherentTier,
       definesMeasure,
       measureLabel,
@@ -576,13 +519,13 @@ class BadgeService {
       }
     }
 
-    // Process upload references - convert temp uploads to permanent storage
-    let processedForegroundValue = defaultForegroundValue;
-    let processedBackgroundValue = defaultBackgroundValue;
+    // Process upload references in config objects - convert temp uploads to permanent storage
+    let processedForegroundConfig = defaultForegroundConfig;
+    let processedBackgroundConfig = defaultBackgroundConfig;
 
-    // Handle foreground upload
-    if (defaultForegroundType === 'UPLOADED_ICON' && defaultForegroundValue?.startsWith('upload://')) {
-      const assetId = defaultForegroundValue.replace('upload://', '');
+    // Handle foreground upload from config objects
+    if ((defaultForegroundConfig?.type === 'static-image-asset' || defaultForegroundConfig?.type === 'customizable-svg') && defaultForegroundConfig?.url?.startsWith('upload://')) {
+      const assetId = defaultForegroundConfig.url.replace('upload://', '');
       const asset = await prisma.uploadedAsset.findUnique({
         where: { id: assetId }
       });
@@ -597,7 +540,10 @@ class BadgeService {
             transformedForegroundSvgContent,
             'image/svg+xml'
           );
-          processedForegroundValue = permanentUrl;
+          processedForegroundConfig = {
+            ...defaultForegroundConfig,
+            url: permanentUrl
+          };
           
           // Delete the temp file
           await r2Service.client.send(new DeleteObjectCommand({
@@ -629,7 +575,10 @@ class BadgeService {
             originalContent,
             asset.mimeType
           );
-          processedForegroundValue = permanentUrl;
+          processedForegroundConfig = {
+            ...defaultForegroundConfig,
+            url: permanentUrl
+          };
           
           // Delete the temp file
           await r2Service.client.send(new DeleteObjectCommand({
@@ -650,13 +599,16 @@ class BadgeService {
         }
       } else if (asset) {
         // Already permanent, use the hosted URL
-        processedForegroundValue = asset.hostedUrl;
+        processedForegroundConfig = {
+          ...defaultForegroundConfig,
+          url: asset.hostedUrl
+        };
       }
     }
 
-    // Handle background upload  
-    if (defaultBackgroundType === 'HOSTED_IMAGE' && defaultBackgroundValue?.startsWith('upload://')) {
-      const assetId = defaultBackgroundValue.replace('upload://', '');
+    // Handle background upload from config objects
+    if (defaultBackgroundConfig?.type === 'static-image-asset' && defaultBackgroundConfig?.url?.startsWith('upload://')) {
+      const assetId = defaultBackgroundConfig.url.replace('upload://', '');
       const asset = await prisma.uploadedAsset.findUnique({
         where: { id: assetId }
       });
@@ -674,7 +626,10 @@ class BadgeService {
           originalContent,
           asset.mimeType
         );
-        processedBackgroundValue = permanentUrl;
+        processedBackgroundConfig = {
+          ...defaultBackgroundConfig,
+          url: permanentUrl
+        };
         
         // Delete the temp file
         await r2Service.client.send(new DeleteObjectCommand({
@@ -695,7 +650,10 @@ class BadgeService {
         });
       } else if (asset) {
         // Already permanent, use the hosted URL
-        processedBackgroundValue = asset.hostedUrl;
+        processedBackgroundConfig = {
+          ...defaultBackgroundConfig,
+          url: asset.hostedUrl
+        };
       }
     }
 
@@ -711,15 +669,10 @@ class BadgeService {
         defaultSubtitleText: defaultSubtitleText || '',
         defaultDisplayDescription: defaultDisplayDescription || '',
         defaultOuterShape,
-        defaultBorderColor,
-        defaultBackgroundType,
-        defaultBackgroundValue: processedBackgroundValue,
-        defaultForegroundType,
-        defaultForegroundValue: processedForegroundValue,
-        defaultForegroundColor,
-        defaultForegroundColorConfig: defaultForegroundColorConfig || {},
-        defaultTextFont: defaultTextFont || 'Arial',
-        defaultTextSize: defaultTextSize || 24,
+        // Config-only approach: save only unified config objects
+        defaultBorderConfig: defaultBorderConfig || null,
+        defaultBackgroundConfig: processedBackgroundConfig || null,
+        defaultForegroundConfig: processedForegroundConfig || null,
         inherentTier,
         definesMeasure: definesMeasure || false,
         measureLabel: measureLabel || null,
@@ -957,13 +910,10 @@ class BadgeService {
       overrideSubtitle,
       overrideDisplayDescription,
       overrideOuterShape,
-      overrideBorderColor,
-      overrideBackgroundType,
-      overrideBackgroundValue,
-      overrideForegroundType,
-      overrideForegroundValue,
-      overrideForegroundColor,
-      overrideForegroundColorConfig,
+      // Config overrides only
+      overrideBorderConfig,
+      overrideBackgroundConfig,
+      overrideForegroundConfig,
       measureValue,
       metadataValues = {}
     } = customizations;
@@ -981,18 +931,15 @@ class BadgeService {
           awardStatus: 'ACCEPTED', // Skip pending acceptance for now
           apiVisible: false, // Stays private until user adds to badge case
           message,
-          // Visual overrides
+          // Visual overrides (config-only)
           overrideBadgeName,
           overrideSubtitle,
           overrideDisplayDescription,
           overrideOuterShape,
-          overrideBorderColor,
-          overrideBackgroundType,
-          overrideBackgroundValue,
-          overrideForegroundType,
-          overrideForegroundValue,
-          overrideForegroundColor,
-          overrideForegroundColorConfig,
+          // Config overrides only
+          overrideBorderConfig,
+          overrideBackgroundConfig,
+          overrideForegroundConfig,
           // Measure value
           measureValue: template.definesMeasure ? measureValue : null,
           // Create metadata values

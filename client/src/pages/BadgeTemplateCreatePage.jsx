@@ -12,9 +12,10 @@ import {
   createHostedAssetConfig,
   createElementPathConfig 
 } from '../utils/colorConfig';
+import { applySvgColorTransform } from '../utils/svgColorTransform';
 import './BadgeBuilderPage.css';
 
-// Enums matching the database schema
+// Enums for UI state management only
 const BadgeShape = { CIRCLE: 'CIRCLE', SQUARE: 'SQUARE', STAR: 'STAR', HEXAGON: 'HEXAGON', HEART: 'HEART' };
 const BackgroundContentType = { SOLID_COLOR: 'SOLID_COLOR', HOSTED_IMAGE: 'HOSTED_IMAGE' };
 const ForegroundContentType = { TEXT: 'TEXT', SYSTEM_ICON: 'SYSTEM_ICON', UPLOADED_ICON: 'UPLOADED_ICON' };
@@ -37,7 +38,7 @@ const BadgeTemplateCreatePage = () => {
     defaultDisplayDescription: '',
     inherentTier: null,
     
-    // Visual properties
+    // Visual properties (UI state only - converted to configs on submit)
     defaultOuterShape: BadgeShape.CIRCLE,
     defaultBorderColor: '#FFD700',
     defaultBackgroundType: BackgroundContentType.SOLID_COLOR,
@@ -45,8 +46,6 @@ const BadgeTemplateCreatePage = () => {
     defaultForegroundType: ForegroundContentType.SYSTEM_ICON,
     defaultForegroundValue: 'Shield',
     defaultForegroundColor: '#FFFFFF',
-    defaultTextFont: 'Arial',
-    defaultTextSize: 24,
     
     // Measure configuration
     definesMeasure: false,
@@ -155,11 +154,21 @@ const BadgeTemplateCreatePage = () => {
           setDisplayableForegroundSvg('<svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2L2 7v10c0 5.55 3.84 9.95 9 11 5.16-1.05 9-5.45 9-11V7l-10-5z"/></svg>');
         });
     } else if (template.defaultForegroundType === ForegroundContentType.UPLOADED_ICON && uploadedIconSvg) {
-      setDisplayableForegroundSvg(uploadedIconSvg);
+      // Apply color transformations if we have color data
+      if (iconSvgColorData && iconSvgColorData.elementColorMap) {
+        const transformedSvg = applySvgColorTransform(uploadedIconSvg, {
+          type: 'element-path',
+          version: 1,
+          mappings: iconSvgColorData.elementColorMap
+        });
+        setDisplayableForegroundSvg(transformedSvg);
+      } else {
+        setDisplayableForegroundSvg(uploadedIconSvg);
+      }
     } else {
       setDisplayableForegroundSvg(null);
     }
-  }, [template.defaultForegroundType, template.defaultForegroundValue, uploadedIconSvg]);
+  }, [template.defaultForegroundType, template.defaultForegroundValue, uploadedIconSvg, iconSvgColorData]);
 
   // Reset foregroundColor to appropriate default when foregroundType changes
   useEffect(() => {
@@ -257,12 +266,65 @@ const BadgeTemplateCreatePage = () => {
       setUploadedIconSvg(null);
     }
     setIconSvgColorData(colorData);
+    
+    // Debug: Check what color data we're receiving
+    if (colorData?.elementColorMap) {
+      console.log('BadgeTemplateCreatePage received colorData:', colorData);
+      Object.entries(colorData.elementColorMap).forEach(([path, colors]) => {
+        if (colors.fill?.original === 'UNSPECIFIED') {
+          console.log(`Preview will use UNSPECIFIED fill at ${path}, current:`, colors.fill.current);
+        }
+      });
+    }
   };
 
   const handleBackgroundChange = (backgroundUrl, actualUrl) => {
     setTemplate(prev => ({ ...prev, defaultBackgroundValue: backgroundUrl }));
     if (actualUrl) {
       setUploadedBackgroundUrl(actualUrl);
+    }
+  };
+
+  // Helper to generate the full foreground config object
+  const buildForegroundConfig = () => {
+    switch (template.defaultForegroundType) {
+      case ForegroundContentType.TEXT:
+        return {
+          type: 'text',
+          version: 1,
+          value: template.defaultForegroundValue,
+          color: template.defaultForegroundColor,
+        };
+      case ForegroundContentType.SYSTEM_ICON:
+        return {
+          type: 'system-icon',
+          version: 1,
+          value: template.defaultForegroundValue, // The icon name
+          color: template.defaultForegroundColor,
+        };
+      case ForegroundContentType.UPLOADED_ICON:
+        if (template.defaultForegroundValue?.startsWith('upload://')) {
+          if (iconSvgColorData && iconSvgColorData.elementColorMap && Object.keys(iconSvgColorData.elementColorMap).length > 0) {
+            return {
+              type: 'customizable-svg',
+              version: 1,
+              url: template.defaultForegroundValue,
+              colorMappings: iconSvgColorData.elementColorMap,
+            };
+          } else {
+            return createHostedAssetConfig(template.defaultForegroundValue);
+          }
+        }
+        return createHostedAssetConfig(uploadedBackgroundUrl || template.defaultForegroundValue);
+
+      default:
+        // Fallback to system icon config if type is unclear
+        return {
+          type: 'system-icon',
+          version: 1,
+          value: template.defaultForegroundValue || 'Shield',
+          color: template.defaultForegroundColor,
+        };
     }
   };
 
@@ -280,25 +342,12 @@ const BadgeTemplateCreatePage = () => {
       ownerId: user?.id || 'user_id',
       authoredByUserId: user?.id || 'user_id',
       
-      // Visual properties (legacy)
-      defaultOuterShape: template.defaultOuterShape,
-      defaultBorderColor: template.defaultBorderColor,
-      defaultBackgroundType: template.defaultBackgroundType,
-      defaultBackgroundValue: template.defaultBackgroundValue,
-      defaultForegroundType: template.defaultForegroundType,
-      defaultForegroundValue: template.defaultForegroundValue,  // Will show upload://assetId reference
-      defaultForegroundColor: template.defaultForegroundColor,
-      defaultTextFont: template.defaultTextFont,
-      defaultTextSize: template.defaultTextSize,
-      
-      // New unified config objects
+      // Config objects only (legacy fields removed)
       defaultBorderConfig: createSimpleColorConfig(template.defaultBorderColor),
       defaultBackgroundConfig: template.defaultBackgroundType === BackgroundContentType.HOSTED_IMAGE
         ? createHostedAssetConfig(template.defaultBackgroundValue)
         : createSimpleColorConfig(template.defaultBackgroundValue),
-      defaultForegroundConfig: (iconSvgColorData && iconSvgColorData.elementColorMap && Object.keys(iconSvgColorData.elementColorMap).length > 0)
-        ? createElementPathConfig(iconSvgColorData.elementColorMap)
-        : createSimpleColorConfig(template.defaultForegroundColor),
+      defaultForegroundConfig: buildForegroundConfig(),
       
       // Tier
       ...(template.inherentTier && { inherentTier: template.inherentTier }),
@@ -335,17 +384,29 @@ const BadgeTemplateCreatePage = () => {
   };
 
   const copyToClipboard = async () => {
+    const textToCopy = JSON.stringify(generateApiPayload(), null, 2);
+    
     try {
-      await navigator.clipboard.writeText(JSON.stringify(generateApiPayload(), null, 2));
+      await navigator.clipboard.writeText(textToCopy);
       // TODO: Show success message
     } catch (err) {
       console.error('Failed to copy to clipboard:', err);
-      // Fallback for older browsers
+      // Modern fallback without execCommand
       const textArea = document.createElement('textarea');
-      textArea.value = JSON.stringify(generateApiPayload(), null, 2);
+      textArea.value = textToCopy;
+      textArea.style.position = 'fixed';
+      textArea.style.opacity = '0';
       document.body.appendChild(textArea);
       textArea.select();
-      document.execCommand('copy');
+      try {
+        // Use the Clipboard API as a fallback
+        const successful = document.execCommand('copy');
+        if (!successful) {
+          console.error('Fallback copy failed');
+        }
+      } catch (error) {
+        console.error('Fallback copy error:', error);
+      }
       document.body.removeChild(textArea);
     }
   };
@@ -449,7 +510,25 @@ const BadgeTemplateCreatePage = () => {
 
     try {
       const templateData = {
-        ...template,
+        // Only send fields that exist in the database schema
+        templateSlug: template.templateSlug,
+        defaultBadgeName: template.defaultBadgeName,
+        defaultSubtitleText: template.defaultSubtitleText,
+        defaultDisplayDescription: template.defaultDisplayDescription,
+        defaultOuterShape: template.defaultOuterShape,
+        inherentTier: template.inherentTier,
+        definesMeasure: template.definesMeasure,
+        measureLabel: template.measureLabel,
+        measureBest: template.measureBest,
+        measureWorst: template.measureWorst,
+        measureNotes: template.measureNotes,
+        measureIsNormalizable: template.measureIsNormalizable,
+        higherIsBetter: template.higherIsBetter,
+        measureBestLabel: template.measureBestLabel,
+        measureWorstLabel: template.measureWorstLabel,
+        allowsPushedInstanceUpdates: template.allowsPushedInstanceUpdates,
+        internalNotes: template.internalNotes,
+        
         ownerType: 'USER',
         ownerId: user.id,
         authoredByUserId: user.id,
@@ -459,18 +538,8 @@ const BadgeTemplateCreatePage = () => {
         defaultBackgroundConfig: template.defaultBackgroundType === BackgroundContentType.HOSTED_IMAGE
           ? createHostedAssetConfig(template.defaultBackgroundValue)
           : createSimpleColorConfig(template.defaultBackgroundValue),
-        defaultForegroundConfig: (iconSvgColorData && iconSvgColorData.elementColorMap && Object.keys(iconSvgColorData.elementColorMap).length > 0)
-          ? createElementPathConfig(iconSvgColorData.elementColorMap)
-          : createSimpleColorConfig(template.defaultForegroundColor),
+        defaultForegroundConfig: buildForegroundConfig(),
         
-        // Include legacy color config if applicable (for backward compatibility during transition)
-        ...(iconSvgColorData && iconSvgColorData.elementColorMap && Object.keys(iconSvgColorData.elementColorMap).length > 0 && {
-          defaultForegroundColorConfig: {
-            type: 'element-path',
-            version: 1,
-            mappings: iconSvgColorData.elementColorMap
-          }
-        }),
         
         // Include metadata field definitions (with validation)
         metadataFieldDefinitions: metadataFields
@@ -510,36 +579,19 @@ const BadgeTemplateCreatePage = () => {
     }
   };
 
+
   const badgePreviewProps = {
     name: template.defaultBadgeName,
     subtitle: template.defaultSubtitleText,
     shape: template.defaultOuterShape,
     
-    // Legacy fields for backward compatibility
-    borderColor: template.defaultBorderColor,
-    backgroundType: template.defaultBackgroundType,
-    backgroundValue: template.defaultBackgroundType === BackgroundContentType.HOSTED_IMAGE && uploadedBackgroundUrl
-      ? uploadedBackgroundUrl  // Use actual URL for display
-      : template.defaultBackgroundValue,
-    foregroundType: template.defaultForegroundType === ForegroundContentType.UPLOADED_ICON && displayableForegroundSvg && displayableForegroundSvg.includes('<svg')
-      ? ForegroundContentType.SYSTEM_ICON  // Treat SVG content as SYSTEM_ICON for display
-      : template.defaultForegroundType,
-    foregroundValue: (template.defaultForegroundType === ForegroundContentType.SYSTEM_ICON || 
-                     template.defaultForegroundType === ForegroundContentType.UPLOADED_ICON) 
-      ? displayableForegroundSvg 
+    // For rendering - Let BadgeDisplay handle SVG fetching
+    foregroundType: template.defaultForegroundType,
+    foregroundValue: template.defaultForegroundType === ForegroundContentType.UPLOADED_ICON
+      ? displayableForegroundSvg
       : template.defaultForegroundValue,
-    foregroundColor: template.defaultForegroundType === ForegroundContentType.UPLOADED_ICON 
-      ? '#000000' // Use black fallback color for uploaded icons (matches BadgeIconUpload default)
-      : template.defaultForegroundColor,
-    foregroundColorConfig: iconSvgColorData && iconSvgColorData.elementColorMap && Object.keys(iconSvgColorData.elementColorMap).length > 0 
-      ? {
-          type: 'element-path',
-          version: 1,
-          mappings: iconSvgColorData.elementColorMap
-        }
-      : null,
     
-    // New unified config objects for preview
+    // Config objects for preview
     borderConfig: createSimpleColorConfig(template.defaultBorderColor),
     backgroundConfig: template.defaultBackgroundType === BackgroundContentType.HOSTED_IMAGE
       ? createHostedAssetConfig(uploadedBackgroundUrl || template.defaultBackgroundValue)
@@ -552,6 +604,7 @@ const BadgeTemplateCreatePage = () => {
     
     foregroundScale: 100
   };
+
 
   if (!isOwnPage) {
     return null;

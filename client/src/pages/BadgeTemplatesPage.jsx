@@ -119,19 +119,15 @@ const BadgeTemplatesPage = () => {
   // Format template for BadgeCard component
   const formatTemplateForCard = (template) => ({
     id: template.id,
+    tier: template.inherentTier,
     displayProps: {
       name: template.defaultBadgeName,
       subtitle: template.defaultSubtitleText,
       description: template.defaultDisplayDescription,
       shape: template.defaultOuterShape,
-      borderColor: template.defaultBorderColor,
-      backgroundType: template.defaultBackgroundType,
-      backgroundValue: template.defaultBackgroundValue,
-      foregroundType: template.defaultForegroundType,
-      foregroundValue: template.defaultForegroundValue,
-      foregroundColor: template.defaultForegroundColor,
-      foregroundColorConfig: template.defaultForegroundColorConfig, // Include color config
-      tier: template.inherentTier,
+      borderConfig: template.defaultBorderConfig,
+      backgroundConfig: template.defaultBackgroundConfig,
+      foregroundConfig: template.defaultForegroundConfig,
       measureLabel: template.measureLabel,
       metadata: []
     }

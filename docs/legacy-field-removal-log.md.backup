@@ -1,0 +1,179 @@
+# Legacy Field Removal Tracking
+
+This document tracks the commenting out of legacy visual configuration fields as we transition to the unified config object system.
+
+**Date Started**: 2024-06-13  
+**Comment Pattern**: `// LEGACY_FIELD_REMOVAL: [field_name] - replaced by [new_field] (YYYY-MM-DD)`
+
+## Status Legend
+- [ ] Not started
+- [🔄] In progress  
+- [✅] Completed
+- [⚠️] Must keep (with reason)
+
+---
+
+## Summary of Findings (2024-06-13)
+
+After investigation and migration reset, we found that:
+
+1. **Database**: All badge templates and instances now have config fields populated by seeds
+2. **Backend**: Updated to accept and save config fields alongside legacy fields
+3. **Frontend Display**: BadgeDisplay MUST keep legacy fallback logic for backward compatibility
+4. **Frontend Creation**: Must keep sending legacy fields because backend still expects them
+5. **Migration Strategy**: Simplified approach (no backwards compatibility needed):
+   - Phase 1: Ensure frontend sends both legacy and config fields ✅ (DONE)
+   - Phase 2: Update backend to use ONLY config fields, ignore legacy fields
+   - Phase 3: Remove legacy fields from frontend (stop sending them)
+   - Phase 4: Remove legacy fields from database schema
+
+---
+
+## Database Schema Fields (schema.prisma)
+
+### BadgeTemplate Table
+
+**Current Legacy Fields (marked LEGACY in schema):**
+- [ ] `defaultBorderColor` (String) - replaced by `defaultBorderConfig`
+- [ ] `defaultForegroundColor` (String) - replaced by `defaultForegroundConfig` 
+- [ ] `defaultForegroundColorConfig` (Json) - merged into `defaultForegroundConfig`
+
+**Planned for Removal (marked PLANNED FOR REMOVAL in schema):**
+- [ ] `defaultBackgroundType` (BackgroundContentType) - incorporated into `defaultBackgroundConfig.type`
+- [ ] `defaultBackgroundValue` (String) - incorporated into `defaultBackgroundConfig.url/color`
+- [ ] `defaultForegroundType` (ForegroundContentType) - incorporated into `defaultForegroundConfig.type`
+- [ ] `defaultForegroundValue` (String) - incorporated into `defaultForegroundConfig.value/url`
+- [ ] `defaultTextFont` (String) - incorporated into `defaultForegroundConfig.font` (for text type)
+- [ ] `defaultTextSize` (Int) - incorporated into `defaultForegroundConfig.size` (for text type)
+
+**Keep as separate fields (structural/content, not visual styling):**
+- [x] `defaultBadgeName` (String) - badge content/identity
+- [x] `defaultSubtitleText` (String) - badge content/identity  
+- [x] `defaultOuterShape` (BadgeShape) - structural container shape
+- [x] `defaultDisplayDescription` (String) - badge content/identity
+
+### BadgeInstance Table
+
+**Current Legacy Fields (marked LEGACY in schema):**
+- [ ] `overrideBorderColor` (String) - replaced by `overrideBorderConfig`
+- [ ] `overrideForegroundColor` (String) - replaced by `overrideForegroundConfig`
+- [ ] `overrideForegroundColorConfig` (Json) - merged into `overrideForegroundConfig`
+
+**Planned for Removal (marked PLANNED FOR REMOVAL in schema):**
+- [ ] `overrideBackgroundType` (BackgroundContentType) - incorporated into `overrideBackgroundConfig.type`
+- [ ] `overrideBackgroundValue` (String) - incorporated into `overrideBackgroundConfig.url/color`
+- [ ] `overrideForegroundType` (ForegroundContentType) - incorporated into `overrideForegroundConfig.type`
+- [ ] `overrideForegroundValue` (String) - incorporated into `overrideForegroundConfig.value/url`
+- [ ] `overrideTextFont` (String) - incorporated into `overrideForegroundConfig.font` (for text type)
+- [ ] `overrideTextSize` (Int) - incorporated into `overrideForegroundConfig.size` (for text type)
+
+**Keep as separate fields (structural/content, not visual styling):**
+- [x] `overrideBadgeName` (String) - badge content/identity
+- [x] `overrideSubtitle` (String) - badge content/identity
+- [x] `overrideOuterShape` (BadgeShape) - structural container shape  
+- [x] `overrideDisplayDescription` (String) - badge content/identity
+
+---
+
+## Frontend Components
+
+### BadgeDisplay.jsx
+- [✅] Line 33-35: Legacy prop destructuring (kept for now, marked with comment)
+- [⚠️] Line 47-49: Legacy fallback merging (MUST KEEP - needed until all data is migrated)
+- [✅] Line 86-96: Legacy background type checking (commented out)
+- [✅] Line 167-169: Legacy foreground color fallback (commented out)
+
+### BadgeTemplateCreatePage.jsx
+- [✅] Line 41-50: Added comment clarifying legacy state fields
+- [⚠️] Line 305-313: Legacy fields in API payload (MUST KEEP - backend expects them)
+- [⚠️] Line 540-561: Legacy fields in preview props (MUST KEEP - BadgeDisplay needs them)
+- [⚠️] Line 703-817: Legacy visual control inputs (MUST KEEP - UI functionality)
+
+### BadgeGiveModal.jsx
+- [⚠️] Line 63-70: Legacy override fields in state (MUST KEEP - for UI controls)
+- [✅] Line 71-74: New config override fields added
+- [✅] Line 162-173: State reset includes both legacy and config fields
+- [⚠️] Line 288-310: Legacy field filtering and conversion (MUST KEEP - generates configs)
+- [⚠️] Line 390-396: Legacy fields in preview props (MUST KEEP - BadgeDisplay needs them)
+
+---
+
+## Backend Code
+
+### badge.service.js
+- [ ] Line 271-280: Legacy field handling in getBadgeDisplayProps
+- [✅] Line 516-554: Added config field handling in template creation
+- [✅] Line 917-981: Added config field handling in badge giving
+- [ ] Legacy fields still being saved (needed for backward compatibility)
+
+### badge.controller.js
+- [ ] Legacy field validation/processing in createBadgeTemplate
+- [ ] Legacy field handling in giveBadge
+
+### colorConfig.js
+- [ ] Line 154-167: mergeLegacyColor function (keep for now, mark as deprecated)
+- [ ] Line 174-189: convertLegacyBackground function (keep for now, mark as deprecated)
+
+---
+
+## Seed Files
+
+### badgeTemplates.ts
+- [ ] Legacy field assignments in template definitions
+- [ ] Remove legacy field imports
+
+### badgeInstances.ts
+- [ ] Legacy field assignments in instance definitions
+- [ ] Remove legacy BackgroundContentType/ForegroundContentType imports
+
+---
+
+## API Endpoints
+
+### POST /api/badge-templates
+- [ ] Remove legacy fields from request validation
+- [ ] Remove legacy fields from response
+
+### POST /api/badges/give
+- [ ] Remove legacy override fields from request
+- [ ] Update response format
+
+### GET /api/badges/*
+- [ ] Remove legacy fields from badge display responses
+
+---
+
+## Critical Dependencies
+
+### MUST KEEP (Until Data Migration):
+1. **BadgeDisplay.jsx** - Legacy fallback merging (lines 47-49)
+   - Required for existing badges to display correctly
+   - Without these, badges show black borders and white backgrounds
+   
+2. **colorConfig.js** - Helper functions
+   - `mergeLegacyColor()` - Still needed by BadgeDisplay
+   - `convertLegacyBackground()` - Still needed by BadgeDisplay
+
+### Safe to Comment Out:
+1. Legacy field assignments in new badge creation
+2. Legacy field processing in badge giving
+3. UI components that set legacy fields (as long as they also set config fields)
+
+## Notes
+
+1. **Order of Operations**:
+   - Frontend first (safest, most visible for testing)
+   - Backend services next
+   - API endpoints after that
+   - Database schema last (after confirming everything works)
+
+2. **Testing Checklist**:
+   - [ ] Badge creation still works
+   - [ ] Badge giving with customization works
+   - [ ] Badge display renders correctly
+   - [ ] Existing badges still display
+
+3. **Rollback Plan**:
+   - Simply uncomment the lines
+   - All legacy code is preserved with consistent comment pattern
+   - Can use search: `LEGACY_FIELD_REMOVAL` to find all changes

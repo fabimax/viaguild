@@ -20,6 +20,22 @@ export function extractColor(config, fallback = '#000000') {
     case 'simple-color':
       return config.color || fallback;
       
+    case 'system-icon':
+    case 'text':
+      // Extract color from text or system icon configs
+      return config.color || fallback;
+      
+    case 'customizable-svg':
+      // For customizable SVGs, try to extract a representative color from mappings
+      if (config.colorMappings && typeof config.colorMappings === 'object') {
+        const mappings = Object.values(config.colorMappings);
+        for (const mapping of mappings) {
+          if (mapping.fill?.current) return mapping.fill.current;
+          if (mapping.stroke?.current) return mapping.stroke.current;
+        }
+      }
+      return fallback;
+      
     case 'element-path':
       // Extract representative color from element mappings
       if (config.mappings && typeof config.mappings === 'object') {
@@ -37,6 +53,30 @@ export function extractColor(config, fallback = '#000000') {
 }
 
 /**
+ * Resolve upload:// URLs to actual hosted URLs
+ * @param {string} url - The URL to resolve
+ * @returns {Promise<string>} Resolved URL
+ */
+export async function resolveUploadUrl(url) {
+  if (!url || !url.startsWith('upload://')) {
+    return url;
+  }
+  
+  try {
+    const assetId = url.replace('upload://', '');
+    const response = await fetch(`/api/uploads/resolve/${assetId}`);
+    if (response.ok) {
+      const data = await response.json();
+      return data.hostedUrl || url; // Fallback to original if no hosted URL
+    }
+  } catch (error) {
+    console.error('Failed to resolve upload URL:', error);
+  }
+  
+  return url; // Fallback to original URL
+}
+
+/**
  * Extract background style properties from a config object
  * @param {Object|null} config - The background configuration object
  * @returns {Object} Style properties for CSS application
@@ -50,7 +90,18 @@ export function extractBackgroundStyle(config) {
         backgroundColor: config.color || '#DDDDDD' 
       };
       
-    case 'hosted-asset':
+    case 'static-image-asset':
+      // For upload:// URLs, we need async resolution
+      // For now, return a placeholder and handle async resolution in components
+      if (config.url && config.url.startsWith('upload://')) {
+        return {
+          // Will be resolved asynchronously in component
+          '--upload-url': config.url,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat'
+        };
+      }
       return {
         backgroundImage: `url(${config.url})`,
         backgroundSize: 'cover',
@@ -104,7 +155,7 @@ export function createSimpleColorConfig(color) {
  */
 export function createHostedAssetConfig(url) {
   return {
-    type: 'hosted-asset',
+    type: 'static-image-asset',
     version: 1,
     url: url
   };
@@ -136,7 +187,7 @@ export function validateColorConfig(config) {
     case 'simple-color':
       return typeof config.color === 'string' && config.color.startsWith('#');
       
-    case 'hosted-asset':
+    case 'static-image-asset':
       return typeof config.url === 'string' && config.url.length > 0;
       
     case 'element-path':

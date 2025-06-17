@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const badgeController = require('../controllers/badge.controller');
+const { uploadController } = require('../controllers/upload.controller');
 const { authenticate } = require('../middleware/auth.middleware');
 
 // Public routes (no authentication required)
@@ -30,5 +31,8 @@ router.get('/users/:username/badges/given', authenticate, badgeController.getUse
 
 // Secure SVG proxy endpoint
 router.get('/fetch-svg', authenticate, badgeController.fetchSvgContent);
+
+// Asset retrieval endpoint
+router.get('/assets/:assetId', authenticate, uploadController.getAssetUrl);
 
 module.exports = router;

@@ -70,14 +70,23 @@ model BadgeInstance {
 ### Target Schema
 ```prisma
 model BadgeTemplate {
-  # Unified configuration approach
+  # Unified configuration approach  
   defaultBorderConfig           Json?    # All border styling
-  defaultBackgroundConfig       Json?    # All background styling  
-  defaultForegroundConfig       Json?    # All foreground styling
+  defaultBackgroundConfig       Json?    # All background styling (includes type + value)
+  defaultForegroundConfig       Json?    # All foreground styling (includes type + value + text properties + scaling)
   
-  # Keep content type/value separate from styling
-  defaultForegroundType         String   # 'TEXT' | 'SYSTEM_ICON' | 'UPLOADED_ICON'
-  defaultForegroundValue        String?  # Text, icon name, or URL
+  # Keep structural/content fields (not visual styling)
+  defaultBadgeName              String   # Badge name
+  defaultSubtitleText           String?  # Badge subtitle
+  defaultOuterShape             BadgeShape # Container shape (affects foreground space)
+  defaultDisplayDescription     String?  # Badge description
+  
+  # All visual properties moved to configs:
+  # - defaultBackgroundType/Value → defaultBackgroundConfig
+  # - defaultForegroundType/Value → defaultForegroundConfig  
+  # - defaultTextFont/Size → defaultForegroundConfig (for text type)
+  # - defaultBorderColor → defaultBorderConfig
+  # - defaultForegroundColor → defaultForegroundConfig
 }
 
 model BadgeInstance {
@@ -86,9 +95,13 @@ model BadgeInstance {
   overrideBackgroundConfig      Json?
   overrideForegroundConfig      Json?
   
-  # Keep content overrides
-  overrideForegroundType        String?
-  overrideForegroundValue       String?
+  # Keep structural/content overrides
+  overrideBadgeName             String?
+  overrideSubtitle              String?
+  overrideOuterShape            BadgeShape?
+  overrideDisplayDescription    String?
+  
+  # All visual override properties moved to configs
 }
 ```
 
@@ -104,23 +117,52 @@ Used for: TEXT foreground, solid backgrounds, simple borders
 }
 ```
 
-### 2. Hosted Asset
-Used for: Background images, non-customizable content
+### 2. Static Image Asset
+Used for: Background images, uploaded raster images (JPG/PNG/GIF/WebP)
 ```json
 {
-  "type": "hosted-asset", 
+  "type": "static-image-asset", 
   "version": 1,
-  "url": "https://pub-2a8c2830ac2d42478acd81b42a86bd95.r2.dev/image.jpg"
+  "url": "upload://clu2x8p9v0001...",
+  "scale": 0.9
 }
 ```
 
-### 3. Element Path Mappings
-Used for: SVG icons with customizable colors, SVG backgrounds
+### 3. Text Content
+Used for: Text foregrounds with typography
 ```json
 {
-  "type": "element-path",
-  "version": 1, 
-  "mappings": {
+  "type": "text",
+  "version": 1,
+  "value": "WIN",
+  "color": "#FFFFFF",
+  "font": "Arial",
+  "size": 24,
+  "scale": 0.8
+}
+```
+
+### 4. System Icon
+Used for: Built-in icons from SystemIcon catalog
+```json
+{
+  "type": "system-icon",
+  "version": 1,
+  "value": "Shield",
+  "color": "#FFFFFF",
+  "scale": 1.0
+}
+```
+
+### 5. Customizable SVG
+Used for: Uploaded SVGs with color customization
+```json
+{
+  "type": "customizable-svg",
+  "version": 1,
+  "url": "upload://asset-id",
+  "scale": 0.8,
+  "colorMappings": {
     "svg": {
       "fill": {
         "original": "#000000",
@@ -154,6 +196,8 @@ Used for: SVG icons with customizable colors, SVG backgrounds
   }
 }
 ```
+
+**Note:** In the UI, "Uploaded Image" automatically becomes either `static-image-asset` (for raster images) or `customizable-svg` (for SVGs with color detection) based on the file type.
 
 **Supported Elements**: `path`, `circle`, `rect`, `ellipse`, `polygon`, `line`, `polyline`, and `svg` root
 **Path Structure**: Hierarchical paths like `g[0]/path[1]`, `svg/g[2]/circle[0]`, supporting nested groups and complex SVG structures

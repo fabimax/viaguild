@@ -1,7 +1,6 @@
 import {
   PrismaClient,
   BadgeAwardStatus, BadgeShape, // Enums for overrides
-  BackgroundContentType, ForegroundContentType,
   EntityType // For discriminated unions
 } from '@prisma/client';
 import { faker } from '@faker-js/faker';
@@ -12,8 +11,7 @@ import { seededUploadedAssets } from './uploadedAssets';
 const {
   createSimpleColorConfig,
   createHostedAssetConfig,
-  createElementPathConfig,
-  convertLegacyBackground
+  createElementPathConfig
 } = require('../../src/utils/colorConfig');
 
 // Helper to get a specific seeded asset URL by its key used in uploadedAssets.ts
@@ -35,18 +33,10 @@ interface BadgeInstanceSeedEntry {
   apiVisible?: boolean;
   message?: string;
   revokedAt?: Date | null;
-  // Visual Overrides (Legacy)
+  // Visual Overrides (Non-legacy)
   overrideBadgeName?: string | null;
   overrideSubtitle?: string | null;
   overrideOuterShape?: BadgeShape | null;
-  overrideBorderColor?: string | null;
-  overrideBackgroundType?: BackgroundContentType | null;
-  overrideBackgroundValue?: string | null; // Hex or HostedAsset.hostedUrl
-  overrideForegroundType?: ForegroundContentType | null;
-  overrideForegroundValue?: string | null; // Text, SystemIcon.id, or HostedAsset.hostedUrl
-  overrideForegroundColor?: string | null;
-  overrideTextFont?: string | null;
-  overrideTextSize?: number | null;
   overrideDisplayDescription?: string | null;
   // New unified config overrides
   overrideBorderConfig?: any | null;
@@ -121,7 +111,6 @@ export async function seedBadgeInstances(prisma: PrismaClient) {
     return undefined;
   };
 
-  const getSystemIconIdByName = (name: string): string | undefined => systemIcons.find(si => si.name === name)?.name;
 
   let instancesToSeed: BadgeInstanceSeedEntry[] = [
     // Scenario 1: TestUserPrime receives "Site Pioneer"
@@ -147,7 +136,6 @@ export async function seedBadgeInstances(prisma: PrismaClient) {
       awardStatus: BadgeAwardStatus.ACCEPTED,
       apiVisible: false,
       message: `For founding and leading ${SPECIAL_GUILD_NAME} with unparalleled vision.`,
-      overrideBorderColor: '#FFD700',
       overrideBorderConfig: createSimpleColorConfig('#FFD700'), // New config format
       metadataValues: { foundingDate: '2024-01-01' },
     },
@@ -166,8 +154,7 @@ export async function seedBadgeInstances(prisma: PrismaClient) {
       overrideMeasureIsNormalizable: true,
       overrideMeasureBestLabel: 'Max Special Difficulty',
       overrideMeasureWorstLabel: 'Min Special Difficulty',
-      overrideForegroundValue: getSystemIconIdByName('Glowing Star'),
-      overrideForegroundColor: '#f59e0b',
+      overrideForegroundConfig: createSimpleColorConfig('#f59e0b'),
       metadataValues: {
         projectName: 'Project Alpha - Internal Tools Suite',
         completionDate: faker.date.recent({days: 30}).toISOString().split('T')[0],
@@ -211,7 +198,7 @@ export async function seedBadgeInstances(prisma: PrismaClient) {
       apiVisible: true,
       message: 'Your rank is being tracked.',
       measureValue: 50, 
-      overrideForegroundValue: '50th',
+      // Foreground value now handled through unified config
       metadataValues: { rankNameDetail: 'Silver III', lastUpdated: new Date().toISOString() }
     },
     // Scenario 7: TheNexusHub receives "Generic Participation" from TestUserPrime
@@ -234,7 +221,7 @@ export async function seedBadgeInstances(prisma: PrismaClient) {
       awardStatus: BadgeAwardStatus.ACCEPTED,
       apiVisible: false,
       message: `Recognizing ${SPECIAL_GUILD_NAME} for its foundational vision and community leadership.`,
-      overrideBorderColor: '#DAA520',
+      overrideBorderConfig: createSimpleColorConfig('#DAA520'),
       metadataValues: { foundingDate: '2024-01-01' },
     },
     // Scenario 9: Cluster1 receives "Generic Participation" from TheNexusHub
@@ -258,8 +245,6 @@ export async function seedBadgeInstances(prisma: PrismaClient) {
       apiVisible: true, 
       message: `TheNexusHub successfully completed the 'Community Onboarding Module' project!`,
       measureValue: 9, 
-      overrideBackgroundType: BackgroundContentType.HOSTED_IMAGE,
-      overrideBackgroundValue: getAssetUrl('BADGE_BACKGROUND_IMAGE_40'),
       overrideBackgroundConfig: createHostedAssetConfig(getAssetUrl('BADGE_BACKGROUND_IMAGE_40') || ''), // New config format
       metadataValues: {
         projectName: 'Community Onboarding Module',
@@ -366,7 +351,7 @@ export async function seedBadgeInstances(prisma: PrismaClient) {
       apiVisible: true,
       message: 'Current ranking status.',
       measureValue: 25,
-      overrideForegroundValue: '25th',
+      // Foreground value now handled through unified config
       metadataValues: { rankNameDetail: 'Gold I', lastUpdated: new Date().toISOString() }
     },
     // Scenario 19: Cluster2 receives "Generic Participation" from TheNexusHub
@@ -611,28 +596,15 @@ export async function seedBadgeInstances(prisma: PrismaClient) {
               ? true : false),
         message: instanceEntry.message,
         revokedAt: instanceEntry.revokedAt,
-        // Legacy fields
+        // Non-legacy visual overrides
         overrideBadgeName: instanceEntry.overrideBadgeName,
         overrideSubtitle: instanceEntry.overrideSubtitle,
         overrideOuterShape: instanceEntry.overrideOuterShape,
-        overrideBorderColor: instanceEntry.overrideBorderColor,
-        overrideBackgroundType: instanceEntry.overrideBackgroundType,
-        overrideBackgroundValue: instanceEntry.overrideBackgroundValue,
-        overrideForegroundType: instanceEntry.overrideForegroundType,
-        overrideForegroundValue: instanceEntry.overrideForegroundValue,
-        overrideForegroundColor: instanceEntry.overrideForegroundColor,
-        overrideTextFont: instanceEntry.overrideTextFont,
-        overrideTextSize: instanceEntry.overrideTextSize,
         overrideDisplayDescription: instanceEntry.overrideDisplayDescription,
         // New unified config objects
-        overrideBorderConfig: instanceEntry.overrideBorderConfig || 
-          (instanceEntry.overrideBorderColor ? createSimpleColorConfig(instanceEntry.overrideBorderColor) : null),
-        overrideBackgroundConfig: instanceEntry.overrideBackgroundConfig || 
-          (instanceEntry.overrideBackgroundType && instanceEntry.overrideBackgroundValue 
-            ? convertLegacyBackground(instanceEntry.overrideBackgroundType, instanceEntry.overrideBackgroundValue)
-            : null),
-        overrideForegroundConfig: instanceEntry.overrideForegroundConfig || 
-          (instanceEntry.overrideForegroundColor ? createSimpleColorConfig(instanceEntry.overrideForegroundColor) : null),
+        overrideBorderConfig: instanceEntry.overrideBorderConfig,
+        overrideBackgroundConfig: instanceEntry.overrideBackgroundConfig,
+        overrideForegroundConfig: instanceEntry.overrideForegroundConfig,
         // Measure fields
         measureValue: instanceEntry.measureValue,
         overrideMeasureBest: instanceEntry.overrideMeasureBest,

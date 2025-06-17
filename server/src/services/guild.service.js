@@ -152,12 +152,9 @@ class GuildService {
                     overrideBadgeName: true,
                     overrideSubtitle: true,
                     overrideOuterShape: true,
-                    overrideBorderColor: true,
-                    overrideBackgroundType: true,
-                    overrideBackgroundValue: true,
-                    overrideForegroundType: true,
-                    overrideForegroundValue: true,
-                    overrideForegroundColor: true,
+                    overrideBorderConfig: true,
+                    overrideBackgroundConfig: true,
+                    overrideForegroundConfig: true,
                     overrideDisplayDescription: true,
                     template: {
                       select: {
@@ -166,12 +163,9 @@ class GuildService {
                         defaultBadgeName: true,
                         defaultSubtitleText: true,
                         defaultOuterShape: true,
-                        defaultBorderColor: true,
-                        defaultBackgroundType: true,
-                        defaultBackgroundValue: true,
-                        defaultForegroundType: true,
-                        defaultForegroundValue: true,
-                        defaultForegroundColor: true,
+                        defaultBorderConfig: true,
+                        defaultBackgroundConfig: true,
+                        defaultForegroundConfig: true,
                         defaultDisplayDescription: true,
                       }
                     }
@@ -246,23 +240,55 @@ class GuildService {
       const badgeProcessingPromises = guildData.badgeCase.badges.map(async (guildBadgeItem) => {
         const instance = guildBadgeItem.badge;
         const template = instance.template;
-        const resolveProp = (instanceProp, templateProp) => instance[instanceProp] !== null && instance[instanceProp] !== undefined ? instance[instanceProp] : template[templateProp];
+        // Get unified config objects (config-only approach)
+        const borderConfig = instance.overrideBorderConfig || template.defaultBorderConfig;
+        const backgroundConfig = instance.overrideBackgroundConfig || template.defaultBackgroundConfig;
+        const foregroundConfig = instance.overrideForegroundConfig || template.defaultForegroundConfig;
         
-        let finalForegroundValue = resolveProp('overrideForegroundValue', 'defaultForegroundValue');
-        const finalForegroundType = resolveProp('overrideForegroundType', 'defaultForegroundType') || 'TEXT';
-
-        if (finalForegroundType === 'SYSTEM_ICON' && finalForegroundValue) {
-          console.log(`[getGuildById] Attempting to find SystemIcon with name: "${finalForegroundValue}"`); // DEBUG LOG
+        // Extract colors from configs
+        const { extractColor } = require('../utils/colorConfig');
+        let borderColor = extractColor(borderConfig, '#000000');
+        
+        // For tiered badges, enforce tier colors (ignore config overrides)
+        const tierBorderColors = {
+          'GOLD': '#FFD700',
+          'SILVER': '#C0C0C0',
+          'BRONZE': '#CD7F32'
+        };
+        if (template.inherentTier && tierBorderColors[template.inherentTier]) {
+          borderColor = tierBorderColors[template.inherentTier];
+        }
+        
+        // Derive foreground type and value from config for backward compatibility
+        let foregroundType = 'TEXT';
+        let foregroundValue = '';
+        if (foregroundConfig) {
+          switch (foregroundConfig.type) {
+            case 'simple-color':
+              foregroundType = 'TEXT';
+              foregroundValue = template.defaultBadgeName || '';
+              break;
+            case 'static-image-asset':
+              foregroundType = 'UPLOADED_ICON';
+              foregroundValue = foregroundConfig.url || '';
+              break;
+            case 'system-icon':
+              foregroundType = 'SYSTEM_ICON';
+              foregroundValue = foregroundConfig.iconName || 'Shield';
+              break;
+          }
+        }
+        
+        // Load system icon SVG if needed
+        if (foregroundType === 'SYSTEM_ICON' && foregroundValue) {
           const systemIcon = await prisma.systemIcon.findUnique({
-            where: { name: finalForegroundValue }, 
+            where: { name: foregroundValue }, 
             select: { svgContent: true }
           });
           if (systemIcon && systemIcon.svgContent) {
-            console.log(`[getGuildById] Found SystemIcon "${finalForegroundValue}". Has svgContent: true`); // DEBUG LOG
-            finalForegroundValue = systemIcon.svgContent;
+            foregroundValue = systemIcon.svgContent;
           } else {
-            console.log(`[getGuildById] SystemIcon NOT FOUND or no svgContent for name: "${finalForegroundValue}"`); // DEBUG LOG
-            finalForegroundValue = '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/></svg>';
+            foregroundValue = '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/></svg>';
           }
         }
 
@@ -271,16 +297,25 @@ class GuildService {
           displayOrder: guildBadgeItem.displayOrder,
           addedAt: guildBadgeItem.addedAt,
           message: instance.message,
-          name: resolveProp('overrideBadgeName', 'defaultBadgeName') || 'Unnamed Badge',
-          subtitle: resolveProp('overrideSubtitle', 'defaultSubtitleText'),
-          shape: resolveProp('overrideOuterShape', 'defaultOuterShape') || 'CIRCLE',
-          borderColor: resolveProp('overrideBorderColor', 'defaultBorderColor') || '#000000',
-          backgroundType: resolveProp('overrideBackgroundType', 'defaultBackgroundType') || 'SOLID_COLOR',
-          backgroundValue: resolveProp('overrideBackgroundValue', 'defaultBackgroundValue') || '#dddddd',
-          foregroundType: finalForegroundType,
-          foregroundValue: finalForegroundValue,
-          foregroundColor: resolveProp('overrideForegroundColor', 'defaultForegroundColor'),
-          description: resolveProp('overrideDisplayDescription', 'defaultDisplayDescription'),
+          name: instance.overrideBadgeName || template.defaultBadgeName,
+          subtitle: instance.overrideSubtitle || template.defaultSubtitleText,
+          shape: instance.overrideOuterShape || template.defaultOuterShape,
+          
+          // Config objects (primary)
+          borderConfig: borderConfig,
+          backgroundConfig: backgroundConfig,
+          foregroundConfig: foregroundConfig,
+          
+          // Derived display values
+          borderColor: borderColor,
+          foregroundColor: extractColor(foregroundConfig, '#FFFFFF'),
+          
+          // Legacy fields for compatibility
+          foregroundType: foregroundType,
+          foregroundValue: foregroundValue,
+          
+          description: instance.overrideDisplayDescription || template.defaultDisplayDescription,
+          tier: template.inherentTier,
           templateSlug: template.templateSlug
         };
       });
@@ -386,12 +421,9 @@ class GuildService {
                   overrideBadgeName: true,
                   overrideSubtitle: true,
                   overrideOuterShape: true,
-                  overrideBorderColor: true,
-                  overrideBackgroundType: true,
-                  overrideBackgroundValue: true,
-                  overrideForegroundType: true,
-                  overrideForegroundValue: true,
-                  overrideForegroundColor: true,
+                  overrideBorderConfig: true,
+                  overrideBackgroundConfig: true,
+                  overrideForegroundConfig: true,
                   overrideDisplayDescription: true,
                   template: {
                     select: {
@@ -400,12 +432,9 @@ class GuildService {
                       defaultBadgeName: true,
                       defaultSubtitleText: true,
                       defaultOuterShape: true,
-                      defaultBorderColor: true,
-                      defaultBackgroundType: true,
-                      defaultBackgroundValue: true,
-                      defaultForegroundType: true,
-                      defaultForegroundValue: true,
-                      defaultForegroundColor: true,
+                      defaultBorderConfig: true,
+                      defaultBackgroundConfig: true,
+                      defaultForegroundConfig: true,
                       defaultDisplayDescription: true,
                     }
                   }
@@ -486,41 +515,24 @@ class GuildService {
       const badgeProcessingPromises = guildData.badgeCase.badges.map(async (guildBadgeItem) => {
         const instance = guildBadgeItem.badge;
         const template = instance.template;
-        const resolveProp = (instanceProp, templateProp) => instance[instanceProp] !== null && instance[instanceProp] !== undefined ? instance[instanceProp] : template[templateProp];
+        // Import badge service for display props processing
+        const badgeService = require('./badge.service');
         
-        let finalForegroundValue = resolveProp('overrideForegroundValue', 'defaultForegroundValue');
-        const finalForegroundType = resolveProp('overrideForegroundType', 'defaultForegroundType') || 'TEXT';
-
-        if (finalForegroundType === 'SYSTEM_ICON' && finalForegroundValue) {
-          console.log(`[getGuildByIdentifier] Attempting to find SystemIcon with name: "${finalForegroundValue}"`); // DEBUG LOG
-          const systemIcon = await prisma.systemIcon.findUnique({
-            where: { name: finalForegroundValue }, 
-            select: { svgContent: true }
-          });
-          if (systemIcon && systemIcon.svgContent) {
-            console.log(`[getGuildByIdentifier] Found SystemIcon "${finalForegroundValue}". Has svgContent: true`); // DEBUG LOG
-            finalForegroundValue = systemIcon.svgContent;
-          } else {
-            console.log(`[getGuildByIdentifier] SystemIcon NOT FOUND or no svgContent for name: "${finalForegroundValue}"`); // DEBUG LOG
-            finalForegroundValue = '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/></svg>';
-          }
-        }
-
+        // Create a minimal badge instance object for display props processing
+        const badgeInstance = {
+          ...instance,
+          template: template
+        };
+        
+        // Use the badge service's display props method to get consistent formatting
+        const displayProps = badgeService.getBadgeDisplayProps(badgeInstance);
+        
         return {
           instanceId: instance.id,
           displayOrder: guildBadgeItem.displayOrder,
           addedAt: guildBadgeItem.addedAt,
           message: instance.message,
-          name: resolveProp('overrideBadgeName', 'defaultBadgeName') || 'Unnamed Badge',
-          subtitle: resolveProp('overrideSubtitle', 'defaultSubtitleText'),
-          shape: resolveProp('overrideOuterShape', 'defaultOuterShape') || 'CIRCLE',
-          borderColor: resolveProp('overrideBorderColor', 'defaultBorderColor') || '#000000',
-          backgroundType: resolveProp('overrideBackgroundType', 'defaultBackgroundType') || 'SOLID_COLOR',
-          backgroundValue: resolveProp('overrideBackgroundValue', 'defaultBackgroundValue') || '#dddddd',
-          foregroundType: finalForegroundType,
-          foregroundValue: finalForegroundValue,
-          foregroundColor: resolveProp('overrideForegroundColor', 'defaultForegroundColor'),
-          description: resolveProp('overrideDisplayDescription', 'defaultDisplayDescription'),
+          ...displayProps,
           templateSlug: template.templateSlug
         };
       });

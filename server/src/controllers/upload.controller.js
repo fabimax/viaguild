@@ -1,9 +1,45 @@
+const { PrismaClient } = require('@prisma/client');
 const r2Service = require('../services/r2.service.js');
+
+const prisma = new PrismaClient();
 
 /**
  * Controller for handling file uploads to R2 storage
  */
 const uploadController = {
+  /**
+   * Get asset URL by ID
+   * GET /api/assets/:assetId
+   */
+  async getAssetUrl(req, res) {
+    try {
+      const { assetId } = req.params;
+      console.log('DEBUG: getAssetUrl called with assetId:', assetId);
+      
+      const asset = await prisma.uploadedAsset.findUnique({
+        where: { id: assetId },
+        select: { hostedUrl: true, status: true }
+      });
+      
+      console.log('DEBUG: found asset:', asset);
+      
+      if (!asset) {
+        console.log('DEBUG: Asset not found in database');
+        return res.status(404).json({ error: 'Asset not found' });
+      }
+      
+      if (asset.status === 'DELETED') {
+        console.log('DEBUG: Asset is deleted');
+        return res.status(410).json({ error: 'Asset has been deleted' });
+      }
+      
+      console.log('DEBUG: returning hostedUrl:', asset.hostedUrl);
+      res.json({ hostedUrl: asset.hostedUrl });
+    } catch (error) {
+      console.error('Error fetching asset URL:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  },
   /**
    * Upload user avatar
    * Replaces the old Base64 avatar system

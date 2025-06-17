@@ -50,9 +50,23 @@ const setElementColor = (element, colorType, colorValue) => {
       `${colorType}:${colorValue}`
     );
     element.setAttribute('style', updatedStyle);
+    // Remove conflicting direct attribute to prevent CSS specificity issues
+    element.removeAttribute(colorType);
   } else {
-    // Set as direct attribute
+    // Set as direct attribute and remove any conflicting style
     element.setAttribute(colorType, colorValue);
+    // Remove from style attribute if it exists
+    if (style && style.includes(`${colorType}:`)) {
+      const cleanedStyle = style.replace(
+        new RegExp(`${colorType}\\s*:\\s*[^;]+;?`, 'i'),
+        ''
+      ).replace(/;+/g, ';').replace(/^;|;$/g, '');
+      if (cleanedStyle) {
+        element.setAttribute('style', cleanedStyle);
+      } else {
+        element.removeAttribute('style');
+      }
+    }
   }
 };
 
