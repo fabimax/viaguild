@@ -5,6 +5,7 @@ import BadgeNavigation from '../components/BadgeNavigation';
 import BadgeDisplay from '../components/guilds/BadgeDisplay';
 import BadgeIconUpload from '../components/BadgeIconUpload';
 import BadgeBackgroundUpload from '../components/BadgeBackgroundUpload';
+import SvgColorCustomization from '../components/SvgColorCustomization';
 import SystemIconService from '../services/systemIcon.service';
 import badgeService from '../services/badgeService';
 import { 
@@ -13,6 +14,7 @@ import {
   createElementPathConfig 
 } from '../utils/colorConfig';
 import { applySvgColorTransform } from '../utils/svgColorTransform';
+import { buildElementColorMap } from '../utils/svgColorAnalysis';
 import './BadgeBuilderPage.css';
 
 // Enums for UI state management only
@@ -70,6 +72,8 @@ const BadgeTemplateCreatePage = () => {
   const [displayableForegroundSvg, setDisplayableForegroundSvg] = useState(null);
   const [uploadedIconSvg, setUploadedIconSvg] = useState(null);
   const [iconSvgColorData, setIconSvgColorData] = useState(null);
+  const [systemIconColorData, setSystemIconColorData] = useState(null);
+  const [systemIconName, setSystemIconName] = useState(null); // Store the original icon name
   const [uploadedBackgroundUrl, setUploadedBackgroundUrl] = useState(null);
   const [slugWasIncremented, setSlugWasIncremented] = useState(false);
   const [existingTemplateSlugs, setExistingTemplateSlugs] = useState([]);
@@ -146,14 +150,42 @@ const BadgeTemplateCreatePage = () => {
 
   // Fetch system icon SVG for preview
   useEffect(() => {
-    if (template.defaultForegroundType === ForegroundContentType.SYSTEM_ICON && template.defaultForegroundValue) {
+    if (template.defaultForegroundType === ForegroundContentType.SYSTEM_ICON && 
+        template.defaultForegroundValue && 
+        !template.defaultForegroundValue.startsWith('upload://')) {
+      // Store the original icon name
+      setSystemIconName(template.defaultForegroundValue);
+      
       SystemIconService.getSystemIconSvg(template.defaultForegroundValue)
-        .then(setDisplayableForegroundSvg)
+        .then(svgContent => {
+          // Analyze system icon for color customization
+          const colorMapResult = buildElementColorMap(svgContent);
+          if (colorMapResult && colorMapResult.elementColorMap) {
+            setSystemIconColorData({
+              elementColorMap: colorMapResult.elementColorMap
+            });
+            // Set initial displayable SVG (will be updated with transformations below)
+            setDisplayableForegroundSvg(svgContent);
+          } else {
+            setSystemIconColorData(null);
+            setDisplayableForegroundSvg(svgContent);
+          }
+        })
         .catch(err => {
           console.error('Failed to fetch system icon:', err);
           setDisplayableForegroundSvg('<svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2L2 7v10c0 5.55 3.84 9.95 9 11 5.16-1.05 9-5.45 9-11V7l-10-5z"/></svg>');
+          setSystemIconColorData(null);
         });
-    } else if (template.defaultForegroundType === ForegroundContentType.UPLOADED_ICON && uploadedIconSvg) {
+    } else {
+      // Clear system icon data when switching away from system icons
+      setSystemIconColorData(null);
+      setSystemIconName(null);
+      if (template.defaultForegroundType !== ForegroundContentType.SYSTEM_ICON) {
+        setDisplayableForegroundSvg(null);
+      }
+    }
+    
+    if (template.defaultForegroundType === ForegroundContentType.UPLOADED_ICON && uploadedIconSvg) {
       // Apply color transformations if we have color data
       if (iconSvgColorData && iconSvgColorData.elementColorMap) {
         const transformedSvg = applySvgColorTransform(uploadedIconSvg, {
@@ -169,6 +201,28 @@ const BadgeTemplateCreatePage = () => {
       setDisplayableForegroundSvg(null);
     }
   }, [template.defaultForegroundType, template.defaultForegroundValue, uploadedIconSvg, iconSvgColorData]);
+
+  // Apply system icon color transformations when color data changes
+  useEffect(() => {
+    if (template.defaultForegroundType === ForegroundContentType.SYSTEM_ICON && 
+        systemIconName && 
+        systemIconColorData && 
+        systemIconColorData.elementColorMap) {
+      // Re-fetch the original SVG using the stored icon name and apply transformations
+      SystemIconService.getSystemIconSvg(systemIconName)
+        .then(originalSvg => {
+          const transformedSvg = applySvgColorTransform(originalSvg, {
+            type: 'element-path',
+            version: 1,
+            mappings: systemIconColorData.elementColorMap
+          });
+          setDisplayableForegroundSvg(transformedSvg);
+        })
+        .catch(err => {
+          console.error('Failed to apply system icon color transformations:', err);
+        });
+    }
+  }, [template.defaultForegroundType, systemIconName, systemIconColorData]);
 
   // Reset foregroundColor to appropriate default when foregroundType changes
   useEffect(() => {
@@ -189,6 +243,22 @@ const BadgeTemplateCreatePage = () => {
       }
       return prev;
     });
+
+    // Clear state when switching between icon types
+    if (newType === ForegroundContentType.TEXT) {
+      setDisplayableForegroundSvg(null);
+      setIconSvgColorData(null);
+      setSystemIconColorData(null);
+      setSystemIconName(null);
+    } else if (newType === ForegroundContentType.SYSTEM_ICON) {
+      // When switching to system icon, clear uploaded icon state
+      setIconSvgColorData(null);
+      setUploadedIconSvg(null);
+    } else if (newType === ForegroundContentType.UPLOADED_ICON) {
+      // When switching to uploaded icon, clear system icon state
+      setSystemIconColorData(null);
+      setSystemIconName(null);
+    }
   }, [template.defaultForegroundType]);
 
   // Reset foregroundValue to appropriate default when foregroundType changes
@@ -296,12 +366,20 @@ const BadgeTemplateCreatePage = () => {
           color: template.defaultForegroundColor,
         };
       case ForegroundContentType.SYSTEM_ICON:
-        return {
-          type: 'system-icon',
-          version: 1,
-          value: template.defaultForegroundValue, // The icon name
-          color: template.defaultForegroundColor,
-        };
+        // Use advanced color mapping if available, otherwise simple color
+        if (systemIconColorData && systemIconColorData.elementColorMap) {
+          return createElementPathConfig(
+            template.defaultForegroundValue, // The icon name
+            systemIconColorData.elementColorMap
+          );
+        } else {
+          return {
+            type: 'system-icon',
+            version: 1,
+            value: template.defaultForegroundValue, // The icon name
+            color: template.defaultForegroundColor,
+          };
+        }
       case ForegroundContentType.UPLOADED_ICON:
         if (template.defaultForegroundValue?.startsWith('upload://')) {
           if (iconSvgColorData && iconSvgColorData.elementColorMap && Object.keys(iconSvgColorData.elementColorMap).length > 0) {
@@ -588,19 +666,23 @@ const BadgeTemplateCreatePage = () => {
     // For rendering - Let BadgeDisplay handle SVG fetching
     foregroundType: template.defaultForegroundType,
     foregroundValue: template.defaultForegroundType === ForegroundContentType.UPLOADED_ICON
-      ? displayableForegroundSvg
-      : template.defaultForegroundValue,
+      ? (displayableForegroundSvg || template.defaultForegroundValue) // Use transformed SVG if available, otherwise upload reference
+      : systemIconName || template.defaultForegroundValue, // Always use the original icon name for system icons
     
     // Config objects for preview
     borderConfig: createSimpleColorConfig(template.defaultBorderColor),
     backgroundConfig: template.defaultBackgroundType === BackgroundContentType.HOSTED_IMAGE
       ? createHostedAssetConfig(uploadedBackgroundUrl || template.defaultBackgroundValue)
       : createSimpleColorConfig(template.defaultBackgroundValue),
-    foregroundConfig: (iconSvgColorData && iconSvgColorData.elementColorMap && Object.keys(iconSvgColorData.elementColorMap).length > 0)
-      ? createElementPathConfig(iconSvgColorData.elementColorMap)
-      : createSimpleColorConfig(template.defaultForegroundType === ForegroundContentType.UPLOADED_ICON 
-          ? '#000000' 
-          : template.defaultForegroundColor),
+    foregroundConfig: (
+      (iconSvgColorData && iconSvgColorData.elementColorMap && Object.keys(iconSvgColorData.elementColorMap).length > 0)
+        ? createElementPathConfig(iconSvgColorData.elementColorMap)
+        : (systemIconColorData && systemIconColorData.elementColorMap && Object.keys(systemIconColorData.elementColorMap).length > 0)
+          ? createElementPathConfig(systemIconColorData.elementColorMap) 
+          : createSimpleColorConfig(template.defaultForegroundType === ForegroundContentType.UPLOADED_ICON 
+              ? '#000000' 
+              : template.defaultForegroundColor)
+    ),
     
     foregroundScale: 100
   };
@@ -855,8 +937,8 @@ const BadgeTemplateCreatePage = () => {
                   )}
                 </div>
 
-                {/* Only show general foreground color if not using uploaded icon with custom color controls */}
-                {!(template.defaultForegroundType === ForegroundContentType.UPLOADED_ICON && iconSvgColorData && iconSvgColorData.colorSlots && iconSvgColorData.colorSlots.length > 0) && (
+                {/* Only show simple foreground color picker for TEXT type */}
+                {template.defaultForegroundType === ForegroundContentType.TEXT && (
                   <div className="control-group">
                     <label htmlFor="defaultForegroundColor">Foreground Color:</label>
                     <input
@@ -867,6 +949,21 @@ const BadgeTemplateCreatePage = () => {
                       onChange={handleInputChange}
                     />
                   </div>
+                )}
+                
+                {/* System Icon Color Customization */}
+                {template.defaultForegroundType === ForegroundContentType.SYSTEM_ICON && systemIconColorData && systemIconColorData.elementColorMap && Object.keys(systemIconColorData.elementColorMap).length > 0 && (
+                  <SvgColorCustomization
+                    title="System Icon Color Customization"
+                    elementColorMap={systemIconColorData.elementColorMap}
+                    onColorChange={(updatedColorMap) => {
+                      setSystemIconColorData(prev => ({
+                        ...prev,
+                        elementColorMap: updatedColorMap,
+                        lastUpdated: Date.now() // Force re-render
+                      }));
+                    }}
+                  />
                 )}
               </div>
 

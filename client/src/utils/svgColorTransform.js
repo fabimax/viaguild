@@ -152,7 +152,9 @@ export const applySvgColorTransform = (svgString, colorConfig) => {
  * @returns {boolean} - True if string appears to be SVG content
  */
 export const isSvgContent = (str) => {
-  return typeof str === 'string' && str.trim().startsWith('<svg');
+  return typeof str === 'string' && 
+         (str.trim().startsWith('<svg') || 
+          (str.includes('<?xml') && str.includes('<svg')));
 };
 
 /**

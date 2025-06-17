@@ -575,7 +575,6 @@ model BadgeTemplate {
   // Future: { type: "pattern", version: 1, patternUrl: string, opacity?: number }
   
   defaultForegroundConfig   Json? // Foreground styling configuration object - will replace defaultForegroundType/Value fields
-  // Structure for simple colors: { type: "simple-color", version: 1, color: "#RRGGBB" | "#RRGGBBAA" }
   // Structure for text: { type: "text", version: 1, value: string, color: "#RRGGBB", font?: string, size?: number, scale?: number }
   // Structure for system icons: { type: "system-icon", version: 1, value: string, color?: "#RRGGBB", scale?: number }
   // Structure for uploaded images: { type: "static-image-asset", version: 1, url: "upload://asset-id", scale?: number }

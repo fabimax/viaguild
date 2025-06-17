@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import DOMPurify from 'dompurify';
+import { buildElementColorMap } from '../utils/svgColorAnalysis';
 
 // Helper to convert a 6-digit hex and an alpha (0-1) to an 8-digit hex (or 6 if alpha is 1)
 const formatHexWithAlpha = (hex, alpha = 1) => {
@@ -134,12 +135,15 @@ class SVGColorCustomizer {
  */
 function BadgeIconUpload({ 
   currentIcon = null,
+  systemIconSvg = null, // New prop for system icon SVG content
+  systemIconName = null, // New prop for system icon name
+  colorOnlyMode = false, // New prop to hide upload UI and only show color controls
   onIconChange,
   onSvgDataChange,
   isLoading = false,
   templateSlug = 'badge-icon'
 }) {
-  const [previewIcon, setPreviewIcon] = useState(currentIcon);
+  const [previewIcon, setPreviewIcon] = useState(null);
   const [error, setError] = useState('');
   const [internalLoading, setInternalLoading] = useState(false);
   const [uploadedUrl, setUploadedUrl] = useState(null);
@@ -207,7 +211,8 @@ function BadgeIconUpload({
         processedSvgContent = svgContent;
         
         // Build color map
-        const elementColorMap = buildElementColorMap(svgContent);
+        const colorMapResult = buildElementColorMap(svgContent);
+        const elementColorMap = colorMapResult?.elementColorMap || {};
         const elementPaths = Object.keys(elementColorMap);
         
         if (elementPaths.length > 0) {
@@ -404,7 +409,8 @@ function BadgeIconUpload({
         .then(svg => {
           setSvgContent(svg);
           // Use element-based color mapping
-          const elementColorMap = buildElementColorMap(svg);
+          const colorMapResult = buildElementColorMap(svg);
+          const elementColorMap = colorMapResult?.elementColorMap || {};
           const elementPaths = Object.keys(elementColorMap);
           
           if (elementPaths.length > 0) {
@@ -449,6 +455,82 @@ function BadgeIconUpload({
         .catch(err => console.error('Error fetching SVG:', err));
     }
   }, [currentIcon]);
+
+  // Handle system icon SVG input
+  useEffect(() => {
+    if (systemIconSvg && systemIconName) {
+      setIsSvg(true);
+      setSvgContent(systemIconSvg);
+      
+      // Use element-based color mapping
+      const colorMapResult = buildElementColorMap(systemIconSvg);
+      const elementColorMap = colorMapResult?.elementColorMap || {};
+      const elementPaths = Object.keys(elementColorMap);
+      
+      if (elementPaths.length > 0) {
+        // Convert to display format for UI
+        const colorSlots = [];
+        elementPaths.forEach(path => {
+          const elementColors = elementColorMap[path];
+          
+          if (elementColors.fill) {
+            colorSlots.push({
+              id: `${path}-fill`,
+              label: `${path} (fill)`,
+              originalColor: elementColors.fill.original,
+              currentColor: elementColors.fill.current,
+              elementPath: path,
+              colorType: 'fill',
+              rgba: svgCustomizer.current.hexToRgba(
+                elementColors.fill.original === 'UNSPECIFIED' ? '#000000FF' : elementColors.fill.original
+              ),
+              hasTransparency: svgCustomizer.current.hasTransparency(
+                elementColors.fill.original === 'UNSPECIFIED' ? '#000000FF' : elementColors.fill.original
+              )
+            });
+          }
+          
+          if (elementColors.stroke) {
+            colorSlots.push({
+              id: `${path}-stroke`,
+              label: `${path} (stroke)`,
+              originalColor: elementColors.stroke.original,
+              currentColor: elementColors.stroke.current,
+              elementPath: path,
+              colorType: 'stroke',
+              rgba: svgCustomizer.current.hexToRgba(
+                elementColors.stroke.original === 'UNSPECIFIED' ? '#000000FF' : elementColors.stroke.original
+              ),
+              hasTransparency: svgCustomizer.current.hasTransparency(
+                elementColors.stroke.original === 'UNSPECIFIED' ? '#000000FF' : elementColors.stroke.original
+              )
+            });
+          }
+        });
+        
+        setSvgColorData({
+          colorSlots,
+          elementColorMap
+        });
+      }
+      
+      // Create preview blob URL
+      const blob = new Blob([systemIconSvg], { type: 'image/svg+xml' });
+      const previewUrl = URL.createObjectURL(blob);
+      setPreviewIcon(previewUrl);
+      
+      // Notify parent component about the system icon
+      onIconChange(`system://${systemIconName}`, systemIconSvg, null);
+    } else {
+      // Clear system icon data when no system icon is provided
+      if (!currentIcon && !uploadedUrl) {
+        setIsSvg(false);
+        setSvgContent('');
+        setSvgColorData(null);
+        setPreviewIcon(null);
+      }
+    }
+  }, [systemIconSvg, systemIconName, onIconChange]);
   
   /**
    * Delete a temporary upload
@@ -634,114 +716,6 @@ function BadgeIconUpload({
     return null;
   };
 
-  /**
-   * Build element-based color map (enhanced: detects all color formats)
-   */
-  const buildElementColorMap = (svgString) => {
-    console.log('Building element color map for SVG:', svgString.substring(0, 200) + '...');
-    
-    // Parse DOM to map colors to elements directly
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(svgString, 'image/svg+xml');
-    const svgElement = doc.documentElement;
-    
-    // Check for parser errors and log them
-    const parserError = svgElement.querySelector('parsererror');
-    if (parserError) {
-      console.error('SVG parsing error:', parserError.textContent);
-      console.error('SVG that failed to parse:', svgString);
-      throw new Error(`Invalid SVG content: ${parserError.textContent}`);
-    }
-    
-    console.log('SVG parsed successfully. Root element:', svgElement.tagName);
-    
-    const colorMap = {};
-    const detectedColors = new Set(); // Track all detected colors
-    const colorableElements = svgElement.querySelectorAll('path, circle, rect, ellipse, polygon, line, polyline');
-    
-    // Helper to get color from element (checks both attributes and style)
-    const getElementColor = (element, colorType) => {
-      // First check direct attribute
-      let color = element.getAttribute(colorType);
-      
-      // If not found, check style attribute
-      if (!color) {
-        const style = element.getAttribute('style');
-        if (style) {
-          const match = style.match(new RegExp(`${colorType}\\s*:\\s*([^;]+)`, 'i'));
-          if (match) {
-            color = match[1].trim();
-          }
-        }
-      }
-      
-      return color;
-    };
-
-    // Helper to process colors for any element
-    const processElementColors = (element, elementPath) => {
-      // Check fill color
-      const fillRaw = getElementColor(element, 'fill');
-      if (fillRaw) {
-        const normalizedFill = parseAndNormalizeColor(fillRaw);
-        if (normalizedFill) {
-          detectedColors.add(normalizedFill);
-          if (!colorMap[elementPath]) colorMap[elementPath] = {};
-          colorMap[elementPath].fill = {
-            original: normalizedFill,
-            current: normalizedFill
-          };
-        }
-      } else if (element.tagName.toLowerCase() === 'path' || element.tagName.toLowerCase() === 'circle' || 
-                 element.tagName.toLowerCase() === 'rect' || element.tagName.toLowerCase() === 'ellipse' ||
-                 element.tagName.toLowerCase() === 'polygon') {
-        // Only add unspecified fill for actual drawing elements that typically need fill
-        if (!colorMap[elementPath]) colorMap[elementPath] = {};
-        colorMap[elementPath].fill = {
-          original: 'UNSPECIFIED', // Special marker for unspecified colors
-          current: '#000000FF', // Default to black
-          isUnspecified: true
-        };
-      }
-      
-      // Check stroke color
-      const strokeRaw = getElementColor(element, 'stroke');
-      if (strokeRaw) {
-        const normalizedStroke = parseAndNormalizeColor(strokeRaw);
-        if (normalizedStroke) {
-          detectedColors.add(normalizedStroke);
-          if (!colorMap[elementPath]) colorMap[elementPath] = {};
-          colorMap[elementPath].stroke = {
-            original: normalizedStroke,
-            current: normalizedStroke
-          };
-        }
-      } else if (element.tagName.toLowerCase() === 'line' || element.tagName.toLowerCase() === 'polyline') {
-        // Only add unspecified stroke for elements that commonly use strokes (excluding path)
-        if (!colorMap[elementPath]) colorMap[elementPath] = {};
-        colorMap[elementPath].stroke = {
-          original: 'UNSPECIFIED', // Special marker for unspecified colors
-          current: '#000000FF', // Default to black
-          isUnspecified: true
-        };
-      }
-    };
-
-    // First check the root SVG element
-    processElementColors(svgElement, 'svg');
-    
-    // Then check all child elements
-    colorableElements.forEach(el => {
-      const elementPath = getElementPath(el, svgElement);
-      processElementColors(el, elementPath);
-    });
-    
-    console.log('Enhanced color detection:');
-    console.log('- Detected colors:', Array.from(detectedColors));
-    console.log('- Element color map:', colorMap);
-    
-    return colorMap;
-  };
 
   /**
    * Sanitize and process SVG
@@ -813,7 +787,8 @@ function BadgeIconUpload({
         const svgText = await readFileAsText(file);
         
         // Build element-based color map from original SVG
-        const elementColorMap = buildElementColorMap(svgText);
+        const colorMapResult = buildElementColorMap(svgText);
+        const elementColorMap = colorMapResult?.elementColorMap || {};
         console.log('Element color map:', elementColorMap);
         console.log('Original SVG:', svgText);
         
@@ -1245,31 +1220,34 @@ function BadgeIconUpload({
                 e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"%3E%3Ctext x="50" y="50" text-anchor="middle" dominant-baseline="middle" font-size="40"%3E?%3C/text%3E%3C/svg%3E';
               }}
             />
-            <button
-              type="button"
-              className="remove-icon-btn"
-              onClick={handleRemoveIcon}
-              aria-label="Remove icon"
-              disabled={isComponentLoading}
-              style={{
-                width: '24px',
-                height: '24px',
-                borderRadius: '50%',
-                border: '1px solid #ccc',
-                background: '#fff',
-                cursor: 'pointer',
-                fontSize: '14px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                lineHeight: '1',
-                padding: '0',
-                color: '#666',
-                marginTop: '0'
-              }}
-            >
-              ✕
-            </button>
+            {/* Only show remove button when not in color-only mode */}
+            {!colorOnlyMode && (
+              <button
+                type="button"
+                className="remove-icon-btn"
+                onClick={handleRemoveIcon}
+                aria-label="Remove icon"
+                disabled={isComponentLoading}
+                style={{
+                  width: '24px',
+                  height: '24px',
+                  borderRadius: '50%',
+                  border: '1px solid #ccc',
+                  background: '#fff',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  lineHeight: '1',
+                  padding: '0',
+                  color: '#666',
+                  marginTop: '0'
+                }}
+              >
+                ✕
+              </button>
+            )}
           </>
         ) : (
           <div className="icon-placeholder" style={{
@@ -1289,51 +1267,34 @@ function BadgeIconUpload({
         )}
       </div>
       
-      <div className="icon-controls">
-        <button
-          type="button"
-          className="upload-icon-btn"
-          onClick={handleUploadClick}
-          disabled={isComponentLoading}
-        >
-          {isComponentLoading ? 'Processing...' : (previewIcon ? 'Change Icon' : 'Upload Icon')}
-        </button>
-        
-        <input
-          type="file"
-          ref={fileInputRef}
-          onChange={handleFileChange}
-          accept="image/jpeg, image/png, image/gif, image/webp, image/svg+xml"
-          className="file-input"
-          disabled={isComponentLoading}
-        />
-      </div>
+      {/* Only show upload controls when not in color-only mode */}
+      {!colorOnlyMode && (
+        <div className="icon-controls">
+          <button
+            type="button"
+            className="upload-icon-btn"
+            onClick={handleUploadClick}
+            disabled={isComponentLoading}
+          >
+            {isComponentLoading ? 'Processing...' : (previewIcon ? 'Change Icon' : 'Upload Icon')}
+          </button>
+          
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileChange}
+            accept="image/jpeg, image/png, image/gif, image/webp, image/svg+xml"
+            className="file-input"
+            disabled={isComponentLoading}
+          />
+        </div>
+      )}
       
       {error && <div className="icon-error">{error}</div>}
       
       {/* SVG Color Customization */}
       {isSvg && (
         <div className="svg-color-controls">
-          <h4>SVG Color (for currentColor elements):</h4>
-          <div className="control-group svg-fallback-color">
-            <label>Foreground Color:</label>
-            <input 
-              type="color" 
-              value={fallbackColor}
-              onChange={(e) => handleFallbackColorChange(e.target.value, fallbackAlpha)}
-              disabled={isComponentLoading}
-            />
-            <input 
-              type="range" 
-              min="0" max="1" step="0.01" 
-              value={fallbackAlpha}
-              onChange={(e) => handleFallbackColorChange(fallbackColor, parseFloat(e.target.value))}
-              disabled={isComponentLoading}
-            />
-            <span>{formatHexWithAlpha(fallbackColor, fallbackAlpha)}</span>
-            <small><br></br>This color fills parts of the icon that don't have a specific color, i.e. currentColor elements.
-             Not all icons have such elements.</small>
-          </div>
           
           {svgColorData && svgColorData.colorSlots.length > 0 && (
             <>

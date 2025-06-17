@@ -12,7 +12,7 @@ function BadgeBackgroundUpload({
   isLoading = false,
   templateSlug = 'badge-background'
 }) {
-  const [previewUrl, setPreviewUrl] = useState(currentBackground);
+  const [previewUrl, setPreviewUrl] = useState(null);
   const [error, setError] = useState('');
   const [internalLoading, setInternalLoading] = useState(false);
   const [uploadedUrl, setUploadedUrl] = useState(null);

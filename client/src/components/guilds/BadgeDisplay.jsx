@@ -68,8 +68,10 @@ const BadgeDisplay = ({ badge }) => {
     
     // If we have a system icon name, fetch its SVG content
     if (type === 'SYSTEM_ICON' && value && !isSvgContent(value)) {
+      console.log('BadgeDisplay fetching system icon:', value);
       SystemIconService.getSystemIconSvg(value)
         .then(svgContent => {
+          console.log('BadgeDisplay fetched SVG for', value, ':', svgContent.substring(0, 100) + '...');
           if (isMounted) setCurrentFg({ type, value: svgContent });
         })
         .catch(err => {
@@ -273,6 +275,12 @@ const BadgeDisplay = ({ badge }) => {
 
   // Apply color transformations to SVG content if needed
   const getTransformedForegroundValue = () => {
+    // For system icons with color config, apply transformations
+    if (foregroundType === 'SYSTEM_ICON' && isSvgContent(foregroundValue)) {
+      if (resolvedForegroundConfig) {
+        return applySvgColorTransform(foregroundValue, resolvedForegroundConfig);
+      }
+    }
     // For uploaded icons with color config, apply transformations
     if (foregroundType === 'UPLOADED_ICON' && isSvgContent(foregroundValue)) {
       if (resolvedForegroundConfig) {
@@ -317,13 +325,14 @@ const BadgeDisplay = ({ badge }) => {
       {foregroundType === 'SYSTEM_ICON' && foregroundValue && (
         <div 
           className="badge-svg-icon"
-          dangerouslySetInnerHTML={{ __html: foregroundValue }}
+          dangerouslySetInnerHTML={{ __html: transformedForegroundValue }}
         />
       )}
       {foregroundType === 'UPLOADED_ICON' && (
-        transformedForegroundValue ? (
-          // Check if it's SVG content (starts with <svg) or an image URL
-          transformedForegroundValue.trim().startsWith('<svg') ? (
+        transformedForegroundValue && transformedForegroundValue.trim() && 
+        (isSvgContent(transformedForegroundValue) || transformedForegroundValue.startsWith('http') || transformedForegroundValue.startsWith('upload://')) ? (
+          // Check if it's SVG content using our robust SVG detection
+          isSvgContent(transformedForegroundValue) ? (
             <div 
               className="badge-svg-icon"
               dangerouslySetInnerHTML={{ __html: transformedForegroundValue }}
