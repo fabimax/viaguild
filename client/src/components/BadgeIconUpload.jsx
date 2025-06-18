@@ -1382,10 +1382,55 @@ function BadgeIconUpload({
             // Then apply element color mappings
             updatedSvg = applyElementMappings(updatedSvg, updatedColorMap);
             
+            // Regenerate colorSlots with updated current colors
+            const updatedColorSlots = [];
+            Object.keys(updatedColorMap).forEach(path => {
+              const elementColors = updatedColorMap[path];
+              
+              if (elementColors.fill) {
+                updatedColorSlots.push({
+                  id: `${path}-fill`,
+                  label: `${path} (fill)`,
+                  originalColor: elementColors.fill.original,
+                  currentColor: elementColors.fill.current, // This will be the updated color
+                  elementPath: path,
+                  colorType: 'fill',
+                  isGradient: elementColors.fill.isGradient || false,
+                  gradientId: elementColors.fill.gradientId || null,
+                  rgba: svgCustomizer.current.hexToRgba(
+                    elementColors.fill.original === 'UNSPECIFIED' ? '#000000FF' : elementColors.fill.original
+                  ),
+                  hasTransparency: svgCustomizer.current.hasTransparency(
+                    elementColors.fill.original === 'UNSPECIFIED' ? '#000000FF' : elementColors.fill.original
+                  )
+                });
+              }
+              
+              if (elementColors.stroke) {
+                updatedColorSlots.push({
+                  id: `${path}-stroke`,
+                  label: `${path} (stroke)`,
+                  originalColor: elementColors.stroke.original,
+                  currentColor: elementColors.stroke.current, // This will be the updated color
+                  elementPath: path,
+                  colorType: 'stroke',
+                  isGradient: elementColors.stroke.isGradient || false,
+                  gradientId: elementColors.stroke.gradientId || null,
+                  rgba: svgCustomizer.current.hexToRgba(
+                    elementColors.stroke.original === 'UNSPECIFIED' ? '#000000FF' : elementColors.stroke.original
+                  ),
+                  hasTransparency: svgCustomizer.current.hasTransparency(
+                    elementColors.stroke.original === 'UNSPECIFIED' ? '#000000FF' : elementColors.stroke.original
+                  )
+                });
+              }
+            });
+
             // Update color data
             setSvgColorData(prev => ({
               ...prev,
               elementColorMap: updatedColorMap,
+              colorSlots: updatedColorSlots, // Update colorSlots with fresh current colors
               gradientDefinitions: updatedGradientDefinitions || prev.gradientDefinitions,
               // Preserve original gradient definitions - never overwrite them
               originalGradientDefinitions: prev.originalGradientDefinitions

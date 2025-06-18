@@ -303,6 +303,36 @@ const SvgColorCustomization = ({
               <span className="color-display-hex8">
                 {allSameColor ? groupCurrentColor : `Mixed colors - expand to edit individually`}
               </span>
+              <button 
+                type="button" 
+                onClick={() => {
+                  // Reset all slots in this group to their original colors
+                  console.log('Resetting group to original colors:', originalColor, 'for', slots.length, 'slots');
+                  
+                  const updatedElementColorMap = { ...elementColorMap };
+                  slots.forEach(slot => {
+                    if (!updatedElementColorMap[slot.elementPath]) {
+                      updatedElementColorMap[slot.elementPath] = {};
+                    }
+                    updatedElementColorMap[slot.elementPath][slot.colorType] = {
+                      original: slot.originalColor,
+                      current: slot.originalColor
+                    };
+                  });
+                  
+                  onColorChange(updatedElementColorMap);
+                }} 
+                disabled={!allSameColor}
+                className="reset-color-btn" 
+                style={{ 
+                  fontSize: '12px', 
+                  padding: '4px 8px', 
+                  marginLeft: '10px',
+                  opacity: allSameColor ? 1 : 0.5
+                }}
+              >
+                Reset Group
+              </button>
             </div>
           )}
         </div>
@@ -387,10 +417,10 @@ const SvgColorCustomization = ({
                       }}
                     />
                     <span className="color-display-hex8">{slot.currentColor}</span>
-                    {slot.isGradientStop && (
-                      <button 
-                        type="button" 
-                        onClick={() => {
+                    <button 
+                      type="button" 
+                      onClick={() => {
+                        if (slot.isGradientStop) {
                           // Reset gradient stop to original color
                           console.log('Resetting gradient stop:', slot.gradientId, 'stop', slot.stopIndex, 'to original:', slot.originalColor);
                           console.log('Current slot details:', slot);
@@ -410,13 +440,25 @@ const SvgColorCustomization = ({
                           
                           // Call onColorChange with gradient update
                           onColorChange(elementColorMap, updatedGradientDefinitions);
-                        }} 
-                        className="reset-color-btn" 
-                        style={{ fontSize: '12px', padding: '2px 8px', marginLeft: '8px' }}
-                      >
-                        Reset
-                      </button>
-                    )}
+                        } else {
+                          // Reset solid color slot to original color
+                          console.log('Resetting solid color slot:', slot.elementPath, slot.colorType, 'to original:', slot.originalColor);
+                          const updatedElementColorMap = { ...elementColorMap };
+                          if (!updatedElementColorMap[slot.elementPath]) {
+                            updatedElementColorMap[slot.elementPath] = {};
+                          }
+                          updatedElementColorMap[slot.elementPath][slot.colorType] = {
+                            original: slot.originalColor,
+                            current: slot.originalColor
+                          };
+                          onColorChange(updatedElementColorMap);
+                        }
+                      }} 
+                      className="reset-color-btn" 
+                      style={{ fontSize: '12px', padding: '2px 8px', marginLeft: '8px' }}
+                    >
+                      Reset
+                    </button>
                   </div>
                 </div>
               );
