@@ -967,12 +967,28 @@ const SvgColorCustomization = ({
             Object.keys(updatedElementColorMap).forEach(path => {
               const element = updatedElementColorMap[path];
               if (element.fill) {
-                // Handle UNSPECIFIED colors - they should default to black
-                element.fill.current = element.fill.original === 'UNSPECIFIED' ? '#000000FF' : element.fill.original;
+                if (element.fill.isGradient && element.fill.gradientId) {
+                  // For gradients, preserve the URL reference
+                  element.fill.current = `url(#${element.fill.gradientId})`;
+                } else if (element.fill.original === 'UNSPECIFIED') {
+                  // Handle UNSPECIFIED colors - they should default to black
+                  element.fill.current = '#000000FF';
+                } else {
+                  // Regular solid colors
+                  element.fill.current = element.fill.original;
+                }
               }
               if (element.stroke) {
-                // Handle UNSPECIFIED colors - they should default to black
-                element.stroke.current = element.stroke.original === 'UNSPECIFIED' ? '#000000FF' : element.stroke.original;
+                if (element.stroke.isGradient && element.stroke.gradientId) {
+                  // For gradients, preserve the URL reference
+                  element.stroke.current = `url(#${element.stroke.gradientId})`;
+                } else if (element.stroke.original === 'UNSPECIFIED') {
+                  // Handle UNSPECIFIED colors - they should default to black
+                  element.stroke.current = '#000000FF';
+                } else {
+                  // Regular solid colors
+                  element.stroke.current = element.stroke.original;
+                }
               }
             });
             
