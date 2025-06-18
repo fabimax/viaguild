@@ -203,11 +203,47 @@ export const applyGradientChanges = (svgString, gradientDefinitions) => {
   const doc = parser.parseFromString(svgString, 'image/svg+xml');
   const svgElement = doc.documentElement;
   
+  // Find or create defs element
+  let defsElement = svgElement.querySelector('defs');
+  if (!defsElement) {
+    defsElement = doc.createElementNS('http://www.w3.org/2000/svg', 'defs');
+    svgElement.insertBefore(defsElement, svgElement.firstChild);
+  }
+  
   // Update each gradient definition
   Object.entries(gradientDefinitions).forEach(([gradientId, gradientDef]) => {
-    const gradientElement = svgElement.querySelector(`#${gradientId}`);
-    if (gradientElement) {
-      // Update stops
+    let gradientElement = svgElement.querySelector(`#${gradientId}`);
+    
+    // If gradient doesn't exist, create it (for cloned gradients)
+    if (!gradientElement && gradientDef.type) {
+      const gradientType = gradientDef.type === 'lineargradient' ? 'linearGradient' : 'radialGradient';
+      gradientElement = doc.createElementNS('http://www.w3.org/2000/svg', gradientType);
+      gradientElement.setAttribute('id', gradientId);
+      
+      // Copy attributes from original gradient if this is a clone
+      if (gradientDef.x1) gradientElement.setAttribute('x1', gradientDef.x1);
+      if (gradientDef.y1) gradientElement.setAttribute('y1', gradientDef.y1);
+      if (gradientDef.x2) gradientElement.setAttribute('x2', gradientDef.x2);
+      if (gradientDef.y2) gradientElement.setAttribute('y2', gradientDef.y2);
+      if (gradientDef.cx) gradientElement.setAttribute('cx', gradientDef.cx);
+      if (gradientDef.cy) gradientElement.setAttribute('cy', gradientDef.cy);
+      if (gradientDef.r) gradientElement.setAttribute('r', gradientDef.r);
+      if (gradientDef.gradientUnits) gradientElement.setAttribute('gradientUnits', gradientDef.gradientUnits);
+      
+      // Create stops
+      gradientDef.stops.forEach(stopDef => {
+        const stopElement = doc.createElementNS('http://www.w3.org/2000/svg', 'stop');
+        stopElement.setAttribute('offset', stopDef.offset);
+        stopElement.setAttribute('stop-color', stopDef.color);
+        if (stopDef.opacity && stopDef.opacity !== '1') {
+          stopElement.setAttribute('stop-opacity', stopDef.opacity);
+        }
+        gradientElement.appendChild(stopElement);
+      });
+      
+      defsElement.appendChild(gradientElement);
+    } else if (gradientElement) {
+      // Update existing gradient stops
       const stops = gradientElement.querySelectorAll('stop');
       gradientDef.stops.forEach((stopDef, index) => {
         if (stops[index]) {
@@ -221,6 +257,19 @@ export const applyGradientChanges = (svgString, gradientDefinitions) => {
           }
         }
       });
+    }
+  });
+  
+  // Clean up gradients that are no longer in gradientDefinitions
+  const allGradients = defsElement.querySelectorAll('linearGradient, radialGradient');
+  allGradients.forEach(gradientEl => {
+    const gradId = gradientEl.getAttribute('id');
+    if (gradId && !gradientDefinitions[gradId]) {
+      // Check if any element still uses this gradient
+      const isUsed = svgElement.querySelector(`[fill="url(#${gradId})"], [stroke="url(#${gradId})"]`);
+      if (!isUsed) {
+        gradientEl.remove();
+      }
     }
   });
   

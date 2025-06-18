@@ -94,46 +94,61 @@ const SvgColorCustomization = ({
       const gradientId = slot.gradientId || (slot.originalColor === 'GRADIENT' ? 
         `GRADIENT_${slot.elementPath}` : slot.originalColor);
       
-      console.log('Processing gradient slot with gradientId:', slot.gradientId);
-      console.log('gradientDefinitions type:', typeof gradientDefinitions);
-      console.log('gradientDefinitions keys:', Object.keys(gradientDefinitions));
-      console.log('slot.gradientId type:', typeof slot.gradientId);
-      console.log('Direct access test:', gradientDefinitions[slot.gradientId]);
-      
       // Try to find the gradient definition using the actual gradient ID from the slot
       const actualGradientId = slot.gradientId; // This contains "linearGrad1", "radialGrad1", etc.
       if (actualGradientId && gradientDefinitions && gradientDefinitions[actualGradientId]) {
-        // Create individual slots for each gradient stop
-        const gradient = gradientDefinitions[actualGradientId];
-        const originalGradient = originalGradientDefinitions[actualGradientId];
-        console.log(`Creating ${gradient.stops.length} stop slots for ${actualGradientId}:`, gradient.stops);
-        gradient.stops.forEach((stop, stopIndex) => {
-          const originalStop = originalGradient?.stops[stopIndex];
-          const stopSlot = {
-            id: `${slot.id}-stop-${stopIndex}`,
-            label: `${gradientId} - Stop ${stopIndex + 1}`,
-            originalColor: originalStop?.color || stop.color, // Use original color, fallback to current
-            currentColor: stop.color,
-            elementPath: slot.elementPath,
-            colorType: slot.colorType,
-            isGradientStop: true,
-            gradientId: gradientId,
-            stopIndex: stopIndex,
-            stopOffset: stop.offset,
-            stopOpacity: stop.opacity
+        // Initialize gradient group if not exists
+        if (!gradientGroups[gradientId]) {
+          gradientGroups[gradientId] = {
+            gradientId: actualGradientId,
+            stops: [],
+            elements: [] // Track which elements use this gradient
           };
-          
-          if (!gradientGroups[gradientId]) {
-            gradientGroups[gradientId] = [];
-          }
-          gradientGroups[gradientId].push(stopSlot);
+        }
+        
+        // Add element info
+        gradientGroups[gradientId].elements.push({
+          elementPath: slot.elementPath,
+          colorType: slot.colorType,
+          label: slot.label,
+          slotId: slot.id
         });
+        
+        // Create stop slots only if not already created
+        if (gradientGroups[gradientId].stops.length === 0) {
+          const gradient = gradientDefinitions[actualGradientId];
+          const originalGradient = originalGradientDefinitions[actualGradientId];
+          
+          gradient.stops.forEach((stop, stopIndex) => {
+            const originalStop = originalGradient?.stops[stopIndex];
+            const stopSlot = {
+              id: `${gradientId}-stop-${stopIndex}`,
+              label: `Stop ${stopIndex + 1}`,
+              originalColor: originalStop?.color || stop.color,
+              currentColor: stop.color,
+              isGradientStop: true,
+              gradientId: actualGradientId,
+              stopIndex: stopIndex,
+              stopOffset: stop.offset,
+              stopOpacity: stop.opacity
+            };
+            gradientGroups[gradientId].stops.push(stopSlot);
+          });
+        }
       } else {
         // Fallback for gradients without definitions
         if (!gradientGroups[gradientId]) {
-          gradientGroups[gradientId] = [];
+          gradientGroups[gradientId] = {
+            gradientId: gradientId,
+            stops: [slot],
+            elements: [{
+              elementPath: slot.elementPath,
+              colorType: slot.colorType,
+              label: slot.label,
+              slotId: slot.id
+            }]
+          };
         }
-        gradientGroups[gradientId].push(slot);
       }
     } else {
       // Group solid colors by original color (like BadgeIconUpload does)
@@ -282,10 +297,15 @@ const SvgColorCustomization = ({
   };
 
   // Helper function to render a color group (used for both solid colors and gradients)
-  const renderColorGroup = (originalColor, slots, isGradient = false) => {
+  const renderColorGroup = (originalColor, slots, isGradient = false, gradientGroup = null) => {
     // Handle special unspecified group
     const isUnspecifiedGroup = originalColor === 'UNSPECIFIED_GROUP';
     const displayGroupName = isUnspecifiedGroup ? 'Unspecified (defaults to black)' : originalColor;
+    
+    // Check if this is an unlinked gradient (has a parent gradient it was cloned from)
+    const isUnlinkedGradient = isGradient && gradientGroup && gradientGroup.gradientId && 
+      gradientGroup.gradientId.includes('-') && gradientGroup.gradientId.match(/^(.+)-\w+$/);
+    const parentGradientId = isUnlinkedGradient ? gradientGroup.gradientId.match(/^(.+)-\w+$/)[1] : null;
     
     // For gradients, create a gradient preview; for solid colors, use the original color
     let groupDisplayColor;
@@ -342,8 +362,54 @@ const SvgColorCustomization = ({
               borderRadius: '3px'
             }}></span>
             <label style={{ fontWeight: 'bold' }}>
-              {displayGroupName} - {slots.length} element{slots.length > 1 ? 's' : ''}
+              {displayGroupName}
+              {isGradient && gradientGroup ? (
+                <span> - Used by: {gradientGroup.elements.map(el => el.label.split(' ')[0]).join(', ')}</span>
+              ) : (
+                <span> - {slots.length} element{slots.length > 1 ? 's' : ''}</span>
+              )}
             </label>
+            {isUnlinkedGradient && (
+              <button
+                type="button"
+                onClick={() => {
+                  console.log('Relinking to parent gradient:', parentGradientId);
+                  
+                  // Update the element to use the parent gradient again
+                  const updatedElementColorMap = { ...elementColorMap };
+                  const element = gradientGroup.elements[0]; // Unlinked gradients only have one element
+                  
+                  if (updatedElementColorMap[element.elementPath] && 
+                      updatedElementColorMap[element.elementPath][element.colorType]) {
+                    updatedElementColorMap[element.elementPath][element.colorType] = {
+                      ...updatedElementColorMap[element.elementPath][element.colorType],
+                      gradientId: parentGradientId,
+                      current: `url(#${parentGradientId})`
+                    };
+                  }
+                  
+                  // Optional: Remove the cloned gradient definition to clean up
+                  const updatedGradientDefinitions = { ...gradientDefinitions };
+                  delete updatedGradientDefinitions[gradientGroup.gradientId];
+                  
+                  // Call onColorChange with updated maps
+                  onColorChange(updatedElementColorMap, updatedGradientDefinitions);
+                }}
+                style={{
+                  marginLeft: '10px',
+                  fontSize: '12px',
+                  padding: '2px 8px',
+                  background: '#059669',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '3px',
+                  cursor: 'pointer'
+                }}
+                title={`Relink to ${parentGradientId}`}
+              >
+                Relink
+              </button>
+            )}
           </div>
           
           {isGradient ? (
@@ -457,6 +523,66 @@ const SvgColorCustomization = ({
         
         {isExpanded && (
           <div className="color-group-items" style={{ paddingLeft: '30px', marginTop: '10px' }}>
+            {/* Show element unlink controls for gradients */}
+            {isGradient && gradientGroup && gradientGroup.elements.length > 1 && (
+              <div style={{ marginBottom: '15px', padding: '10px', background: '#f5f5f5', borderRadius: '4px' }}>
+                <h5 style={{ margin: '0 0 10px 0' }}>Unlink Elements</h5>
+                <p style={{ fontSize: '0.9em', color: '#666', margin: '0 0 10px 0' }}>
+                  Unlink an element to edit its gradient independently
+                </p>
+                {gradientGroup.elements.map(element => (
+                  <div key={element.slotId} style={{ marginBottom: '5px' }}>
+                    <span style={{ marginRight: '10px' }}>{element.label}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        console.log('Unlinking element:', element);
+                        
+                        // Generate a new gradient ID for the cloned gradient
+                        const originalGradientId = gradientGroup.gradientId;
+                        const newGradientId = `${originalGradientId}-${element.elementPath.replace(/[^\w]/g, '_')}`;
+                        
+                        // Clone the gradient definition
+                        const updatedGradientDefinitions = { ...gradientDefinitions };
+                        if (gradientDefinitions[originalGradientId]) {
+                          updatedGradientDefinitions[newGradientId] = {
+                            ...gradientDefinitions[originalGradientId],
+                            stops: gradientDefinitions[originalGradientId].stops.map(stop => ({ ...stop }))
+                          };
+                        }
+                        
+                        // Update the element to use the new gradient
+                        const updatedElementColorMap = { ...elementColorMap };
+                        if (updatedElementColorMap[element.elementPath] && 
+                            updatedElementColorMap[element.elementPath][element.colorType]) {
+                          updatedElementColorMap[element.elementPath][element.colorType] = {
+                            ...updatedElementColorMap[element.elementPath][element.colorType],
+                            gradientId: newGradientId,
+                            current: `url(#${newGradientId})`
+                          };
+                        }
+                        
+                        // Call onColorChange with both updated maps
+                        onColorChange(updatedElementColorMap, updatedGradientDefinitions);
+                      }}
+                      style={{
+                        fontSize: '12px',
+                        padding: '2px 8px',
+                        background: '#4f46e5',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '3px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Unlink
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            
+            {/* Gradient stop controls */}
             {slots.map((slot) => {
               const { hex: slotHex, alpha: slotAlpha } = parseColorString(slot.currentColor);
               return (
@@ -618,8 +744,8 @@ const SvgColorCustomization = ({
       {Object.keys(gradientGroups).length > 0 && (
         <div className="svg-color-controls" style={{ marginTop: '20px' }}>
           <h4>Gradient Colors:</h4>
-          {Object.entries(gradientGroups).map(([originalColor, slots]) => 
-            renderColorGroup(originalColor, slots, true)
+          {Object.entries(gradientGroups).map(([originalColor, gradientGroup]) => 
+            renderColorGroup(originalColor, gradientGroup.stops, true, gradientGroup)
           )}
         </div>
       )}

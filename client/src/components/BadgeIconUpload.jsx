@@ -1427,14 +1427,27 @@ function BadgeIconUpload({
             });
 
             // Update color data
-            setSvgColorData(prev => ({
-              ...prev,
-              elementColorMap: updatedColorMap,
-              colorSlots: updatedColorSlots, // Update colorSlots with fresh current colors
-              gradientDefinitions: updatedGradientDefinitions || prev.gradientDefinitions,
-              // Preserve original gradient definitions - never overwrite them
-              originalGradientDefinitions: prev.originalGradientDefinitions
-            }));
+            setSvgColorData(prev => {
+              // If we have new gradients (from cloning), add their originals too
+              let updatedOriginalGradientDefs = prev.originalGradientDefinitions;
+              if (updatedGradientDefinitions) {
+                updatedOriginalGradientDefs = { ...prev.originalGradientDefinitions };
+                Object.keys(updatedGradientDefinitions).forEach(gradId => {
+                  // If this is a new gradient (not in originals), add it
+                  if (!updatedOriginalGradientDefs[gradId]) {
+                    updatedOriginalGradientDefs[gradId] = JSON.parse(JSON.stringify(updatedGradientDefinitions[gradId]));
+                  }
+                });
+              }
+              
+              return {
+                ...prev,
+                elementColorMap: updatedColorMap,
+                colorSlots: updatedColorSlots, // Update colorSlots with fresh current colors
+                gradientDefinitions: updatedGradientDefinitions || prev.gradientDefinitions,
+                originalGradientDefinitions: updatedOriginalGradientDefs
+              };
+            });
             
             // Update preview
             const blob = new Blob([updatedSvg], { type: 'image/svg+xml' });
