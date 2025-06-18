@@ -262,10 +262,12 @@ function BadgeIconUpload({
             }
           });
           
+          const originalGradientDefinitions = JSON.parse(JSON.stringify(gradientDefinitions));
           setSvgColorData({
             colorSlots,
             elementColorMap,
-            gradientDefinitions
+            gradientDefinitions,
+            originalGradientDefinitions
           });
           
           console.log('Setting svgColorData with gradientDefinitions:', gradientDefinitions);
@@ -462,10 +464,12 @@ function BadgeIconUpload({
               }
             });
             
+            const originalGradientDefinitions = JSON.parse(JSON.stringify(gradientDefinitions));
             setSvgColorData({
               colorSlots,
               elementColorMap,
-              gradientDefinitions
+              gradientDefinitions,
+              originalGradientDefinitions
             });
           }
         })
@@ -550,10 +554,12 @@ function BadgeIconUpload({
           }
         });
         
+        const originalGradientDefinitions = JSON.parse(JSON.stringify(gradientDefinitions));
         setSvgColorData({
           colorSlots,
           elementColorMap,
-          gradientDefinitions
+          gradientDefinitions,
+          originalGradientDefinitions
         });
       }
       
@@ -890,10 +896,12 @@ function BadgeIconUpload({
           });
           
           const gradientDefinitions = colorMapResult?.gradientDefinitions || {};
+          const originalGradientDefinitions = JSON.parse(JSON.stringify(gradientDefinitions)); // Deep copy originals
           const colorData = {
             colorSlots,
             elementColorMap, // Store the structured map for API generation
-            gradientDefinitions
+            gradientDefinitions,
+            originalGradientDefinitions
           };
           console.log('File upload setting svgColorData with gradientDefinitions:', gradientDefinitions);
           console.log('colorSlots being set:', colorSlots);
@@ -1358,6 +1366,7 @@ function BadgeIconUpload({
           elementColorMap={svgColorData.elementColorMap}
           colorSlots={svgColorData.colorSlots}
           gradientDefinitions={svgColorData.gradientDefinitions || {}}
+          originalGradientDefinitions={svgColorData.originalGradientDefinitions || {}}
           onColorChange={(updatedColorMap, updatedGradientDefinitions) => {
             console.log('BadgeIconUpload onColorChange called with:', { updatedColorMap, updatedGradientDefinitions });
             if (!svgContent) return;
@@ -1377,7 +1386,9 @@ function BadgeIconUpload({
             setSvgColorData(prev => ({
               ...prev,
               elementColorMap: updatedColorMap,
-              gradientDefinitions: updatedGradientDefinitions || prev.gradientDefinitions
+              gradientDefinitions: updatedGradientDefinitions || prev.gradientDefinitions,
+              // Preserve original gradient definitions - never overwrite them
+              originalGradientDefinitions: prev.originalGradientDefinitions
             }));
             
             // Update preview

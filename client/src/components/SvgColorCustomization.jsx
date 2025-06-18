@@ -39,6 +39,7 @@ const SvgColorCustomization = ({
   elementColorMap, 
   colorSlots: providedColorSlots,
   gradientDefinitions = {},
+  originalGradientDefinitions = {},
   onColorChange 
 }) => {
   const [expandedGroups, setExpandedGroups] = useState({});
@@ -104,12 +105,14 @@ const SvgColorCustomization = ({
       if (actualGradientId && gradientDefinitions && gradientDefinitions[actualGradientId]) {
         // Create individual slots for each gradient stop
         const gradient = gradientDefinitions[actualGradientId];
+        const originalGradient = originalGradientDefinitions[actualGradientId];
         console.log(`Creating ${gradient.stops.length} stop slots for ${actualGradientId}:`, gradient.stops);
         gradient.stops.forEach((stop, stopIndex) => {
+          const originalStop = originalGradient?.stops[stopIndex];
           const stopSlot = {
             id: `${slot.id}-stop-${stopIndex}`,
             label: `${gradientId} - Stop ${stopIndex + 1}`,
-            originalColor: stop.color,
+            originalColor: originalStop?.color || stop.color, // Use original color, fallback to current
             currentColor: stop.color,
             elementPath: slot.elementPath,
             colorType: slot.colorType,
@@ -245,6 +248,39 @@ const SvgColorCustomization = ({
               <span className="color-display-hex8" style={{ marginLeft: '10px' }}>
                 {slots.length} gradient stop{slots.length > 1 ? 's' : ''}
               </span>
+              <button 
+                type="button" 
+                onClick={() => {
+                  // Reset all stops in this gradient to original colors
+                  console.log('Resetting all stops for gradient:', originalColor);
+                  
+                  // Find the gradient ID from the first slot
+                  const firstGradientSlot = slots.find(slot => slot.isGradientStop);
+                  if (firstGradientSlot && firstGradientSlot.gradientId) {
+                    const gradientId = firstGradientSlot.gradientId;
+                    
+                    // Create updated gradient definitions with all original colors
+                    const updatedGradientDefinitions = { ...gradientDefinitions };
+                    const originalGradient = originalGradientDefinitions[gradientId];
+                    if (updatedGradientDefinitions[gradientId] && originalGradient) {
+                      updatedGradientDefinitions[gradientId] = {
+                        ...updatedGradientDefinitions[gradientId],
+                        stops: updatedGradientDefinitions[gradientId].stops.map((stop, idx) => ({
+                          ...stop,
+                          color: originalGradient.stops[idx]?.color || stop.color
+                        }))
+                      };
+                    }
+                    
+                    // Call onColorChange with gradient update
+                    onColorChange(elementColorMap, updatedGradientDefinitions);
+                  }
+                }} 
+                className="reset-color-btn" 
+                style={{ fontSize: '12px', padding: '4px 8px', marginLeft: '10px' }}
+              >
+                Reset All Stops
+              </button>
             </div>
           ) : (
             // For solid colors, show regular color picker
@@ -351,6 +387,36 @@ const SvgColorCustomization = ({
                       }}
                     />
                     <span className="color-display-hex8">{slot.currentColor}</span>
+                    {slot.isGradientStop && (
+                      <button 
+                        type="button" 
+                        onClick={() => {
+                          // Reset gradient stop to original color
+                          console.log('Resetting gradient stop:', slot.gradientId, 'stop', slot.stopIndex, 'to original:', slot.originalColor);
+                          console.log('Current slot details:', slot);
+                          
+                          // Create updated gradient definitions with original color
+                          const updatedGradientDefinitions = { ...gradientDefinitions };
+                          const originalGradient = originalGradientDefinitions[slot.gradientId];
+                          if (updatedGradientDefinitions[slot.gradientId] && originalGradient) {
+                            const originalStopColor = originalGradient.stops[slot.stopIndex]?.color || slot.originalColor;
+                            updatedGradientDefinitions[slot.gradientId] = {
+                              ...updatedGradientDefinitions[slot.gradientId],
+                              stops: updatedGradientDefinitions[slot.gradientId].stops.map((stop, idx) =>
+                                idx === slot.stopIndex ? { ...stop, color: originalStopColor } : stop
+                              )
+                            };
+                          }
+                          
+                          // Call onColorChange with gradient update
+                          onColorChange(elementColorMap, updatedGradientDefinitions);
+                        }} 
+                        className="reset-color-btn" 
+                        style={{ fontSize: '12px', padding: '2px 8px', marginLeft: '8px' }}
+                      >
+                        Reset
+                      </button>
+                    )}
                   </div>
                 </div>
               );
