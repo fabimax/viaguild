@@ -261,10 +261,24 @@ export const buildElementColorMap = (svgString) => {
       if (id) {
         const stops = [];
         grad.querySelectorAll('stop').forEach(stop => {
+          let stopColor = stop.getAttribute('stop-color');
+          let stopOpacity = stop.getAttribute('stop-opacity');
+          
+          // If attributes not found, check style attribute
+          const style = stop.getAttribute('style');
+          if (style && !stopColor) {
+            const colorMatch = style.match(/stop-color\s*:\s*([^;]+)/);
+            if (colorMatch) stopColor = colorMatch[1].trim();
+          }
+          if (style && !stopOpacity) {
+            const opacityMatch = style.match(/stop-opacity\s*:\s*([^;]+)/);
+            if (opacityMatch) stopOpacity = opacityMatch[1].trim();
+          }
+          
           stops.push({
             offset: stop.getAttribute('offset') || '0%',
-            color: stop.getAttribute('stop-color') || '#000000',
-            opacity: stop.getAttribute('stop-opacity') || '1'
+            color: stopColor || '#000000',
+            opacity: stopOpacity || '1'
           });
         });
         
@@ -281,6 +295,8 @@ export const buildElementColorMap = (svgString) => {
           r: grad.getAttribute('r'),   // for radial gradients
           gradientUnits: grad.getAttribute('gradientUnits')
         };
+        
+        console.log(`Gradient ${id} parsed with ${stops.length} stops:`, stops);
       }
     });
     
@@ -447,6 +463,8 @@ export const buildElementColorMap = (svgString) => {
       processElementColors(el, elementPath);
     });
     
+    
+    console.log('buildElementColorMap returning gradientDefinitions:', gradientDefinitions);
     
     if (Object.keys(colorMap).length > 0) {
       return { 

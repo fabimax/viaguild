@@ -162,7 +162,8 @@ const BadgeTemplateCreatePage = () => {
           const colorMapResult = buildElementColorMap(svgContent);
           if (colorMapResult && colorMapResult.elementColorMap) {
             setSystemIconColorData({
-              elementColorMap: colorMapResult.elementColorMap
+              elementColorMap: colorMapResult.elementColorMap,
+              gradientDefinitions: colorMapResult.gradientDefinitions || {}
             });
             // Set initial displayable SVG (will be updated with transformations below)
             setDisplayableForegroundSvg(svgContent);
@@ -956,6 +957,7 @@ const BadgeTemplateCreatePage = () => {
                   <SvgColorCustomization
                     title="System Icon Color Customization"
                     elementColorMap={systemIconColorData.elementColorMap}
+                    gradientDefinitions={systemIconColorData.gradientDefinitions || {}}
                     onColorChange={(updatedColorMap) => {
                       setSystemIconColorData(prev => ({
                         ...prev,

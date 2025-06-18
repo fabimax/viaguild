@@ -193,6 +193,43 @@ export const applySvgColorTransform = (svgString, colorConfig) => {
 };
 
 /**
+ * Apply gradient changes to SVG
+ * @param {string} svgString - SVG content as string
+ * @param {Object} gradientDefinitions - Updated gradient definitions
+ * @returns {string} - Updated SVG string
+ */
+export const applyGradientChanges = (svgString, gradientDefinitions) => {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(svgString, 'image/svg+xml');
+  const svgElement = doc.documentElement;
+  
+  // Update each gradient definition
+  Object.entries(gradientDefinitions).forEach(([gradientId, gradientDef]) => {
+    const gradientElement = svgElement.querySelector(`#${gradientId}`);
+    if (gradientElement) {
+      // Update stops
+      const stops = gradientElement.querySelectorAll('stop');
+      gradientDef.stops.forEach((stopDef, index) => {
+        if (stops[index]) {
+          // Update stop color
+          stops[index].setAttribute('stop-color', stopDef.color);
+          // Also update style attribute if it has stop-color
+          const style = stops[index].getAttribute('style');
+          if (style && style.includes('stop-color')) {
+            const updatedStyle = style.replace(/stop-color\s*:\s*[^;]+/, `stop-color:${stopDef.color}`);
+            stops[index].setAttribute('style', updatedStyle);
+          }
+        }
+      });
+    }
+  });
+  
+  // Serialize back to string
+  const serializer = new XMLSerializer();
+  return serializer.serializeToString(svgElement);
+};
+
+/**
  * Check if a string is SVG content
  * @param {string} str - String to check
  * @returns {boolean} - True if string appears to be SVG content

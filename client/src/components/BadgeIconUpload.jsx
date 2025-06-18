@@ -2,6 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import DOMPurify from 'dompurify';
 import { buildElementColorMap } from '../utils/svgColorAnalysis';
+import { applyGradientChanges } from '../utils/svgColorTransform';
+import SvgColorCustomization from './SvgColorCustomization';
 
 // Helper to convert a 6-digit hex and an alpha (0-1) to an 8-digit hex (or 6 if alpha is 1)
 const formatHexWithAlpha = (hex, alpha = 1) => {
@@ -213,6 +215,7 @@ function BadgeIconUpload({
         // Build color map
         const colorMapResult = buildElementColorMap(svgContent);
         const elementColorMap = colorMapResult?.elementColorMap || {};
+        const gradientDefinitions = colorMapResult?.gradientDefinitions || {};
         const elementPaths = Object.keys(elementColorMap);
         
         if (elementPaths.length > 0) {
@@ -228,6 +231,8 @@ function BadgeIconUpload({
                 currentColor: elementColors.fill.current,
                 elementPath: path,
                 colorType: 'fill',
+                isGradient: elementColors.fill.isGradient || false,
+                gradientId: elementColors.fill.gradientId || null,
                 rgba: svgCustomizer.current.hexToRgba(
                   elementColors.fill.original === 'UNSPECIFIED' ? '#000000FF' : elementColors.fill.original
                 ),
@@ -245,6 +250,8 @@ function BadgeIconUpload({
                 currentColor: elementColors.stroke.current,
                 elementPath: path,
                 colorType: 'stroke',
+                isGradient: elementColors.stroke.isGradient || false,
+                gradientId: elementColors.stroke.gradientId || null,
                 rgba: svgCustomizer.current.hexToRgba(
                   elementColors.stroke.original === 'UNSPECIFIED' ? '#000000FF' : elementColors.stroke.original
                 ),
@@ -257,7 +264,15 @@ function BadgeIconUpload({
           
           setSvgColorData({
             colorSlots,
-            elementColorMap
+            elementColorMap,
+            gradientDefinitions
+          });
+          
+          console.log('Setting svgColorData with gradientDefinitions:', gradientDefinitions);
+          console.log('Full svgColorData being set:', {
+            colorSlots,
+            elementColorMap,
+            gradientDefinitions
           });
         }
         
@@ -411,6 +426,7 @@ function BadgeIconUpload({
           // Use element-based color mapping
           const colorMapResult = buildElementColorMap(svg);
           const elementColorMap = colorMapResult?.elementColorMap || {};
+          const gradientDefinitions = colorMapResult?.gradientDefinitions || {};
           const elementPaths = Object.keys(elementColorMap);
           
           if (elementPaths.length > 0) {
@@ -448,7 +464,8 @@ function BadgeIconUpload({
             
             setSvgColorData({
               colorSlots,
-              elementColorMap
+              elementColorMap,
+              gradientDefinitions
             });
           }
         })
@@ -465,6 +482,7 @@ function BadgeIconUpload({
       // Use element-based color mapping
       const colorMapResult = buildElementColorMap(systemIconSvg);
       const elementColorMap = colorMapResult?.elementColorMap || {};
+      const gradientDefinitions = colorMapResult?.gradientDefinitions || {};
       const elementPaths = Object.keys(elementColorMap);
       
       if (elementPaths.length > 0) {
@@ -534,7 +552,8 @@ function BadgeIconUpload({
         
         setSvgColorData({
           colorSlots,
-          elementColorMap
+          elementColorMap,
+          gradientDefinitions
         });
       }
       
@@ -837,6 +856,7 @@ function BadgeIconUpload({
           const colorSlots = [];
           elementPaths.forEach(path => {
             const elementColors = elementColorMap[path];
+            console.log('File upload - Processing path:', path, 'colors:', elementColors);
             
             if (elementColors.fill) {
               colorSlots.push({
@@ -846,6 +866,8 @@ function BadgeIconUpload({
                 currentColor: elementColors.fill.current,
                 elementPath: path,
                 colorType: 'fill',
+                isGradient: elementColors.fill.isGradient || false,
+                gradientId: elementColors.fill.gradientId || null,
                 rgba: svgCustomizer.current.hexToRgba(elementColors.fill.original),
                 hasTransparency: svgCustomizer.current.hasTransparency(elementColors.fill.original)
               });
@@ -859,16 +881,23 @@ function BadgeIconUpload({
                 currentColor: elementColors.stroke.current,
                 elementPath: path,
                 colorType: 'stroke',
+                isGradient: elementColors.stroke.isGradient || false,
+                gradientId: elementColors.stroke.gradientId || null,
                 rgba: svgCustomizer.current.hexToRgba(elementColors.stroke.original),
                 hasTransparency: svgCustomizer.current.hasTransparency(elementColors.stroke.original)
               });
             }
           });
           
+          const gradientDefinitions = colorMapResult?.gradientDefinitions || {};
           const colorData = {
             colorSlots,
-            elementColorMap // Store the structured map for API generation
+            elementColorMap, // Store the structured map for API generation
+            gradientDefinitions
           };
+          console.log('File upload setting svgColorData with gradientDefinitions:', gradientDefinitions);
+          console.log('colorSlots being set:', colorSlots);
+          console.log('First slot details:', colorSlots[0]);
           setSvgColorData(colorData);
           onSvgDataChange?.(processedSvg, colorData);
         } else {
@@ -1322,276 +1351,49 @@ function BadgeIconUpload({
       {error && <div className="icon-error">{error}</div>}
       
       {/* SVG Color Customization */}
-      {isSvg && (
-        <div className="svg-color-controls">
-          
-          {svgColorData && svgColorData.colorSlots.length > 0 && (
-            <>
-              <h4>Detected SVG Colors:</h4>
-              {(() => {
-                // Group slots by original color, with special handling for unspecified colors
-                const colorGroups = {};
-                svgColorData.colorSlots.forEach(slot => {
-                  // Group unspecified colors together under a special key
-                  const groupKey = slot.originalColor === 'UNSPECIFIED' ? 'UNSPECIFIED_GROUP' : slot.originalColor;
-                  if (!colorGroups[groupKey]) {
-                    colorGroups[groupKey] = [];
-                  }
-                  colorGroups[groupKey].push(slot);
-                });
-                
-                const toggleGroup = (color) => {
-                  setExpandedGroups(prev => ({
-                    ...prev,
-                    [color]: !prev[color]
-                  }));
-                };
-                
-                const handleGroupColorChange = (originalColor, newHex, newAlpha) => {
-                  if (!svgColorData || !svgContent) return;
-                  const parsedAlpha = parseFloat(newAlpha);
-                  if (isNaN(parsedAlpha)) return;
-                  
-                  const newFormattedColor = formatHexWithAlpha(newHex, parsedAlpha);
-                  const newRgbaFromHexAlpha = svgCustomizer.current.hexToRgba(newFormattedColor);
-                  
-                  // Update all slots with this original color in a single state update
-                  const slotsToUpdate = colorGroups[originalColor];
-                  const updatedSlots = svgColorData.colorSlots.map(slot => {
-                    // Check if this slot should be updated (belongs to this group)
-                    const shouldUpdate = slotsToUpdate.some(groupSlot => groupSlot.id === slot.id);
-                    if (shouldUpdate) {
-                      return {
-                        ...slot,
-                        currentColor: newFormattedColor,
-                        rgba: newRgbaFromHexAlpha,
-                        hasTransparency: parsedAlpha < 1
-                      };
-                    }
-                    return slot;
-                  });
-                  
-                  // Update element color map for SVG processing
-                  const updatedElementColorMap = { ...svgColorData.elementColorMap };
-                  slotsToUpdate.forEach(slot => {
-                    const { elementPath, colorType } = slot;
-                    if (!updatedElementColorMap[elementPath]) {
-                      updatedElementColorMap[elementPath] = {};
-                    }
-                    updatedElementColorMap[elementPath][colorType] = {
-                      original: slot.originalColor,
-                      current: newFormattedColor
-                    };
-                  });
-                  
-                  // Apply mappings to SVG
-                  const updatedSvg = applyElementMappings(svgContent, updatedElementColorMap);
-                  const newColorData = { 
-                    colorSlots: updatedSlots, 
-                    elementColorMap: updatedElementColorMap 
-                  };
-                  
-                  setSvgColorData(newColorData);
-                  
-                  // Update preview
-                  const blob = new Blob([updatedSvg], { type: 'image/svg+xml' });
-                  const newUrl = URL.createObjectURL(blob);
-                  if (previewIcon && previewIcon.startsWith('blob:')) {
-                    URL.revokeObjectURL(previewIcon);
-                  }
-                  setPreviewIcon(newUrl);
-                  
-                  // Keep using the upload reference if we have one
-                  const referenceValue = uploadId ? `upload://${uploadId}` : (uploadedUrl || newUrl);
-                  onIconChange(referenceValue, updatedSvg, uploadedUrl);
-                  onSvgDataChange?.(updatedSvg, newColorData);
-                };
-                
-                const handleResetGroup = (originalColor) => {
-                  if (!svgColorData || !svgContent) return;
-                  
-                  // Reset all slots with this original color in a single state update
-                  const slotsToReset = colorGroups[originalColor];
-                  const updatedSlots = svgColorData.colorSlots.map(slot => {
-                    // Check if this slot should be reset (belongs to this group)
-                    const shouldReset = slotsToReset.some(groupSlot => groupSlot.id === slot.id);
-                    if (shouldReset) {
-                      // For unspecified colors, reset to black instead of the 'UNSPECIFIED' string
-                      const resetColor = slot.originalColor === 'UNSPECIFIED' ? '#000000FF' : slot.originalColor;
-                      return {
-                        ...slot,
-                        currentColor: resetColor,
-                        rgba: svgCustomizer.current.hexToRgba(resetColor),
-                        hasTransparency: svgCustomizer.current.hasTransparency(resetColor)
-                      };
-                    }
-                    return slot;
-                  });
-                  
-                  // Reset element color map
-                  const updatedElementColorMap = { ...svgColorData.elementColorMap };
-                  slotsToReset.forEach(slot => {
-                    const { elementPath, colorType } = slot;
-                    if (updatedElementColorMap[elementPath] && updatedElementColorMap[elementPath][colorType]) {
-                      // For unspecified colors, reset to black instead of the 'UNSPECIFIED' string
-                      const resetColor = slot.originalColor === 'UNSPECIFIED' ? '#000000FF' : slot.originalColor;
-                      updatedElementColorMap[elementPath][colorType].current = resetColor;
-                    }
-                  });
-                  
-                  // Apply mappings to SVG
-                  const updatedSvg = applyElementMappings(svgContent, updatedElementColorMap);
-                  const newColorData = { 
-                    colorSlots: updatedSlots, 
-                    elementColorMap: updatedElementColorMap 
-                  };
-                  
-                  setSvgColorData(newColorData);
-                  
-                  // Update preview
-                  const blob = new Blob([updatedSvg], { type: 'image/svg+xml' });
-                  const newUrl = URL.createObjectURL(blob);
-                  if (previewIcon && previewIcon.startsWith('blob:')) {
-                    URL.revokeObjectURL(previewIcon);
-                  }
-                  setPreviewIcon(newUrl);
-                  
-                  // Keep using the upload reference if we have one
-                  const referenceValue = uploadId ? `upload://${uploadId}` : (uploadedUrl || newUrl);
-                  onIconChange(referenceValue, updatedSvg, uploadedUrl);
-                  onSvgDataChange?.(updatedSvg, newColorData);
-                };
-                
-                return Object.entries(colorGroups).map(([originalColor, slots]) => {
-                  // Handle special unspecified group
-                  const isUnspecifiedGroup = originalColor === 'UNSPECIFIED_GROUP';
-                  const displayGroupName = isUnspecifiedGroup ? 'Unspecified (defaults to black)' : originalColor;
-                  const groupDisplayColor = isUnspecifiedGroup ? '#000000FF' : originalColor;
-                  
-                  // Check if all slots in group have same current color
-                  const allSameColor = slots.every(slot => slot.currentColor === slots[0].currentColor);
-                  
-                  // For group controls, only show unified values when all colors are the same
-                  const groupCurrentColor = allSameColor ? slots[0].currentColor : groupDisplayColor;
-                  const parsedCurrent = parseColorString(groupCurrentColor);
-                  const currentHex = parsedCurrent.hex;
-                  const currentAlpha = parsedCurrent.alpha;
-                  const isExpanded = expandedGroups[originalColor];
-                  
-                  return (
-                    <div key={originalColor} className="color-group" style={{ marginBottom: '15px' }}>
-                      <div className="color-group-header" style={{ marginBottom: '10px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <button 
-                            type="button"
-                            onClick={() => toggleGroup(originalColor)}
-                            style={{
-                              background: '#f0f0f0',
-                              border: '1px solid #ccc',
-                              borderRadius: '3px',
-                              cursor: 'pointer',
-                              fontSize: '16px',
-                              padding: '2px 8px',
-                              minWidth: '30px',
-                              lineHeight: '1',
-                              color: '#4f46e5'
-                            }}
-                            title={isExpanded ? 'Collapse' : 'Expand'}
-                          >
-                            {isExpanded ? '−' : '+'}
-                          </button>
-                          <span style={{
-                            display: 'inline-block',
-                            width: '1.5em',
-                            height: '1.5em',
-                            backgroundColor: groupDisplayColor,
-                            border: '2px solid #ccc',
-                            borderRadius: '3px'
-                          }}></span>
-                          <label style={{ fontWeight: 'bold' }}>
-                            {displayGroupName} - {slots.length} element{slots.length > 1 ? 's' : ''}
-                          </label>
-                        </div>
-                        
-                        <div className="control-group svg-color-control" style={{ marginTop: '8px', paddingLeft: '30px' }}>
-                          <input 
-                            type="color" 
-                            value={allSameColor ? currentHex : '#000000'}
-                            onChange={(e) => handleGroupColorChange(originalColor, e.target.value, currentAlpha)}
-                            disabled={isComponentLoading || !allSameColor}
-                            style={{ opacity: allSameColor ? 1 : 0.5 }}
-                          />
-                          <input 
-                            type="range" 
-                            min="0" max="1" step="0.01" 
-                            value={allSameColor ? currentAlpha : 1}
-                            onChange={(e) => handleGroupColorChange(originalColor, currentHex, parseFloat(e.target.value))}
-                            disabled={isComponentLoading || !allSameColor}
-                            style={{ opacity: allSameColor ? 1 : 0.5 }}
-                          />
-                          <span className="color-display-hex8">
-                            {allSameColor ? groupCurrentColor : `Mixed colors - expand to edit individually`}
-                          </span>
-                          <button 
-                            type="button" 
-                            onClick={() => handleResetGroup(originalColor)} 
-                            className="reset-color-btn" 
-                            disabled={isComponentLoading}
-                          >
-                            Reset All
-                          </button>
-                        </div>
-                      </div>
-                      
-                      {isExpanded && (
-                        <div className="color-group-items" style={{ paddingLeft: '30px', marginTop: '10px' }}>
-                          {slots.map((slot) => {
-                            const slotParsed = parseColorString(slot.currentColor);
-                            const slotHex = slotParsed.hex;
-                            const slotAlpha = slotParsed.alpha;
-                            
-                            return (
-                              <div key={slot.id} className="control-group svg-color-control" style={{ marginBottom: '8px' }}>
-                                <label style={{ fontSize: '14px', color: '#666' }}>
-                                  {slot.label}
-                                </label>
-                                <input 
-                                  type="color" 
-                                  value={slotHex}
-                                  onChange={(e) => handleColorChange(slot.id, e.target.value, slotAlpha)}
-                                  disabled={isComponentLoading}
-                                  style={{ width: '50px', height: '25px' }}
-                                />
-                                <input 
-                                  type="range" 
-                                  min="0" max="1" step="0.01" 
-                                  value={slotAlpha}
-                                  onChange={(e) => handleColorChange(slot.id, slotHex, parseFloat(e.target.value))}
-                                  disabled={isComponentLoading}
-                                  style={{ width: '80px' }}
-                                />
-                                <span style={{ fontSize: '12px' }}>{slot.currentColor}</span>
-                                <button 
-                                  type="button" 
-                                  onClick={() => handleResetColor(slot.id)} 
-                                  className="reset-color-btn" 
-                                  disabled={isComponentLoading}
-                                  style={{ fontSize: '12px', padding: '2px 8px' }}
-                                >
-                                  Reset
-                                </button>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  );
-                });
-              })()}
-            </>
-          )}
-        </div>
+      {isSvg && svgColorData && svgColorData.elementColorMap && (
+        console.log('About to render SvgColorCustomization with svgColorData:', svgColorData),
+        <SvgColorCustomization
+          title="SVG Color Customization"
+          elementColorMap={svgColorData.elementColorMap}
+          colorSlots={svgColorData.colorSlots}
+          gradientDefinitions={svgColorData.gradientDefinitions || {}}
+          onColorChange={(updatedColorMap, updatedGradientDefinitions) => {
+            console.log('BadgeIconUpload onColorChange called with:', { updatedColorMap, updatedGradientDefinitions });
+            if (!svgContent) return;
+            
+            // Apply mappings to SVG - need to handle gradient updates if provided
+            let updatedSvg = svgContent;
+            
+            if (updatedGradientDefinitions) {
+              // Apply gradient changes first
+              updatedSvg = applyGradientChanges(svgContent, updatedGradientDefinitions);
+            }
+            
+            // Then apply element color mappings
+            updatedSvg = applyElementMappings(updatedSvg, updatedColorMap);
+            
+            // Update color data
+            setSvgColorData(prev => ({
+              ...prev,
+              elementColorMap: updatedColorMap,
+              gradientDefinitions: updatedGradientDefinitions || prev.gradientDefinitions
+            }));
+            
+            // Update preview
+            const blob = new Blob([updatedSvg], { type: 'image/svg+xml' });
+            const newUrl = URL.createObjectURL(blob);
+            if (previewIcon && previewIcon.startsWith('blob:')) {
+              URL.revokeObjectURL(previewIcon);
+            }
+            setPreviewIcon(newUrl);
+            
+            // Keep using the upload reference if we have one
+            const referenceValue = uploadId ? `upload://${uploadId}` : (uploadedUrl || newUrl);
+            onIconChange(referenceValue, updatedSvg, uploadedUrl);
+            onSvgDataChange?.(updatedSvg, { ...svgColorData, elementColorMap: updatedColorMap });
+          }}
+        />
       )}
       
       <div className="icon-help">

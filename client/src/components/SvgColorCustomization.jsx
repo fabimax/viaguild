@@ -37,17 +37,24 @@ const formatHexWithAlpha = (hex, alpha = 1) => {
 const SvgColorCustomization = ({ 
   title = "SVG Color Customization",
   elementColorMap, 
+  colorSlots: providedColorSlots,
+  gradientDefinitions = {},
   onColorChange 
 }) => {
   const [expandedGroups, setExpandedGroups] = useState({});
+
+  console.log('SvgColorCustomization received props:', { elementColorMap, gradientDefinitions });
 
   if (!elementColorMap || Object.keys(elementColorMap).length === 0) {
     return null;
   }
 
-  // Convert elementColorMap to colorSlots format (like BadgeIconUpload does)
-  const colorSlots = [];
-  Object.entries(elementColorMap).forEach(([path, colors]) => {
+  // Use provided colorSlots if available, otherwise convert elementColorMap to colorSlots format
+  const colorSlots = providedColorSlots || [];
+  
+  if (!providedColorSlots) {
+    console.log('SvgColorCustomization converting elementColorMap:', elementColorMap);
+    Object.entries(elementColorMap).forEach(([path, colors]) => {
     if (colors.fill) {
       colorSlots.push({
         id: `${path}-fill`,
@@ -74,15 +81,65 @@ const SvgColorCustomization = ({
       });
     }
   });
+  }
 
-  // Group slots by original color (like BadgeIconUpload does)
-  const colorGroups = {};
+  // Separate solid colors from gradients
+  const solidColorGroups = {};
+  const gradientGroups = {};
+  
   colorSlots.forEach(slot => {
-    const groupKey = slot.originalColor === 'UNSPECIFIED' ? 'UNSPECIFIED_GROUP' : slot.originalColor;
-    if (!colorGroups[groupKey]) {
-      colorGroups[groupKey] = [];
+    if (slot.isGradient) {
+      // For gradient slots, we need to extract the gradient ID and create stop slots
+      const gradientId = slot.gradientId || (slot.originalColor === 'GRADIENT' ? 
+        `GRADIENT_${slot.elementPath}` : slot.originalColor);
+      
+      console.log('Processing gradient slot with gradientId:', slot.gradientId);
+      console.log('gradientDefinitions type:', typeof gradientDefinitions);
+      console.log('gradientDefinitions keys:', Object.keys(gradientDefinitions));
+      console.log('slot.gradientId type:', typeof slot.gradientId);
+      console.log('Direct access test:', gradientDefinitions[slot.gradientId]);
+      
+      // Try to find the gradient definition using the actual gradient ID from the slot
+      const actualGradientId = slot.gradientId; // This contains "linearGrad1", "radialGrad1", etc.
+      if (actualGradientId && gradientDefinitions && gradientDefinitions[actualGradientId]) {
+        // Create individual slots for each gradient stop
+        const gradient = gradientDefinitions[actualGradientId];
+        console.log(`Creating ${gradient.stops.length} stop slots for ${actualGradientId}:`, gradient.stops);
+        gradient.stops.forEach((stop, stopIndex) => {
+          const stopSlot = {
+            id: `${slot.id}-stop-${stopIndex}`,
+            label: `${gradientId} - Stop ${stopIndex + 1}`,
+            originalColor: stop.color,
+            currentColor: stop.color,
+            elementPath: slot.elementPath,
+            colorType: slot.colorType,
+            isGradientStop: true,
+            gradientId: gradientId,
+            stopIndex: stopIndex,
+            stopOffset: stop.offset,
+            stopOpacity: stop.opacity
+          };
+          
+          if (!gradientGroups[gradientId]) {
+            gradientGroups[gradientId] = [];
+          }
+          gradientGroups[gradientId].push(stopSlot);
+        });
+      } else {
+        // Fallback for gradients without definitions
+        if (!gradientGroups[gradientId]) {
+          gradientGroups[gradientId] = [];
+        }
+        gradientGroups[gradientId].push(slot);
+      }
+    } else {
+      // Group solid colors by original color (like BadgeIconUpload does)
+      const groupKey = slot.originalColor === 'UNSPECIFIED' ? 'UNSPECIFIED_GROUP' : slot.originalColor;
+      if (!solidColorGroups[groupKey]) {
+        solidColorGroups[groupKey] = [];
+      }
+      solidColorGroups[groupKey].push(slot);
     }
-    colorGroups[groupKey].push(slot);
   });
 
   const toggleGroup = (color) => {
@@ -92,7 +149,7 @@ const SvgColorCustomization = ({
     }));
   };
 
-  const handleGroupColorChange = (originalColor, newHex, newAlpha) => {
+  const handleGroupColorChange = (originalColor, newHex, newAlpha, isGradient = false) => {
     const parsedAlpha = parseFloat(newAlpha);
     if (isNaN(parsedAlpha)) return;
     
@@ -100,7 +157,7 @@ const SvgColorCustomization = ({
     
     // Update element color map
     const updatedElementColorMap = { ...elementColorMap };
-    const slotsToUpdate = colorGroups[originalColor];
+    const slotsToUpdate = isGradient ? gradientGroups[originalColor] : solidColorGroups[originalColor];
     
     slotsToUpdate.forEach(slot => {
       const { elementPath, colorType } = slot;
@@ -116,140 +173,224 @@ const SvgColorCustomization = ({
     onColorChange(updatedElementColorMap);
   };
 
+  // Helper function to render a color group (used for both solid colors and gradients)
+  const renderColorGroup = (originalColor, slots, isGradient = false) => {
+    // Handle special unspecified group
+    const isUnspecifiedGroup = originalColor === 'UNSPECIFIED_GROUP';
+    const displayGroupName = isUnspecifiedGroup ? 'Unspecified (defaults to black)' : originalColor;
+    const groupDisplayColor = isUnspecifiedGroup ? '#000000FF' : originalColor;
+    
+    // Check if all slots in group have same current color
+    const allSameColor = slots.every(slot => slot.currentColor === slots[0].currentColor);
+    
+    // For group controls, only show unified values when all colors are the same
+    const groupCurrentColor = allSameColor ? slots[0].currentColor : groupDisplayColor;
+    const parsedCurrent = parseColorString(groupCurrentColor);
+    const currentHex = parsedCurrent.hex;
+    const currentAlpha = parsedCurrent.alpha;
+    const isExpanded = expandedGroups[originalColor];
+    
+    return (
+      <div key={originalColor} className="color-group" style={{ marginBottom: '15px' }}>
+        <div className="color-group-header" style={{ marginBottom: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <button 
+              type="button"
+              onClick={() => toggleGroup(originalColor)}
+              style={{
+                background: '#f0f0f0',
+                border: '1px solid #ccc',
+                borderRadius: '3px',
+                cursor: 'pointer',
+                fontSize: '16px',
+                padding: '2px 8px',
+                minWidth: '30px',
+                lineHeight: '1',
+                color: '#4f46e5'
+              }}
+              title={isExpanded ? 'Collapse' : 'Expand'}
+            >
+              {isExpanded ? '−' : '+'}
+            </button>
+            <span style={{
+              display: 'inline-block',
+              width: '1.5em',
+              height: '1.5em',
+              backgroundColor: groupDisplayColor,
+              border: '2px solid #ccc',
+              borderRadius: '3px'
+            }}></span>
+            <label style={{ fontWeight: 'bold' }}>
+              {displayGroupName} - {slots.length} element{slots.length > 1 ? 's' : ''}
+            </label>
+          </div>
+          
+          {isGradient ? (
+            // For gradients, show "Edit Gradient" button instead of color picker
+            <div className="control-group svg-color-control" style={{ marginTop: '8px', paddingLeft: '30px' }}>
+              <button 
+                type="button"
+                onClick={() => toggleGroup(originalColor)}
+                style={{
+                  background: '#4f46e5',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  padding: '6px 12px',
+                  cursor: 'pointer'
+                }}
+              >
+                Edit Gradient {isExpanded ? '▲' : '▼'}
+              </button>
+              <span className="color-display-hex8" style={{ marginLeft: '10px' }}>
+                {slots.length} gradient stop{slots.length > 1 ? 's' : ''}
+              </span>
+            </div>
+          ) : (
+            // For solid colors, show regular color picker
+            <div className="control-group svg-color-control" style={{ marginTop: '8px', paddingLeft: '30px' }}>
+              <input 
+                type="color" 
+                value={allSameColor ? currentHex : '#000000'}
+                onChange={(e) => handleGroupColorChange(originalColor, e.target.value, currentAlpha, isGradient)}
+                disabled={!allSameColor}
+                style={{ opacity: allSameColor ? 1 : 0.5 }}
+              />
+              <input 
+                type="range" 
+                min="0" max="1" step="0.01" 
+                value={allSameColor ? currentAlpha : 1}
+                onChange={(e) => handleGroupColorChange(originalColor, currentHex, parseFloat(e.target.value), isGradient)}
+                disabled={!allSameColor}
+                style={{ opacity: allSameColor ? 1 : 0.5 }}
+              />
+              <span className="color-display-hex8">
+                {allSameColor ? groupCurrentColor : `Mixed colors - expand to edit individually`}
+              </span>
+            </div>
+          )}
+        </div>
+        
+        {isExpanded && (
+          <div className="color-group-items" style={{ paddingLeft: '30px', marginTop: '10px' }}>
+            {slots.map((slot) => {
+              const { hex: slotHex, alpha: slotAlpha } = parseColorString(slot.currentColor);
+              return (
+                <div key={slot.id} style={{ marginBottom: '10px' }}>
+                  <label style={{ fontWeight: 'normal', marginBottom: '5px', display: 'block' }}>
+                    {slot.label}
+                    {slot.isGradientStop && (
+                      <span style={{ fontSize: '0.8em', color: '#666', marginLeft: '8px' }}>
+                        (Position: {slot.stopOffset})
+                      </span>
+                    )}
+                  </label>
+                  <div className="control-group svg-color-control">
+                    <input 
+                      type="color" 
+                      value={slotHex}
+                      onChange={(e) => {
+                        const newColor = formatHexWithAlpha(e.target.value, slotAlpha);
+                        
+                        if (slot.isGradientStop) {
+                          // Handle gradient stop color change
+                          console.log('Gradient stop color change:', slot.gradientId, 'stop', slot.stopIndex, 'to', newColor);
+                          
+                          // Create updated gradient definitions
+                          const updatedGradientDefinitions = { ...gradientDefinitions };
+                          if (updatedGradientDefinitions[slot.gradientId]) {
+                            updatedGradientDefinitions[slot.gradientId] = {
+                              ...updatedGradientDefinitions[slot.gradientId],
+                              stops: updatedGradientDefinitions[slot.gradientId].stops.map((stop, idx) =>
+                                idx === slot.stopIndex ? { ...stop, color: newColor } : stop
+                              )
+                            };
+                          }
+                          
+                          // Call onColorChange with gradient update info
+                          onColorChange(elementColorMap, updatedGradientDefinitions);
+                        } else {
+                          // Handle regular slot color change
+                          console.log('Individual slot color change:', slot.elementPath, slot.colorType, 'to', newColor);
+                          const updatedElementColorMap = { ...elementColorMap };
+                          if (!updatedElementColorMap[slot.elementPath]) {
+                            updatedElementColorMap[slot.elementPath] = {};
+                          }
+                          updatedElementColorMap[slot.elementPath][slot.colorType] = {
+                            original: slot.originalColor,
+                            current: newColor
+                          };
+                          console.log('Updated elementColorMap:', updatedElementColorMap);
+                          onColorChange(updatedElementColorMap);
+                        }
+                      }}
+                    />
+                    <input 
+                      type="range" 
+                      min="0" max="1" step="0.01" 
+                      value={slotAlpha}
+                      onChange={(e) => {
+                        const newColor = formatHexWithAlpha(slotHex, parseFloat(e.target.value));
+                        
+                        if (slot.isGradientStop) {
+                          // Handle gradient stop alpha change
+                          console.log('Gradient stop alpha change:', slot.gradientId, 'stop', slot.stopIndex, 'to', newColor);
+                          // TODO: Implement actual gradient stop modification in SVG
+                        } else {
+                          // Handle regular slot alpha change
+                          const updatedElementColorMap = { ...elementColorMap };
+                          if (!updatedElementColorMap[slot.elementPath]) {
+                            updatedElementColorMap[slot.elementPath] = {};
+                          }
+                          updatedElementColorMap[slot.elementPath][slot.colorType] = {
+                            original: slot.originalColor,
+                            current: newColor
+                          };
+                          onColorChange(updatedElementColorMap);
+                        }
+                      }}
+                    />
+                    <span className="color-display-hex8">{slot.currentColor}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="control-section" style={{ marginTop: '20px' }}>
       <h3>{title}</h3>
-      <div className="svg-color-controls">
-        <h4>Detected SVG Colors:</h4>
-        {Object.entries(colorGroups).map(([originalColor, slots]) => {
-          // Handle special unspecified group
-          const isUnspecifiedGroup = originalColor === 'UNSPECIFIED_GROUP';
-          const displayGroupName = isUnspecifiedGroup ? 'Unspecified (defaults to black)' : originalColor;
-          const groupDisplayColor = isUnspecifiedGroup ? '#000000FF' : originalColor;
-          
-          // Check if all slots in group have same current color
-          const allSameColor = slots.every(slot => slot.currentColor === slots[0].currentColor);
-          
-          // For group controls, only show unified values when all colors are the same
-          const groupCurrentColor = allSameColor ? slots[0].currentColor : groupDisplayColor;
-          const parsedCurrent = parseColorString(groupCurrentColor);
-          const currentHex = parsedCurrent.hex;
-          const currentAlpha = parsedCurrent.alpha;
-          const isExpanded = expandedGroups[originalColor];
-          
-          return (
-            <div key={originalColor} className="color-group" style={{ marginBottom: '15px' }}>
-              <div className="color-group-header" style={{ marginBottom: '10px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <button 
-                    type="button"
-                    onClick={() => toggleGroup(originalColor)}
-                    style={{
-                      background: '#f0f0f0',
-                      border: '1px solid #ccc',
-                      borderRadius: '3px',
-                      cursor: 'pointer',
-                      fontSize: '16px',
-                      padding: '2px 8px',
-                      minWidth: '30px',
-                      lineHeight: '1',
-                      color: '#4f46e5'
-                    }}
-                    title={isExpanded ? 'Collapse' : 'Expand'}
-                  >
-                    {isExpanded ? '−' : '+'}
-                  </button>
-                  <span style={{
-                    display: 'inline-block',
-                    width: '1.5em',
-                    height: '1.5em',
-                    backgroundColor: groupDisplayColor,
-                    border: '2px solid #ccc',
-                    borderRadius: '3px'
-                  }}></span>
-                  <label style={{ fontWeight: 'bold' }}>
-                    {displayGroupName} - {slots.length} element{slots.length > 1 ? 's' : ''}
-                  </label>
-                </div>
-                
-                <div className="control-group svg-color-control" style={{ marginTop: '8px', paddingLeft: '30px' }}>
-                  <input 
-                    type="color" 
-                    value={allSameColor ? currentHex : '#000000'}
-                    onChange={(e) => handleGroupColorChange(originalColor, e.target.value, currentAlpha)}
-                    disabled={!allSameColor}
-                    style={{ opacity: allSameColor ? 1 : 0.5 }}
-                  />
-                  <input 
-                    type="range" 
-                    min="0" max="1" step="0.01" 
-                    value={allSameColor ? currentAlpha : 1}
-                    onChange={(e) => handleGroupColorChange(originalColor, currentHex, parseFloat(e.target.value))}
-                    disabled={!allSameColor}
-                    style={{ opacity: allSameColor ? 1 : 0.5 }}
-                  />
-                  <span className="color-display-hex8">
-                    {allSameColor ? groupCurrentColor : `Mixed colors - expand to edit individually`}
-                  </span>
-                </div>
-              </div>
-              
-              {isExpanded && (
-                <div className="color-group-items" style={{ paddingLeft: '30px', marginTop: '10px' }}>
-                  {slots.map((slot) => {
-                    const { hex: slotHex, alpha: slotAlpha } = parseColorString(slot.currentColor);
-                    return (
-                      <div key={slot.id} style={{ marginBottom: '10px' }}>
-                        <label style={{ fontWeight: 'normal', marginBottom: '5px', display: 'block' }}>
-                          {slot.label}
-                        </label>
-                        <div className="control-group svg-color-control">
-                          <input 
-                            type="color" 
-                            value={slotHex}
-                            onChange={(e) => {
-                              const newColor = formatHexWithAlpha(e.target.value, slotAlpha);
-                              console.log('Individual slot color change:', slot.elementPath, slot.colorType, 'to', newColor);
-                              const updatedElementColorMap = { ...elementColorMap };
-                              if (!updatedElementColorMap[slot.elementPath]) {
-                                updatedElementColorMap[slot.elementPath] = {};
-                              }
-                              updatedElementColorMap[slot.elementPath][slot.colorType] = {
-                                original: slot.originalColor,
-                                current: newColor
-                              };
-                              console.log('Updated elementColorMap:', updatedElementColorMap);
-                              onColorChange(updatedElementColorMap);
-                            }}
-                          />
-                          <input 
-                            type="range" 
-                            min="0" max="1" step="0.01" 
-                            value={slotAlpha}
-                            onChange={(e) => {
-                              const newColor = formatHexWithAlpha(slotHex, parseFloat(e.target.value));
-                              const updatedElementColorMap = { ...elementColorMap };
-                              if (!updatedElementColorMap[slot.elementPath]) {
-                                updatedElementColorMap[slot.elementPath] = {};
-                              }
-                              updatedElementColorMap[slot.elementPath][slot.colorType] = {
-                                original: slot.originalColor,
-                                current: newColor
-                              };
-                              onColorChange(updatedElementColorMap);
-                            }}
-                          />
-                          <span className="color-display-hex8">{slot.currentColor}</span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+      
+      {/* Solid Colors Section */}
+      {Object.keys(solidColorGroups).length > 0 && (
+        <div className="svg-color-controls">
+          <h4>Solid Colors:</h4>
+          {Object.entries(solidColorGroups).map(([originalColor, slots]) => 
+            renderColorGroup(originalColor, slots, false)
+          )}
+        </div>
+      )}
+      
+      {/* Gradient Colors Section */}
+      {Object.keys(gradientGroups).length > 0 && (
+        <div className="svg-color-controls" style={{ marginTop: '20px' }}>
+          <h4>Gradient Colors:</h4>
+          {Object.entries(gradientGroups).map(([originalColor, slots]) => 
+            renderColorGroup(originalColor, slots, true)
+          )}
+        </div>
+      )}
+      
+      {/* Show message if no colors detected */}
+      {Object.keys(solidColorGroups).length === 0 && Object.keys(gradientGroups).length === 0 && (
+        <div className="svg-color-controls">
+          <p>No customizable colors detected in this SVG.</p>
+        </div>
+      )}
     </div>
   );
 };
