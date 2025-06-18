@@ -82,7 +82,7 @@ function BadgeBackgroundUpload({
         // Check if the sync data is recent (less than 1 hour old)
         const isRecent = Date.now() - parsed.timestamp < 60 * 60 * 1000;
         if (isRecent) {
-          console.log('Found recent background sync data in localStorage:', parsed);
+          console.log('Found recent background sync data in localStorage for asset:', parsed.assetId);
           return parsed;
         }
       }
@@ -104,7 +104,7 @@ function BadgeBackgroundUpload({
         metadata
       };
       localStorage.setItem('badgeBackgroundPreview', JSON.stringify(syncData));
-      console.log('Stored background sync data in localStorage:', syncData);
+      console.log('Stored background sync data in localStorage for asset:', assetId);
     } catch (error) {
       console.error('Error storing background sync data:', error);
     }
@@ -146,7 +146,7 @@ function BadgeBackgroundUpload({
         console.log('Background storage change detected from another tab');
         try {
           const newSyncData = JSON.parse(e.newValue);
-          console.log('New background sync data:', newSyncData);
+          console.log('New background sync data received from another tab, asset:', newSyncData.assetId);
           
           // Update component state with new data from other tab
           if (newSyncData.assetId !== uploadId) {

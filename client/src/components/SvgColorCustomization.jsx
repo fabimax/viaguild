@@ -51,22 +51,26 @@ const SvgColorCustomization = ({
     if (colors.fill) {
       colorSlots.push({
         id: `${path}-fill`,
-        label: `${path} (fill)`,
+        label: colors.fill.isGradient ? `${path} (gradient fill)` : `${path} (fill)`,
         originalColor: colors.fill.original,
         currentColor: colors.fill.current,
         elementPath: path,
-        colorType: 'fill'
+        colorType: 'fill',
+        isGradient: colors.fill.isGradient || false,
+        cannotCustomize: colors.fill.cannotCustomize || false
       });
     }
     
     if (colors.stroke) {
       colorSlots.push({
         id: `${path}-stroke`,
-        label: `${path} (stroke)`,
+        label: colors.stroke.isGradient ? `${path} (gradient stroke)` : `${path} (stroke)`,
         originalColor: colors.stroke.original,
         currentColor: colors.stroke.current,
         elementPath: path,
-        colorType: 'stroke'
+        colorType: 'stroke',
+        isGradient: colors.stroke.isGradient || false,
+        cannotCustomize: colors.stroke.cannotCustomize || false
       });
     }
   });

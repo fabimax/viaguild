@@ -39,8 +39,52 @@ const findElementByPath = (root, path) => {
  * @param {Element} element - DOM element
  * @param {string} colorType - 'fill' or 'stroke'
  * @param {string} colorValue - Color value (e.g., "#FF0000FF")
+ * @param {Object} cssProperties - CSS properties to preserve
  */
-const setElementColor = (element, colorType, colorValue) => {
+const setElementColor = (element, colorType, colorValue, cssProperties = {}) => {
+  // Handle gradients - don't try to change them
+  if (colorValue && colorValue.includes('url(')) {
+    return; // Keep gradient as-is
+  }
+  
+  // Remove class attribute if it exists to prevent CSS class rules from overriding
+  if (element.hasAttribute('class')) {
+    element.removeAttribute('class');
+    
+    // Apply non-color CSS properties as inline styles
+    if (cssProperties && Object.keys(cssProperties).length > 0) {
+      const existingStyle = element.getAttribute('style') || '';
+      const newStyles = [];
+      
+      // Parse existing inline styles
+      const existingProps = {};
+      if (existingStyle) {
+        existingStyle.split(';').forEach(prop => {
+          const [key, value] = prop.split(':').map(s => s.trim());
+          if (key && value) {
+            existingProps[key] = value;
+          }
+        });
+      }
+      
+      // Add CSS properties (excluding fill/stroke which we handle separately)
+      Object.entries(cssProperties).forEach(([prop, value]) => {
+        if (prop !== 'fill' && prop !== 'stroke') {
+          existingProps[prop] = value;
+        }
+      });
+      
+      // Build new style string
+      Object.entries(existingProps).forEach(([prop, value]) => {
+        newStyles.push(`${prop}: ${value}`);
+      });
+      
+      if (newStyles.length > 0) {
+        element.setAttribute('style', newStyles.join('; '));
+      }
+    }
+  }
+  
   // Check if color is currently in style attribute
   const style = element.getAttribute('style');
   if (style && style.includes(`${colorType}:`)) {
@@ -93,11 +137,13 @@ export const applyElementMappings = (svgString, elementColorMap) => {
   Object.entries(elementColorMap).forEach(([path, colorConfig]) => {
     const element = findElementByPath(svgElement, path);
     if (element) {
-      if (colorConfig.fill) {
-        setElementColor(element, 'fill', colorConfig.fill.current);
+      const cssProps = colorConfig.cssProperties || {};
+      
+      if (colorConfig.fill && !colorConfig.fill.isGradient) {
+        setElementColor(element, 'fill', colorConfig.fill.current, cssProps);
       }
-      if (colorConfig.stroke) {
-        setElementColor(element, 'stroke', colorConfig.stroke.current);
+      if (colorConfig.stroke && !colorConfig.stroke.isGradient) {
+        setElementColor(element, 'stroke', colorConfig.stroke.current, cssProps);
       }
     }
   });

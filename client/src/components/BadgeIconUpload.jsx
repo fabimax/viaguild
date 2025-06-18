@@ -291,7 +291,7 @@ function BadgeIconUpload({
         // Check if the sync data is recent (less than 1 hour old)
         const isRecent = Date.now() - parsed.timestamp < 60 * 60 * 1000;
         if (isRecent) {
-          console.log('Found recent sync data in localStorage:', parsed);
+          console.log('Found recent sync data in localStorage for asset:', parsed.assetId);
           return parsed;
         }
       }
@@ -313,7 +313,7 @@ function BadgeIconUpload({
         metadata
       };
       localStorage.setItem('badgeIconPreview', JSON.stringify(syncData));
-      console.log('Stored sync data in localStorage:', syncData);
+      console.log('Stored icon sync data in localStorage for asset:', assetId);
     } catch (error) {
       console.error('Error storing sync data:', error);
     }
@@ -355,7 +355,7 @@ function BadgeIconUpload({
         console.log('Storage change detected from another tab');
         try {
           const newSyncData = JSON.parse(e.newValue);
-          console.log('New sync data:', newSyncData);
+          console.log('New sync data received from another tab, asset:', newSyncData.assetId);
           
           // Update component state with new data from other tab
           if (newSyncData.assetId !== uploadId) {
@@ -473,7 +473,7 @@ function BadgeIconUpload({
         elementPaths.forEach(path => {
           const elementColors = elementColorMap[path];
           
-          if (elementColors.fill) {
+          if (elementColors.fill && !elementColors.fill.isGradient) {
             colorSlots.push({
               id: `${path}-fill`,
               label: `${path} (fill)`,
@@ -488,9 +488,21 @@ function BadgeIconUpload({
                 elementColors.fill.original === 'UNSPECIFIED' ? '#000000FF' : elementColors.fill.original
               )
             });
+          } else if (elementColors.fill && elementColors.fill.isGradient) {
+            // Add gradient info but mark it as non-customizable
+            colorSlots.push({
+              id: `${path}-fill`,
+              label: `${path} (gradient fill)`,
+              originalColor: 'GRADIENT',
+              currentColor: elementColors.fill.current,
+              elementPath: path,
+              colorType: 'fill',
+              isGradient: true,
+              cannotCustomize: true
+            });
           }
           
-          if (elementColors.stroke) {
+          if (elementColors.stroke && !elementColors.stroke.isGradient) {
             colorSlots.push({
               id: `${path}-stroke`,
               label: `${path} (stroke)`,
@@ -504,6 +516,18 @@ function BadgeIconUpload({
               hasTransparency: svgCustomizer.current.hasTransparency(
                 elementColors.stroke.original === 'UNSPECIFIED' ? '#000000FF' : elementColors.stroke.original
               )
+            });
+          } else if (elementColors.stroke && elementColors.stroke.isGradient) {
+            // Add gradient info but mark it as non-customizable
+            colorSlots.push({
+              id: `${path}-stroke`,
+              label: `${path} (gradient stroke)`,
+              originalColor: 'GRADIENT',
+              currentColor: elementColors.stroke.current,
+              elementPath: path,
+              colorType: 'stroke',
+              isGradient: true,
+              cannotCustomize: true
             });
           }
         });
@@ -975,6 +999,11 @@ function BadgeIconUpload({
    * Set color on element (handles both attributes and style)
    */
   const setElementColor = (element, colorType, colorValue) => {
+    // Remove class attribute if it exists to prevent CSS class rules from overriding
+    if (element.hasAttribute('class')) {
+      element.removeAttribute('class');
+    }
+    
     // Check if color is currently in style attribute
     const style = element.getAttribute('style');
     if (style && style.includes(`${colorType}:`)) {

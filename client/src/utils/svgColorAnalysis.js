@@ -3,6 +3,8 @@
  * for customization interfaces.
  */
 
+import * as csstree from 'css-tree';
+
 /**
  * Get element path for stable identification
  */
@@ -28,10 +30,29 @@ const getElementPath = (element, root) => {
 
 /**
  * Convert any color format to normalized HEX8 format
+ * Returns null for gradients, patterns, and other non-solid colors
  */
 const parseAndNormalizeColor = (colorString) => {
   if (!colorString || colorString === 'none' || colorString === 'transparent' || colorString === 'currentColor') {
     return null;
+  }
+  
+  // Check for gradients and patterns
+  // Matches: url(#gradientId), url('#gradientId'), url("#gradientId")
+  // Examples: url(#linearGrad1), url(#radialGrad2), url(#pattern1)
+  if (colorString.includes('url(')) {
+    // Extract the gradient/pattern ID using regex
+    // Pattern explanation: url\( matches "url(", then ['"]? matches optional quote,
+    // then # matches hash, then ([^)'"],*) captures the ID until quote/paren,
+    // then ['"]? matches optional closing quote, then \) matches closing paren
+    const match = colorString.match(/url\(['"]?#([^)'"]+)['"]?\)/);
+    if (match) {
+      return {
+        type: 'GRADIENT_OR_PATTERN',
+        id: match[1] // Store the gradient/pattern ID for future editing
+      };
+    }
+    return 'GRADIENT_OR_PATTERN'; // Fallback for malformed url() values
   }
 
   // Trim whitespace
@@ -147,10 +168,121 @@ export const buildElementColorMap = (svgString) => {
       throw new Error(`Invalid SVG content: ${parserError.textContent}`);
     }
     
+    // Parse CSS styles if present
+    const styleElements = svgElement.querySelectorAll('style');
+    const cssRules = {};
+    
+    styleElements.forEach(styleEl => {
+      const cssText = styleEl.textContent;
+      
+      try {
+        // Parse CSS with css-tree
+        const ast = csstree.parse(cssText);
+        
+        // Walk through all rules
+        csstree.walk(ast, function(node) {
+          if (node.type === 'Rule') {
+            // Process each selector in the rule
+            const selectors = [];
+            
+            csstree.walk(node.prelude, function(selectorNode) {
+              // Handle class selectors
+              if (selectorNode.type === 'ClassSelector') {
+                selectors.push({
+                  type: 'class',
+                  name: selectorNode.name
+                });
+              }
+              // Handle ID selectors
+              else if (selectorNode.type === 'IdSelector') {
+                selectors.push({
+                  type: 'id',
+                  name: selectorNode.name
+                });
+              }
+              // Handle type selectors (element names)
+              else if (selectorNode.type === 'TypeSelector') {
+                selectors.push({
+                  type: 'element',
+                  name: selectorNode.name
+                });
+              }
+            });
+            
+            // Extract declarations
+            const declarations = {};
+            if (node.block && node.block.children) {
+              node.block.children.forEach(decl => {
+                if (decl.type === 'Declaration') {
+                  declarations[decl.property] = csstree.generate(decl.value);
+                }
+              });
+            }
+            
+            // Store rules by selector
+            selectors.forEach(selector => {
+              if (selector.type === 'class') {
+                cssRules[selector.name] = declarations;
+              }
+              // TODO: Handle other selector types as needed
+            });
+          }
+        });
+      } catch (e) {
+        console.error('CSS parsing error:', e);
+        // Fallback to regex parsing if css-tree fails
+        const ruleMatches = cssText.matchAll(/\.([a-zA-Z0-9_-]+)\s*\{([^}]+)\}/g);
+        for (const match of ruleMatches) {
+          const className = match[1];
+          const ruleContent = match[2];
+          
+          cssRules[className] = {};
+          
+          const propertyMatches = ruleContent.matchAll(/([a-zA-Z-]+)\s*:\s*([^;]+);?/g);
+          for (const propMatch of propertyMatches) {
+            const property = propMatch[1].trim();
+            const value = propMatch[2].trim();
+            cssRules[className][property] = value;
+          }
+        }
+      }
+    });
+    
     
     const colorMap = {};
     const detectedColors = new Set(); // Track all detected colors
     const colorableElements = svgElement.querySelectorAll('path, circle, rect, ellipse, polygon, line, polyline');
+    
+    // Scan for gradient definitions for future gradient stop editing
+    const gradientDefinitions = {};
+    const gradients = svgElement.querySelectorAll('linearGradient, radialGradient');
+    gradients.forEach(grad => {
+      const id = grad.getAttribute('id');
+      if (id) {
+        const stops = [];
+        grad.querySelectorAll('stop').forEach(stop => {
+          stops.push({
+            offset: stop.getAttribute('offset') || '0%',
+            color: stop.getAttribute('stop-color') || '#000000',
+            opacity: stop.getAttribute('stop-opacity') || '1'
+          });
+        });
+        
+        gradientDefinitions[id] = {
+          type: grad.tagName.toLowerCase(), // 'lineargradient' or 'radialgradient'
+          stops: stops,
+          // Store additional gradient attributes for future editing
+          x1: grad.getAttribute('x1'),
+          y1: grad.getAttribute('y1'),
+          x2: grad.getAttribute('x2'),
+          y2: grad.getAttribute('y2'),
+          cx: grad.getAttribute('cx'), // for radial gradients
+          cy: grad.getAttribute('cy'), // for radial gradients
+          r: grad.getAttribute('r'),   // for radial gradients
+          gradientUnits: grad.getAttribute('gradientUnits')
+        };
+      }
+    });
     
     // Helper to get color from element (checks both attributes and style)
     const getElementColor = (element, colorType) => {
@@ -168,16 +300,61 @@ export const buildElementColorMap = (svgString) => {
         }
       }
       
+      // If still not found, check CSS class rules (handle multiple classes)
+      if (!color) {
+        const classAttr = element.getAttribute('class');
+        if (classAttr) {
+          const classes = classAttr.split(/\s+/);
+          for (const className of classes) {
+            if (cssRules[className] && cssRules[className][colorType]) {
+              color = cssRules[className][colorType];
+              break; // Use first matching class
+            }
+          }
+        }
+      }
+      
       return color;
     };
 
     // Helper to process colors for any element
     const processElementColors = (element, elementPath) => {
+      // Store CSS properties for this element
+      const cssProperties = {};
+      const classAttr = element.getAttribute('class');
+      if (classAttr) {
+        const classes = classAttr.split(/\s+/);
+        classes.forEach(className => {
+          if (cssRules[className]) {
+            // Merge properties from each class
+            Object.assign(cssProperties, cssRules[className]);
+          }
+        });
+      }
       // Check fill color
       const fillRaw = getElementColor(element, 'fill');
       if (fillRaw) {
         const normalizedFill = parseAndNormalizeColor(fillRaw);
-        if (normalizedFill) {
+        if (normalizedFill && typeof normalizedFill === 'object' && normalizedFill.type === 'GRADIENT_OR_PATTERN') {
+          // Handle gradients/patterns - store ID for future gradient stop editing
+          if (!colorMap[elementPath]) colorMap[elementPath] = {};
+          colorMap[elementPath].fill = {
+            original: 'GRADIENT',
+            current: fillRaw, // Preserve the original gradient reference
+            gradientId: normalizedFill.id, // Store ID for future gradient editing
+            isGradient: true,
+            cannotCustomize: false // Will be editable in the future
+          };
+        } else if (normalizedFill === 'GRADIENT_OR_PATTERN') {
+          // Fallback for malformed gradient references
+          if (!colorMap[elementPath]) colorMap[elementPath] = {};
+          colorMap[elementPath].fill = {
+            original: 'GRADIENT',
+            current: fillRaw,
+            isGradient: true,
+            cannotCustomize: true // Malformed, so not editable
+          };
+        } else if (normalizedFill) {
           detectedColors.add(normalizedFill);
           if (!colorMap[elementPath]) colorMap[elementPath] = {};
           colorMap[elementPath].fill = {
@@ -209,7 +386,26 @@ export const buildElementColorMap = (svgString) => {
       const strokeRaw = getElementColor(element, 'stroke');
       if (strokeRaw) {
         const normalizedStroke = parseAndNormalizeColor(strokeRaw);
-        if (normalizedStroke) {
+        if (normalizedStroke && typeof normalizedStroke === 'object' && normalizedStroke.type === 'GRADIENT_OR_PATTERN') {
+          // Handle gradients/patterns for stroke - store ID for future gradient stop editing
+          if (!colorMap[elementPath]) colorMap[elementPath] = {};
+          colorMap[elementPath].stroke = {
+            original: 'GRADIENT',
+            current: strokeRaw, // Preserve the original gradient reference
+            gradientId: normalizedStroke.id, // Store ID for future gradient editing
+            isGradient: true,
+            cannotCustomize: false // Will be editable in the future
+          };
+        } else if (normalizedStroke === 'GRADIENT_OR_PATTERN') {
+          // Fallback for malformed gradient references
+          if (!colorMap[elementPath]) colorMap[elementPath] = {};
+          colorMap[elementPath].stroke = {
+            original: 'GRADIENT',
+            current: strokeRaw,
+            isGradient: true,
+            cannotCustomize: true // Malformed, so not editable
+          };
+        } else if (normalizedStroke) {
           detectedColors.add(normalizedStroke);
           if (!colorMap[elementPath]) colorMap[elementPath] = {};
           colorMap[elementPath].stroke = {
@@ -234,6 +430,11 @@ export const buildElementColorMap = (svgString) => {
           isUnspecified: true
         };
       }
+      
+      // Store CSS properties for preservation during transformation
+      if (Object.keys(cssProperties).length > 0 && colorMap[elementPath]) {
+        colorMap[elementPath].cssProperties = cssProperties;
+      }
     };
 
     // First check the root SVG element
@@ -248,7 +449,10 @@ export const buildElementColorMap = (svgString) => {
     
     
     if (Object.keys(colorMap).length > 0) {
-      return { elementColorMap: colorMap };
+      return { 
+        elementColorMap: colorMap,
+        gradientDefinitions: gradientDefinitions // Include gradient info for future editing
+      };
     }
     
     return null;
