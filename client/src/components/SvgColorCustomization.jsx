@@ -180,11 +180,8 @@ const SvgColorCustomization = ({
   const createGradientPreview = (gradientId) => {
     const gradientDef = gradientDefinitions[gradientId];
     if (!gradientDef || !gradientDef.stops || gradientDef.stops.length === 0) {
-      console.log('HEART_DEBUG: No gradient def found for', gradientId);
       return '#cccccc'; // Fallback to gray
     }
-    
-    console.log('HEART_DEBUG: Processing gradient', gradientId, 'with stops:', gradientDef.stops);
     
     // For preview purposes, normalize stop positions to make gradients more visible
     const originalStops = gradientDef.stops;
@@ -202,7 +199,6 @@ const SvgColorCustomization = ({
           ...stop,
           offset: `${(index / (originalStops.length - 1)) * 100}%`
         }));
-        console.log('HEART_DEBUG: Normalizing stops for better preview visibility');
       }
     }
     
@@ -282,7 +278,6 @@ const SvgColorCustomization = ({
       ? `radial-gradient(circle, ${stops})`
       : '#cccccc';
     
-    console.log('HEART_DEBUG: Final CSS for', gradientId, ':', finalCSS);
     return finalCSS;
   };
 
