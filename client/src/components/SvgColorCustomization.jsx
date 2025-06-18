@@ -401,7 +401,20 @@ const SvgColorCustomization = ({
                         if (slot.isGradientStop) {
                           // Handle gradient stop alpha change
                           console.log('Gradient stop alpha change:', slot.gradientId, 'stop', slot.stopIndex, 'to', newColor);
-                          // TODO: Implement actual gradient stop modification in SVG
+                          
+                          // Create updated gradient definitions
+                          const updatedGradientDefinitions = { ...gradientDefinitions };
+                          if (updatedGradientDefinitions[slot.gradientId]) {
+                            updatedGradientDefinitions[slot.gradientId] = {
+                              ...updatedGradientDefinitions[slot.gradientId],
+                              stops: updatedGradientDefinitions[slot.gradientId].stops.map((stop, idx) =>
+                                idx === slot.stopIndex ? { ...stop, color: newColor } : stop
+                              )
+                            };
+                          }
+                          
+                          // Call onColorChange with gradient update
+                          onColorChange(elementColorMap, updatedGradientDefinitions);
                         } else {
                           // Handle regular slot alpha change
                           const updatedElementColorMap = { ...elementColorMap };
