@@ -176,12 +176,46 @@ const SvgColorCustomization = ({
     onColorChange(updatedElementColorMap);
   };
 
+  // Helper function to create CSS gradient string from gradient definition
+  const createGradientPreview = (gradientId) => {
+    const gradientDef = gradientDefinitions[gradientId];
+    if (!gradientDef || !gradientDef.stops || gradientDef.stops.length === 0) {
+      return '#cccccc'; // Fallback to gray
+    }
+    
+    const stops = gradientDef.stops.map(stop => {
+      const offset = stop.offset.replace('%', '');
+      return `${stop.color} ${offset}%`;
+    }).join(', ');
+    
+    if (gradientDef.type === 'lineargradient') {
+      return `linear-gradient(90deg, ${stops})`;
+    } else if (gradientDef.type === 'radialgradient') {
+      return `radial-gradient(circle, ${stops})`;
+    }
+    
+    return '#cccccc'; // Fallback
+  };
+
   // Helper function to render a color group (used for both solid colors and gradients)
   const renderColorGroup = (originalColor, slots, isGradient = false) => {
     // Handle special unspecified group
     const isUnspecifiedGroup = originalColor === 'UNSPECIFIED_GROUP';
     const displayGroupName = isUnspecifiedGroup ? 'Unspecified (defaults to black)' : originalColor;
-    const groupDisplayColor = isUnspecifiedGroup ? '#000000FF' : originalColor;
+    
+    // For gradients, create a gradient preview; for solid colors, use the original color
+    let groupDisplayColor;
+    if (isGradient) {
+      // Find the gradient ID from the first slot
+      const firstGradientSlot = slots.find(slot => slot.isGradientStop);
+      if (firstGradientSlot && firstGradientSlot.gradientId) {
+        groupDisplayColor = createGradientPreview(firstGradientSlot.gradientId);
+      } else {
+        groupDisplayColor = '#cccccc'; // Fallback
+      }
+    } else {
+      groupDisplayColor = isUnspecifiedGroup ? '#000000FF' : originalColor;
+    }
     
     // Check if all slots in group have same current color
     const allSameColor = slots.every(slot => slot.currentColor === slots[0].currentColor);
@@ -219,7 +253,7 @@ const SvgColorCustomization = ({
               display: 'inline-block',
               width: '1.5em',
               height: '1.5em',
-              backgroundColor: groupDisplayColor,
+              background: groupDisplayColor,
               border: '2px solid #ccc',
               borderRadius: '3px'
             }}></span>
