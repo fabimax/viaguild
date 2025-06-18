@@ -180,21 +180,110 @@ const SvgColorCustomization = ({
   const createGradientPreview = (gradientId) => {
     const gradientDef = gradientDefinitions[gradientId];
     if (!gradientDef || !gradientDef.stops || gradientDef.stops.length === 0) {
+      console.log('HEART_DEBUG: No gradient def found for', gradientId);
       return '#cccccc'; // Fallback to gray
     }
     
-    const stops = gradientDef.stops.map(stop => {
-      const offset = stop.offset.replace('%', '');
-      return `${stop.color} ${offset}%`;
-    }).join(', ');
+    console.log('HEART_DEBUG: Processing gradient', gradientId, 'with stops:', gradientDef.stops);
     
-    if (gradientDef.type === 'lineargradient') {
-      return `linear-gradient(90deg, ${stops})`;
-    } else if (gradientDef.type === 'radialgradient') {
-      return `radial-gradient(circle, ${stops})`;
+    // For preview purposes, normalize stop positions to make gradients more visible
+    const originalStops = gradientDef.stops;
+    let normalizedStops = [...originalStops];
+    
+    // If stops are clustered in a small range, spread them across 0%-100% for better preview
+    if (originalStops.length >= 2) {
+      const positions = originalStops.map(stop => parseFloat(stop.offset.replace('%', '')));
+      const minPos = Math.min(...positions);
+      const maxPos = Math.max(...positions);
+      
+      // If the range is very small (less than 10%), spread it out for preview
+      if (maxPos - minPos < 10) {
+        normalizedStops = originalStops.map((stop, index) => ({
+          ...stop,
+          offset: `${(index / (originalStops.length - 1)) * 100}%`
+        }));
+        console.log('HEART_DEBUG: Normalizing stops for better preview visibility');
+      }
     }
     
-    return '#cccccc'; // Fallback
+    const stops = normalizedStops.map(stop => {
+      // Handle offset - ensure it has % and is properly formatted
+      let offset = stop.offset || '0%';
+      if (!offset.includes('%')) {
+        offset = `${offset}%`;
+      }
+      
+      // Handle stop opacity by converting color to rgba
+      let colorWithOpacity = stop.color;
+      if (stop.opacity && stop.opacity !== '1') {
+        const opacity = parseFloat(stop.opacity);
+        
+        // Convert hex to rgba if needed
+        if (colorWithOpacity.startsWith('#')) {
+          const hex = colorWithOpacity.replace('#', '');
+          let r, g, b;
+          
+          if (hex.length === 3) {
+            r = parseInt(hex[0] + hex[0], 16);
+            g = parseInt(hex[1] + hex[1], 16);
+            b = parseInt(hex[2] + hex[2], 16);
+          } else if (hex.length === 6) {
+            r = parseInt(hex.substring(0, 2), 16);
+            g = parseInt(hex.substring(2, 4), 16);
+            b = parseInt(hex.substring(4, 6), 16);
+          } else if (hex.length === 8) {
+            r = parseInt(hex.substring(0, 2), 16);
+            g = parseInt(hex.substring(2, 4), 16);
+            b = parseInt(hex.substring(4, 6), 16);
+            // If hex already has alpha, combine with stop-opacity
+            const hexAlpha = parseInt(hex.substring(6, 8), 16) / 255;
+            const finalOpacity = hexAlpha * opacity;
+            colorWithOpacity = `rgba(${r}, ${g}, ${b}, ${finalOpacity})`;
+            return `${colorWithOpacity} ${offset}`;
+          }
+          
+          colorWithOpacity = `rgba(${r}, ${g}, ${b}, ${opacity})`;
+        } else if (colorWithOpacity.includes('rgb')) {
+          // Handle existing rgba/rgb colors
+          const rgbaMatch = colorWithOpacity.match(/rgba?\(([^)]+)\)/);
+          if (rgbaMatch) {
+            const values = rgbaMatch[1].split(',').map(v => v.trim());
+            if (values.length === 3) {
+              colorWithOpacity = `rgba(${values[0]}, ${values[1]}, ${values[2]}, ${opacity})`;
+            } else if (values.length === 4) {
+              const existingAlpha = parseFloat(values[3]);
+              colorWithOpacity = `rgba(${values[0]}, ${values[1]}, ${values[2]}, ${existingAlpha * opacity})`;
+            }
+          }
+        } else {
+          // Handle named colors by converting to rgba
+          // For simplicity, handle common cases
+          const namedColorMap = {
+            'white': 'rgba(255, 255, 255',
+            'black': 'rgba(0, 0, 0',
+            'red': 'rgba(255, 0, 0',
+            'green': 'rgba(0, 255, 0',
+            'blue': 'rgba(0, 0, 255'
+          };
+          
+          const baseName = colorWithOpacity.toLowerCase();
+          if (namedColorMap[baseName]) {
+            colorWithOpacity = `${namedColorMap[baseName]}, ${opacity})`;
+          }
+        }
+      }
+      
+      return `${colorWithOpacity} ${offset}`;
+    }).join(', ');
+    
+    const finalCSS = gradientDef.type === 'lineargradient' 
+      ? `linear-gradient(90deg, ${stops})`
+      : gradientDef.type === 'radialgradient'
+      ? `radial-gradient(circle, ${stops})`
+      : '#cccccc';
+    
+    console.log('HEART_DEBUG: Final CSS for', gradientId, ':', finalCSS);
+    return finalCSS;
   };
 
   // Helper function to render a color group (used for both solid colors and gradients)
