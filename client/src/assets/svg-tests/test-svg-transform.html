@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>SVG Transform Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-case { margin: 20px 0; padding: 20px; border: 1px solid #ccc; }
+        .svg-display { display: inline-block; margin: 10px; vertical-align: top; }
+        .svg-display svg { width: 100px; height: 100px; border: 1px solid #ddd; }
+        pre { background: #f5f5f5; padding: 10px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>SVG Transformation Test</h1>
+    
+    <div class="test-case">
+        <h2>Original SVG</h2>
+        <div class="svg-display" id="original"></div>
+        <pre id="original-code"></pre>
+    </div>
+    
+    <div class="test-case">
+        <h2>Transformed with empty mappings (simulating BadgeDisplay issue)</h2>
+        <div class="svg-display" id="transformed-empty"></div>
+        <pre id="transformed-empty-code"></pre>
+    </div>
+    
+    <div class="test-case">
+        <h2>Transformed with null/undefined mappings</h2>
+        <div class="svg-display" id="transformed-null"></div>
+        <pre id="transformed-null-code"></pre>
+    </div>
+
+    <script>
+        // Original SVG content
+        const originalSvg = `<svg width="100" height="100" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="testGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#ff0000" stop-opacity="1"/>
+      <stop offset="50%" stop-color="#00ff00" stop-opacity="1"/>
+      <stop offset="100%" stop-color="#0000ff" stop-opacity="1"/>
+    </linearGradient>
+    <radialGradient id="testRadial" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffff00" stop-opacity="1"/>
+      <stop offset="100%" stop-color="#ff00ff" stop-opacity="0.5"/>
+    </radialGradient>
+  </defs>
+  <rect width="100" height="50" fill="url(#testGradient)"/>
+  <circle cx="50" cy="75" r="20" fill="url(#testRadial)" stroke="#000000"/>
+</svg>`;
+
+        // Simulate the applySvgColorTransform function from svgColorTransform.js
+        function applySvgColorTransform(svgString, colorConfig) {
+            if (!svgString || !colorConfig || !colorConfig.mappings) {
+                return svgString;
+            }
+            
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(svgString, 'image/svg+xml');
+            const svgElement = doc.documentElement;
+            
+            // Check for parser errors
+            const parserError = svgElement.querySelector('parsererror');
+            if (parserError) {
+                console.error('SVG parsing error:', parserError.textContent);
+                return svgString;
+            }
+            
+            // This is where the issue might be - if mappings is empty {}
+            // we still serialize and return, which might corrupt gradients
+            Object.entries(colorConfig.mappings).forEach(([path, colorConfig]) => {
+                // Find element logic would go here...
+                console.log('Processing mapping:', path, colorConfig);
+            });
+            
+            const serializer = new XMLSerializer();
+            return serializer.serializeToString(svgElement);
+        }
+
+        // Test cases
+        function runTests() {
+            // Display original
+            document.getElementById('original').innerHTML = originalSvg;
+            document.getElementById('original-code').textContent = originalSvg;
+            
+            // Test with empty mappings (simulating BadgeDisplay issue)
+            const emptyMappingsConfig = { mappings: {} };
+            const transformedEmpty = applySvgColorTransform(originalSvg, emptyMappingsConfig);
+            document.getElementById('transformed-empty').innerHTML = transformedEmpty;
+            document.getElementById('transformed-empty-code').textContent = transformedEmpty;
+            
+            // Test with null mappings
+            const nullMappingsConfig = { mappings: null };
+            const transformedNull = applySvgColorTransform(originalSvg, nullMappingsConfig);
+            document.getElementById('transformed-null').innerHTML = transformedNull;
+            document.getElementById('transformed-null-code').textContent = transformedNull;
+            
+            // Log comparison
+            console.log('Original length:', originalSvg.length);
+            console.log('Empty mappings length:', transformedEmpty.length);
+            console.log('Null mappings length:', transformedNull.length);
+            
+            console.log('Original contains gradients:', originalSvg.includes('linearGradient'));
+            console.log('Empty transform contains gradients:', transformedEmpty.includes('linearGradient'));
+            console.log('Null transform contains gradients:', transformedNull.includes('linearGradient'));
+        }
+        
+        runTests();
+    </script>
+</body>
+</html>

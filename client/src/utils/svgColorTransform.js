@@ -115,6 +115,33 @@ const setElementColor = (element, colorType, colorValue, cssProperties = {}) => 
 };
 
 /**
+ * Ensure SVG has proper viewBox for scaling
+ * @param {Element} svgElement - SVG DOM element
+ */
+const ensureViewBox = (svgElement) => {
+  // Skip if viewBox already exists
+  if (svgElement.hasAttribute('viewBox')) {
+    return;
+  }
+  
+  // Get width and height attributes
+  const width = svgElement.getAttribute('width');
+  const height = svgElement.getAttribute('height');
+  
+  if (width && height) {
+    // Parse width and height, removing units (px, pt, etc.)
+    const numericWidth = parseFloat(width);
+    const numericHeight = parseFloat(height);
+    
+    if (!isNaN(numericWidth) && !isNaN(numericHeight) && numericWidth > 0 && numericHeight > 0) {
+      // Add viewBox starting at origin with width/height dimensions
+      svgElement.setAttribute('viewBox', `0 0 ${numericWidth} ${numericHeight}`);
+      console.log(`Auto-added viewBox: "0 0 ${numericWidth} ${numericHeight}" to SVG`);
+    }
+  }
+};
+
+/**
  * Apply element-based color mappings to SVG string
  * @param {string} svgString - Original SVG content
  * @param {Object} elementColorMap - Color mapping configuration
@@ -122,6 +149,13 @@ const setElementColor = (element, colorType, colorValue, cssProperties = {}) => 
  */
 export const applyElementMappings = (svgString, elementColorMap) => {
   if (!svgString || !elementColorMap) return svgString;
+  
+  // Check if there are any actual mappings to apply
+  const mappingEntries = Object.entries(elementColorMap);
+  if (mappingEntries.length === 0) {
+    // No mappings to apply, return original to avoid unnecessary DOM parsing/serialization
+    return svgString;
+  }
   
   const parser = new DOMParser();
   const doc = parser.parseFromString(svgString, 'image/svg+xml');
@@ -133,6 +167,9 @@ export const applyElementMappings = (svgString, elementColorMap) => {
     console.error('SVG parsing error:', parserError.textContent);
     return svgString; // Return original if parsing fails
   }
+  
+  // Ensure proper viewBox for scaling
+  ensureViewBox(svgElement);
   
   Object.entries(elementColorMap).forEach(([path, colorConfig]) => {
     const element = findElementByPath(svgElement, path);
@@ -160,6 +197,13 @@ export const applyElementMappings = (svgString, elementColorMap) => {
  */
 export const applySvgColorTransform = (svgString, colorConfig) => {
   if (!svgString || !colorConfig || !colorConfig.mappings) {
+    return svgString;
+  }
+  
+  // Check if mappings object has any actual mappings
+  const mappingEntries = Object.entries(colorConfig.mappings);
+  if (mappingEntries.length === 0) {
+    // No actual mappings to apply, return original to avoid unnecessary DOM parsing/serialization
     return svgString;
   }
   
@@ -202,6 +246,9 @@ export const applyGradientChanges = (svgString, gradientDefinitions) => {
   const parser = new DOMParser();
   const doc = parser.parseFromString(svgString, 'image/svg+xml');
   const svgElement = doc.documentElement;
+  
+  // Ensure proper viewBox for scaling
+  ensureViewBox(svgElement);
   
   // Find or create defs element
   let defsElement = svgElement.querySelector('defs');
@@ -276,6 +323,38 @@ export const applyGradientChanges = (svgString, gradientDefinitions) => {
   // Serialize back to string
   const serializer = new XMLSerializer();
   return serializer.serializeToString(svgElement);
+};
+
+/**
+ * Ensure SVG has proper viewBox for scaling (standalone function)
+ * @param {string} svgString - SVG content as string
+ * @returns {string} - SVG with viewBox ensured
+ */
+export const ensureSvgViewBox = (svgString) => {
+  if (!svgString) return svgString;
+  
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(svgString, 'image/svg+xml');
+  const svgElement = doc.documentElement;
+  
+  // Check for parser errors
+  const parserError = svgElement.querySelector('parsererror');
+  if (parserError) {
+    console.error('SVG parsing error:', parserError.textContent);
+    return svgString; // Return original if parsing fails
+  }
+  
+  // Check if viewBox fix is needed
+  const hadViewBox = svgElement.hasAttribute('viewBox');
+  ensureViewBox(svgElement);
+  
+  // Only serialize if we actually added a viewBox
+  if (!hadViewBox && svgElement.hasAttribute('viewBox')) {
+    const serializer = new XMLSerializer();
+    return serializer.serializeToString(svgElement);
+  }
+  
+  return svgString; // Return original if no changes needed
 };
 
 /**

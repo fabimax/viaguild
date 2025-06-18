@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
-import { applySvgColorTransform, isSvgContent } from '../../utils/svgColorTransform';
+import { applySvgColorTransform, isSvgContent, ensureSvgViewBox } from '../../utils/svgColorTransform';
 import { 
   extractColor, 
   extractBackgroundStyle, 
@@ -283,15 +283,20 @@ const BadgeDisplay = ({ badge }) => {
         // Check if this is already a transformed SVG from BadgeIconUpload (contains blob: URL references)
         // or if it's a complex SVG that should not be double-transformed
         if (foregroundValue.includes('blob:') || foregroundValue.length > 50000) {
-          return foregroundValue;
+          // Even for large/blob SVGs, ensure viewBox for proper scaling
+          return ensureSvgViewBox(foregroundValue);
         }
         // Only transform if we have SVG content that needs transformation
         const transformed = applySvgColorTransform(foregroundValue, resolvedForegroundConfig);
         if (transformed.length < foregroundValue.length * 0.5) {
           console.warn('SVG significantly reduced in size - possible corruption!');
-          return foregroundValue; // Return original if corruption detected
+          // Return original with viewBox fix if corruption detected
+          return ensureSvgViewBox(foregroundValue);
         }
         return transformed;
+      } else {
+        // No color config but still ensure viewBox for proper scaling
+        return ensureSvgViewBox(foregroundValue);
       }
     }
     return foregroundValue;
