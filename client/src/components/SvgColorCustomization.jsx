@@ -44,7 +44,6 @@ const SvgColorCustomization = ({
 }) => {
   const [expandedGroups, setExpandedGroups] = useState({});
 
-  console.log('SvgColorCustomization received props:', { elementColorMap, gradientDefinitions });
 
   if (!elementColorMap || Object.keys(elementColorMap).length === 0) {
     return null;
@@ -54,7 +53,6 @@ const SvgColorCustomization = ({
   const colorSlots = providedColorSlots || [];
   
   if (!providedColorSlots) {
-    console.log('SvgColorCustomization converting elementColorMap:', elementColorMap);
     Object.entries(elementColorMap).forEach(([path, colors]) => {
     if (colors.fill) {
       colorSlots.push({
@@ -96,6 +94,7 @@ const SvgColorCustomization = ({
       
       // Try to find the gradient definition using the actual gradient ID from the slot
       const actualGradientId = slot.gradientId; // This contains "linearGrad1", "radialGrad1", etc.
+      
       if (actualGradientId && gradientDefinitions && gradientDefinitions[actualGradientId]) {
         // Initialize gradient group if not exists
         if (!gradientGroups[gradientId]) {
@@ -121,6 +120,7 @@ const SvgColorCustomization = ({
           
           gradient.stops.forEach((stop, stopIndex) => {
             const originalStop = originalGradient?.stops[stopIndex];
+            
             const stopSlot = {
               id: `${gradientId}-stop-${stopIndex}`,
               label: `Stop ${stopIndex + 1}`,
@@ -132,6 +132,7 @@ const SvgColorCustomization = ({
               stopOffset: stop.offset,
               stopOpacity: stop.opacity
             };
+            
             gradientGroups[gradientId].stops.push(stopSlot);
           });
         }
@@ -373,8 +374,6 @@ const SvgColorCustomization = ({
               <button
                 type="button"
                 onClick={() => {
-                  console.log('Relinking to parent gradient:', parentGradientId);
-                  
                   // Update the element to use the parent gradient again
                   const updatedElementColorMap = { ...elementColorMap };
                   const element = gradientGroup.elements[0]; // Unlinked gradients only have one element
@@ -413,31 +412,15 @@ const SvgColorCustomization = ({
           </div>
           
           {isGradient ? (
-            // For gradients, show "Edit Gradient" button instead of color picker
+            // For gradients, show gradient info and reset button
             <div className="control-group svg-color-control" style={{ marginTop: '8px', paddingLeft: '30px' }}>
-              <button 
-                type="button"
-                onClick={() => toggleGroup(originalColor)}
-                style={{
-                  background: '#4f46e5',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  padding: '6px 12px',
-                  cursor: 'pointer'
-                }}
-              >
-                Edit Gradient {isExpanded ? '▲' : '▼'}
-              </button>
-              <span className="color-display-hex8" style={{ marginLeft: '10px' }}>
+              <span className="color-display-hex8">
                 {slots.length} gradient stop{slots.length > 1 ? 's' : ''}
               </span>
               <button 
                 type="button" 
                 onClick={() => {
                   // Reset all stops in this gradient to original colors
-                  console.log('Resetting all stops for gradient:', originalColor);
-                  
                   // Find the gradient ID from the first slot
                   const firstGradientSlot = slots.find(slot => slot.isGradientStop);
                   if (firstGradientSlot && firstGradientSlot.gradientId) {
@@ -491,8 +474,6 @@ const SvgColorCustomization = ({
                 type="button" 
                 onClick={() => {
                   // Reset all slots in this group to their original colors
-                  console.log('Resetting group to original colors:', originalColor, 'for', slots.length, 'slots');
-                  
                   const updatedElementColorMap = { ...elementColorMap };
                   slots.forEach(slot => {
                     if (!updatedElementColorMap[slot.elementPath]) {
@@ -536,8 +517,6 @@ const SvgColorCustomization = ({
                     <button
                       type="button"
                       onClick={() => {
-                        console.log('Unlinking element:', element);
-                        
                         // Generate a new gradient ID for the cloned gradient
                         const originalGradientId = gradientGroup.gradientId;
                         const newGradientId = `${originalGradientId}-${element.elementPath.replace(/[^\w]/g, '_')}`;
@@ -604,8 +583,6 @@ const SvgColorCustomization = ({
                         
                         if (slot.isGradientStop) {
                           // Handle gradient stop color change
-                          console.log('Gradient stop color change:', slot.gradientId, 'stop', slot.stopIndex, 'to', newColor);
-                          
                           // Create updated gradient definitions
                           const updatedGradientDefinitions = { ...gradientDefinitions };
                           if (updatedGradientDefinitions[slot.gradientId]) {
@@ -621,7 +598,6 @@ const SvgColorCustomization = ({
                           onColorChange(elementColorMap, updatedGradientDefinitions);
                         } else {
                           // Handle regular slot color change
-                          console.log('Individual slot color change:', slot.elementPath, slot.colorType, 'to', newColor);
                           const updatedElementColorMap = { ...elementColorMap };
                           if (!updatedElementColorMap[slot.elementPath]) {
                             updatedElementColorMap[slot.elementPath] = {};
@@ -630,7 +606,6 @@ const SvgColorCustomization = ({
                             original: slot.originalColor,
                             current: newColor
                           };
-                          console.log('Updated elementColorMap:', updatedElementColorMap);
                           onColorChange(updatedElementColorMap);
                         }
                       }}
@@ -644,8 +619,6 @@ const SvgColorCustomization = ({
                         
                         if (slot.isGradientStop) {
                           // Handle gradient stop alpha change
-                          console.log('Gradient stop alpha change:', slot.gradientId, 'stop', slot.stopIndex, 'to', newColor);
-                          
                           // Create updated gradient definitions
                           const updatedGradientDefinitions = { ...gradientDefinitions };
                           if (updatedGradientDefinitions[slot.gradientId]) {
@@ -679,9 +652,6 @@ const SvgColorCustomization = ({
                       onClick={() => {
                         if (slot.isGradientStop) {
                           // Reset gradient stop to original color
-                          console.log('Resetting gradient stop:', slot.gradientId, 'stop', slot.stopIndex, 'to original:', slot.originalColor);
-                          console.log('Current slot details:', slot);
-                          
                           // Create updated gradient definitions with original color
                           const updatedGradientDefinitions = { ...gradientDefinitions };
                           const originalGradient = originalGradientDefinitions[slot.gradientId];
@@ -699,7 +669,6 @@ const SvgColorCustomization = ({
                           onColorChange(elementColorMap, updatedGradientDefinitions);
                         } else {
                           // Reset solid color slot to original color
-                          console.log('Resetting solid color slot:', slot.elementPath, slot.colorType, 'to original:', slot.originalColor);
                           const updatedElementColorMap = { ...elementColorMap };
                           if (!updatedElementColorMap[slot.elementPath]) {
                             updatedElementColorMap[slot.elementPath] = {};

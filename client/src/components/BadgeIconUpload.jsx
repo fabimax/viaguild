@@ -270,12 +270,6 @@ function BadgeIconUpload({
             originalGradientDefinitions
           });
           
-          console.log('Setting svgColorData with gradientDefinitions:', gradientDefinitions);
-          console.log('Full svgColorData being set:', {
-            colorSlots,
-            elementColorMap,
-            gradientDefinitions
-          });
         }
         
         // Create preview blob URL
@@ -1360,7 +1354,6 @@ function BadgeIconUpload({
       
       {/* SVG Color Customization */}
       {isSvg && svgColorData && svgColorData.elementColorMap && (
-        console.log('About to render SvgColorCustomization with svgColorData:', svgColorData),
         <SvgColorCustomization
           title="SVG Color Customization"
           elementColorMap={svgColorData.elementColorMap}
@@ -1368,7 +1361,6 @@ function BadgeIconUpload({
           gradientDefinitions={svgColorData.gradientDefinitions || {}}
           originalGradientDefinitions={svgColorData.originalGradientDefinitions || {}}
           onColorChange={(updatedColorMap, updatedGradientDefinitions) => {
-            console.log('BadgeIconUpload onColorChange called with:', { updatedColorMap, updatedGradientDefinitions });
             if (!svgContent) return;
             
             // Apply mappings to SVG - need to handle gradient updates if provided

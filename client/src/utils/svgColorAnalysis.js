@@ -259,7 +259,9 @@ export const buildElementColorMap = (svgString) => {
     gradients.forEach(grad => {
       const id = grad.getAttribute('id');
       if (id) {
-        const stops = [];
+        let stops = [];
+        
+        // First try to get stops directly from this gradient
         grad.querySelectorAll('stop').forEach(stop => {
           let stopColor = stop.getAttribute('stop-color');
           let stopOpacity = stop.getAttribute('stop-opacity');
@@ -281,6 +283,38 @@ export const buildElementColorMap = (svgString) => {
             opacity: stopOpacity || '1'
           });
         });
+        
+        // If no stops found, check for xlink:href reference
+        if (stops.length === 0) {
+          const href = grad.getAttribute('xlink:href') || grad.getAttributeNS('http://www.w3.org/1999/xlink', 'href');
+          if (href && href.startsWith('#')) {
+            const referencedId = href.substring(1);
+            const referencedGradient = svgElement.querySelector(`#${referencedId}`);
+            if (referencedGradient) {
+              referencedGradient.querySelectorAll('stop').forEach(stop => {
+                let stopColor = stop.getAttribute('stop-color');
+                let stopOpacity = stop.getAttribute('stop-opacity');
+                
+                // If attributes not found, check style attribute
+                const style = stop.getAttribute('style');
+                if (style && !stopColor) {
+                  const colorMatch = style.match(/stop-color\s*:\s*([^;]+)/);
+                  if (colorMatch) stopColor = colorMatch[1].trim();
+                }
+                if (style && !stopOpacity) {
+                  const opacityMatch = style.match(/stop-opacity\s*:\s*([^;]+)/);
+                  if (opacityMatch) stopOpacity = opacityMatch[1].trim();
+                }
+                
+                stops.push({
+                  offset: stop.getAttribute('offset') || '0%',
+                  color: stopColor || '#000000',
+                  opacity: stopOpacity || '1'
+                });
+              });
+            }
+          }
+        }
         
         gradientDefinitions[id] = {
           type: grad.tagName.toLowerCase(), // 'lineargradient' or 'radialgradient'

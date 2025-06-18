@@ -340,7 +340,6 @@ const BadgeTemplateCreatePage = () => {
     
     // Debug: Check what color data we're receiving
     if (colorData?.elementColorMap) {
-      console.log('BadgeTemplateCreatePage received colorData:', colorData);
       Object.entries(colorData.elementColorMap).forEach(([path, colors]) => {
         if (colors.fill?.original === 'UNSPECIFIED') {
           console.log(`Preview will use UNSPECIFIED fill at ${path}, current:`, colors.fill.current);

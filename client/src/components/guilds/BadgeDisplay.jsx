@@ -68,10 +68,8 @@ const BadgeDisplay = ({ badge }) => {
     
     // If we have a system icon name, fetch its SVG content
     if (type === 'SYSTEM_ICON' && value && !isSvgContent(value)) {
-      console.log('BadgeDisplay fetching system icon:', value);
       SystemIconService.getSystemIconSvg(value)
         .then(svgContent => {
-          console.log('BadgeDisplay fetched SVG for', value, ':', svgContent.substring(0, 100) + '...');
           if (isMounted) setCurrentFg({ type, value: svgContent });
         })
         .catch(err => {
@@ -80,12 +78,10 @@ const BadgeDisplay = ({ badge }) => {
         });
     } else if (type === 'UPLOADED_ICON' && value && !isSvgContent(value) && foregroundConfig?.type === 'customizable-svg') {
       // For customizable SVGs, fetch the SVG content through our server proxy to avoid CORS
-      console.log('BadgeDisplay: Fetching customizable SVG from:', value);
       import('../../services/api.js').then(({ default: api }) => {
         return api.get('/fetch-svg', { params: { url: value } });
       })
         .then(response => {
-          console.log('BadgeDisplay: SVG fetch successful:', response.data);
           if (isMounted) setCurrentFg({ type, value: response.data });
         })
         .catch(err => {
@@ -284,16 +280,18 @@ const BadgeDisplay = ({ badge }) => {
     // For uploaded icons with color config, apply transformations
     if (foregroundType === 'UPLOADED_ICON' && isSvgContent(foregroundValue)) {
       if (resolvedForegroundConfig) {
-        // For customizable-svg that was fetched from server, the SVG is already transformed
-        // Only apply transformations for other cases (like preview mode)
-        if (resolvedForegroundConfig.type === 'customizable-svg' && foregroundValue.includes('fill=')) {
-          // SVG already has colors applied, don't transform again
-          console.log('BadgeDisplay: Skipping transformation - SVG already has colors applied');
+        // Check if this is already a transformed SVG from BadgeIconUpload (contains blob: URL references)
+        // or if it's a complex SVG that should not be double-transformed
+        if (foregroundValue.includes('blob:') || foregroundValue.length > 50000) {
           return foregroundValue;
         }
         // Only transform if we have SVG content that needs transformation
-        console.log('BadgeDisplay: Applying SVG color transformation');
-        return applySvgColorTransform(foregroundValue, resolvedForegroundConfig);
+        const transformed = applySvgColorTransform(foregroundValue, resolvedForegroundConfig);
+        if (transformed.length < foregroundValue.length * 0.5) {
+          console.warn('SVG significantly reduced in size - possible corruption!');
+          return foregroundValue; // Return original if corruption detected
+        }
+        return transformed;
       }
     }
     return foregroundValue;
