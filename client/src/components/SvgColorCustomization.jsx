@@ -1,4 +1,88 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+
+// HSL conversion utilities
+const hexToHsl = (hex) => {
+  // Remove # and convert to RGB
+  const r = parseInt(hex.substring(1, 3), 16) / 255;
+  const g = parseInt(hex.substring(3, 5), 16) / 255;
+  const b = parseInt(hex.substring(5, 7), 16) / 255;
+
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const diff = max - min;
+  
+  let h = 0;
+  let s = 0;
+  let l = (max + min) / 2;
+
+  if (diff !== 0) {
+    s = l > 0.5 ? diff / (2 - max - min) : diff / (max + min);
+    
+    switch (max) {
+      case r: h = (g - b) / diff + (g < b ? 6 : 0); break;
+      case g: h = (b - r) / diff + 2; break;
+      case b: h = (r - g) / diff + 4; break;
+    }
+    h /= 6;
+  }
+
+  return {
+    h: h * 360, // 0-360
+    s: s * 100, // 0-100
+    l: l * 100  // 0-100
+  };
+};
+
+const hslToHex = (h, s, l) => {
+  h = h / 360;
+  s = s / 100;
+  l = l / 100;
+
+  const hue2rgb = (p, q, t) => {
+    if (t < 0) t += 1;
+    if (t > 1) t -= 1;
+    if (t < 1/6) return p + (q - p) * 6 * t;
+    if (t < 1/2) return q;
+    if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+    return p;
+  };
+
+  let r, g, b;
+  if (s === 0) {
+    r = g = b = l; // achromatic
+  } else {
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+    r = hue2rgb(p, q, h + 1/3);
+    g = hue2rgb(p, q, h);
+    b = hue2rgb(p, q, h - 1/3);
+  }
+
+  const toHex = (c) => {
+    const hex = Math.round(c * 255).toString(16);
+    return hex.length === 1 ? '0' + hex : hex;
+  };
+
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`.toUpperCase();
+};
+
+// Apply HSL adjustments to a color
+const adjustColorHsl = (hex, hueDelta, satDelta, lightDelta) => {
+  if (!hex || !hex.startsWith('#')) return hex;
+  
+  const baseHex = hex.length === 9 ? hex.substring(0, 7) : hex;
+  const alpha = hex.length === 9 ? hex.substring(7) : null;
+  
+  const hsl = hexToHsl(baseHex);
+  
+  // Apply adjustments with clamping
+  const newH = (hsl.h + hueDelta + 360) % 360; // Wrap around
+  const newS = Math.max(0, Math.min(100, hsl.s + satDelta));
+  const newL = Math.max(0, Math.min(100, hsl.l + lightDelta));
+  
+  const newHex = hslToHex(newH, newS, newL);
+  return alpha ? newHex + alpha : newHex;
+};
 
 // Helper to parse a color string into { hex: #RRGGBB, alpha: number (0-1) }
 const parseColorString = (colorString) => {
@@ -43,6 +127,16 @@ const SvgColorCustomization = ({
   onColorChange 
 }) => {
   const [expandedGroups, setExpandedGroups] = useState({});
+  const [globalAdjustments, setGlobalAdjustments] = useState({
+    hue: 0,      // -180 to +180
+    saturation: 0, // -100 to +100  
+    lightness: 0   // -100 to +100
+  });
+
+  // Reset global adjustments when a new SVG is uploaded (only track the keys, not the values)
+  useEffect(() => {
+    setGlobalAdjustments({ hue: 0, saturation: 0, lightness: 0 });
+  }, [Object.keys(elementColorMap || {}).join(',')]); // Only reset when the structure changes (new SVG)
 
 
   if (!elementColorMap || Object.keys(elementColorMap).length === 0) {
@@ -166,6 +260,60 @@ const SvgColorCustomization = ({
       ...prev,
       [color]: !prev[color]
     }));
+  };
+
+  // Apply global HSL adjustments to all colors
+  const handleGlobalAdjustment = (type, value) => {
+    const newAdjustments = { ...globalAdjustments, [type]: parseFloat(value) };
+    setGlobalAdjustments(newAdjustments);
+
+    // Apply to all solid colors (additive: apply adjustment delta to current colors)
+    const updatedElementColorMap = { ...elementColorMap };
+    const deltaHue = newAdjustments.hue - globalAdjustments.hue;
+    const deltaSat = newAdjustments.saturation - globalAdjustments.saturation;
+    const deltaLight = newAdjustments.lightness - globalAdjustments.lightness;
+    
+    Object.keys(updatedElementColorMap).forEach(path => {
+      const element = updatedElementColorMap[path];
+      if (element.fill && !element.fill.isGradient) {
+        const adjustedColor = adjustColorHsl(
+          element.fill.current, // Use current color, not original
+          deltaHue,             // Apply only the delta change
+          deltaSat, 
+          deltaLight
+        );
+        element.fill.current = adjustedColor;
+      }
+      if (element.stroke && !element.stroke.isGradient) {
+        const adjustedColor = adjustColorHsl(
+          element.stroke.current, // Use current color, not original
+          deltaHue,               // Apply only the delta change
+          deltaSat, 
+          deltaLight
+        );
+        element.stroke.current = adjustedColor;
+      }
+    });
+
+    // Apply to all gradient stops (additive: apply adjustment delta to current stops)
+    const updatedGradientDefinitions = { ...gradientDefinitions };
+    Object.keys(updatedGradientDefinitions).forEach(gradientId => {
+      const gradient = updatedGradientDefinitions[gradientId];
+      if (gradient) {
+        gradient.stops = gradient.stops.map((stop) => {
+          const adjustedColor = adjustColorHsl(
+            stop.color,    // Use current stop color, not original
+            deltaHue,      // Apply only the delta change
+            deltaSat, 
+            deltaLight
+          );
+          return { ...stop, color: adjustedColor };
+        });
+      }
+    });
+
+    // Notify parent of changes
+    onColorChange(updatedElementColorMap, updatedGradientDefinitions);
   };
 
   const handleGroupColorChange = (originalColor, newHex, newAlpha, isGradient = false) => {
@@ -698,6 +846,164 @@ const SvgColorCustomization = ({
   return (
     <div className="control-section" style={{ marginTop: '20px' }}>
       <h3>{title}</h3>
+      
+      {/* Global Adjustments Section */}
+      <div className="global-adjustments" style={{ marginBottom: '20px', padding: '12px', background: '#f8f9fa', borderRadius: '4px', border: '1px solid #e9ecef' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+          <h4 style={{ margin: '0', color: '#495057', fontSize: '1em' }}>Global Adjustments</h4>
+        </div>
+        
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px', alignItems: 'center' }}>
+          {/* Hue Control */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <label style={{ fontSize: '0.85em', fontWeight: '500', color: '#495057' }}>
+                Hue: {globalAdjustments.hue}°
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  // Only reset hue (no clamping issues with hue)
+                  const deltaHue = 0 - globalAdjustments.hue;
+                  
+                  // Update state to reset only hue
+                  setGlobalAdjustments(prev => ({ ...prev, hue: 0 }));
+                  
+                  // Apply the hue reset delta
+                  const updatedElementColorMap = { ...elementColorMap };
+                  Object.keys(updatedElementColorMap).forEach(path => {
+                    const element = updatedElementColorMap[path];
+                    if (element.fill && !element.fill.isGradient) {
+                      const adjustedColor = adjustColorHsl(element.fill.current, deltaHue, 0, 0);
+                      element.fill.current = adjustedColor;
+                    }
+                    if (element.stroke && !element.stroke.isGradient) {
+                      const adjustedColor = adjustColorHsl(element.stroke.current, deltaHue, 0, 0);
+                      element.stroke.current = adjustedColor;
+                    }
+                  });
+                  
+                  const updatedGradientDefinitions = { ...gradientDefinitions };
+                  Object.keys(updatedGradientDefinitions).forEach(gradientId => {
+                    const gradient = updatedGradientDefinitions[gradientId];
+                    if (gradient) {
+                      gradient.stops = gradient.stops.map((stop) => {
+                        const adjustedColor = adjustColorHsl(stop.color, deltaHue, 0, 0);
+                        return { ...stop, color: adjustedColor };
+                      });
+                    }
+                  });
+                  
+                  onColorChange(updatedElementColorMap, updatedGradientDefinitions);
+                }}
+                style={{
+                  fontSize: '10px',
+                  padding: '2px 6px',
+                  background: '#6c757d',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '3px',
+                  cursor: 'pointer'
+                }}
+              >
+                Reset Hue
+              </button>
+            </div>
+            <input
+              type="range"
+              min="-180"
+              max="180"
+              step="1"
+              value={globalAdjustments.hue}
+              onChange={(e) => handleGlobalAdjustment('hue', e.target.value)}
+              style={{ width: '100%' }}
+            />
+          </div>
+          
+          {/* Saturation Control */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <label style={{ fontSize: '0.85em', fontWeight: '500', color: '#495057' }}>
+              Saturation: {globalAdjustments.saturation > 0 ? '+' : ''}{globalAdjustments.saturation}%
+            </label>
+            <input
+              type="range"
+              min="-100"
+              max="100"
+              step="1"
+              value={globalAdjustments.saturation}
+              onChange={(e) => handleGlobalAdjustment('saturation', e.target.value)}
+              style={{ width: '100%' }}
+            />
+          </div>
+          
+          {/* Lightness Control */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <label style={{ fontSize: '0.85em', fontWeight: '500', color: '#495057' }}>
+              Lightness: {globalAdjustments.lightness > 0 ? '+' : ''}{globalAdjustments.lightness}%
+            </label>
+            <input
+              type="range"
+              min="-100"
+              max="100"
+              step="1"
+              value={globalAdjustments.lightness}
+              onChange={(e) => handleGlobalAdjustment('lightness', e.target.value)}
+              style={{ width: '100%' }}
+            />
+          </div>
+        </div>
+      </div>
+      
+      {/* Reset All to Original button */}
+      <div style={{ marginBottom: '20px', textAlign: 'center' }}>
+        <button
+          type="button"
+          onClick={() => {
+            // Reset global adjustments state
+            setGlobalAdjustments({ hue: 0, saturation: 0, lightness: 0 });
+            
+            // Reset all solid colors to original
+            const updatedElementColorMap = { ...elementColorMap };
+            Object.keys(updatedElementColorMap).forEach(path => {
+              const element = updatedElementColorMap[path];
+              if (element.fill) {
+                // Handle UNSPECIFIED colors - they should default to black
+                element.fill.current = element.fill.original === 'UNSPECIFIED' ? '#000000FF' : element.fill.original;
+              }
+              if (element.stroke) {
+                // Handle UNSPECIFIED colors - they should default to black
+                element.stroke.current = element.stroke.original === 'UNSPECIFIED' ? '#000000FF' : element.stroke.original;
+              }
+            });
+            
+            // Reset all gradient stops to original
+            const updatedGradientDefinitions = { ...gradientDefinitions };
+            Object.keys(updatedGradientDefinitions).forEach(gradientId => {
+              const gradient = updatedGradientDefinitions[gradientId];
+              const originalGradient = originalGradientDefinitions[gradientId];
+              if (gradient && originalGradient) {
+                gradient.stops = gradient.stops.map((stop, index) => {
+                  const originalStop = originalGradient.stops[index];
+                  return { ...stop, color: originalStop?.color || stop.color };
+                });
+              }
+            });
+            
+            onColorChange(updatedElementColorMap, updatedGradientDefinitions);
+          }}
+          style={{
+            fontSize: '12px',
+            padding: '6px 16px',
+            background: '#dc3545',
+            color: 'white',
+            border: 'none',
+            borderRadius: '3px',
+            cursor: 'pointer'
+          }}
+        >
+          Reset All to Original
+        </button>
+      </div>
       
       {/* Solid Colors Section */}
       {Object.keys(solidColorGroups).length > 0 && (
