@@ -272,7 +272,31 @@ function BadgeIconUpload({
           
         }
         
-        // Create preview blob URL
+        // Apply initial color transformations for inherited colors
+        const hasInheritedColors = Object.values(elementColorMap).some(colors => 
+          colors.fill?.isInherited || colors.stroke?.isInherited
+        );
+        
+        if (hasInheritedColors) {
+          try {
+            const { applySvgColorTransform } = await import('../utils/svgColorTransform');
+            const transformedSvg = applySvgColorTransform(svgContent, {
+              type: 'element-path',
+              version: 1,
+              mappings: elementColorMap
+            });
+            
+            // Create preview from transformed SVG
+            const blob = new Blob([transformedSvg], { type: 'image/svg+xml' });
+            const previewUrl = URL.createObjectURL(blob);
+            setPreviewIcon(previewUrl);
+            return;
+          } catch (error) {
+            console.error('Failed to apply initial color transformations:', error);
+          }
+        }
+        
+        // Fallback: Create preview blob URL from original
         const blob = new Blob([svgContent], { type: 'image/svg+xml' });
         const previewUrl = URL.createObjectURL(blob);
         setPreviewIcon(previewUrl);
@@ -923,10 +947,37 @@ function BadgeIconUpload({
         };
         storeSyncData(uploadedUrl, assetId, syncMetadata);
         
-        // Create preview URL for display
-        const blob = new Blob([processedSvg], { type: 'image/svg+xml' });
-        const previewUrl = URL.createObjectURL(blob);
-        setPreviewIcon(previewUrl);
+        // Apply initial color transformations for inherited colors
+        const hasInheritedColors = Object.values(elementColorMap).some(colors => 
+          colors.fill?.isInherited || colors.stroke?.isInherited
+        );
+        
+        if (hasInheritedColors) {
+          try {
+            const { applySvgColorTransform } = await import('../utils/svgColorTransform');
+            const transformedSvg = applySvgColorTransform(processedSvg, {
+              type: 'element-path',
+              version: 1,
+              mappings: elementColorMap
+            });
+            
+            // Create preview from transformed SVG
+            const blob = new Blob([transformedSvg], { type: 'image/svg+xml' });
+            const previewUrl = URL.createObjectURL(blob);
+            setPreviewIcon(previewUrl);
+          } catch (error) {
+            console.error('Failed to apply initial color transformations:', error);
+            // Fallback to original
+            const blob = new Blob([processedSvg], { type: 'image/svg+xml' });
+            const previewUrl = URL.createObjectURL(blob);
+            setPreviewIcon(previewUrl);
+          }
+        } else {
+          // Create preview URL for display
+          const blob = new Blob([processedSvg], { type: 'image/svg+xml' });
+          const previewUrl = URL.createObjectURL(blob);
+          setPreviewIcon(previewUrl);
+        }
         setUploadedUrl(uploadedUrl);
         setUploadId(assetId);
         setPreviousUploadId(assetId); // Track for cleanup on next upload
