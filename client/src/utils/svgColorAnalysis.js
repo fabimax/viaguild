@@ -367,6 +367,22 @@ export const buildElementColorMap = (svgString) => {
       return color;
     };
 
+    // Helper to get inherited color from parent elements
+    const getInheritedColor = (element, colorType) => {
+      let currentElement = element;
+      
+      // Walk up the DOM tree to find inherited colors
+      while (currentElement && currentElement !== svgElement.parentElement) {
+        const color = getElementColor(currentElement, colorType);
+        if (color && color !== 'inherit' && color !== 'currentColor') {
+          return color;
+        }
+        currentElement = currentElement.parentElement;
+      }
+      
+      return null;
+    };
+
     // Helper to process colors for any element
     const processElementColors = (element, elementPath) => {
       // Store CSS properties for this element
@@ -381,103 +397,121 @@ export const buildElementColorMap = (svgString) => {
           }
         });
       }
-      // Check fill color
+      // Check fill color (including inheritance)
       const fillRaw = getElementColor(element, 'fill');
-      if (fillRaw) {
-        const normalizedFill = parseAndNormalizeColor(fillRaw);
+      const inheritedFill = fillRaw ? null : getInheritedColor(element, 'fill');
+      const effectiveFill = fillRaw || inheritedFill;
+      
+      if (effectiveFill) {
+        const normalizedFill = parseAndNormalizeColor(effectiveFill);
         if (normalizedFill && typeof normalizedFill === 'object' && normalizedFill.type === 'GRADIENT_OR_PATTERN') {
           // Handle gradients/patterns - store ID for future gradient stop editing
           if (!colorMap[elementPath]) colorMap[elementPath] = {};
           colorMap[elementPath].fill = {
             original: 'GRADIENT',
-            current: fillRaw, // Preserve the original gradient reference
+            current: effectiveFill, // Preserve the original gradient reference
             gradientId: normalizedFill.id, // Store ID for future gradient editing
             isGradient: true,
-            cannotCustomize: false // Will be editable in the future
+            cannotCustomize: false, // Will be editable in the future
+            isInherited: !!inheritedFill // Track if this was inherited
           };
         } else if (normalizedFill === 'GRADIENT_OR_PATTERN') {
           // Fallback for malformed gradient references
           if (!colorMap[elementPath]) colorMap[elementPath] = {};
           colorMap[elementPath].fill = {
             original: 'GRADIENT',
-            current: fillRaw,
+            current: effectiveFill,
             isGradient: true,
-            cannotCustomize: true // Malformed, so not editable
+            cannotCustomize: true, // Malformed, so not editable
+            isInherited: !!inheritedFill // Track if this was inherited
           };
         } else if (normalizedFill) {
           detectedColors.add(normalizedFill);
           if (!colorMap[elementPath]) colorMap[elementPath] = {};
           colorMap[elementPath].fill = {
             original: normalizedFill,
-            current: normalizedFill
+            current: normalizedFill,
+            isInherited: !!inheritedFill // Track if this was inherited
           };
-        } else if (fillRaw === 'none' || fillRaw === 'transparent' || fillRaw === 'currentColor') {
+        } else if (effectiveFill === 'none' || effectiveFill === 'transparent' || effectiveFill === 'currentColor') {
           // Treat "none", "transparent", and "currentColor" as unspecified colors that can be customized
           if (!colorMap[elementPath]) colorMap[elementPath] = {};
           colorMap[elementPath].fill = {
             original: 'UNSPECIFIED',
             current: '#000000FF', // Default to black
-            isUnspecified: true
+            isUnspecified: true,
+            isInherited: !!inheritedFill // Track if this was inherited
           };
         }
       } else if (element.tagName.toLowerCase() === 'path' || element.tagName.toLowerCase() === 'circle' || 
                  element.tagName.toLowerCase() === 'rect' || element.tagName.toLowerCase() === 'ellipse' ||
                  element.tagName.toLowerCase() === 'polygon') {
         // Only add unspecified fill for actual drawing elements that typically need fill
+        // and only if no inherited color was found
         if (!colorMap[elementPath]) colorMap[elementPath] = {};
         colorMap[elementPath].fill = {
           original: 'UNSPECIFIED', // Special marker for unspecified colors
           current: '#000000FF', // Default to black
-          isUnspecified: true
+          isUnspecified: true,
+          isInherited: false
         };
       }
       
-      // Check stroke color
+      // Check stroke color (including inheritance)
       const strokeRaw = getElementColor(element, 'stroke');
-      if (strokeRaw) {
-        const normalizedStroke = parseAndNormalizeColor(strokeRaw);
+      const inheritedStroke = strokeRaw ? null : getInheritedColor(element, 'stroke');
+      const effectiveStroke = strokeRaw || inheritedStroke;
+      
+      if (effectiveStroke) {
+        const normalizedStroke = parseAndNormalizeColor(effectiveStroke);
         if (normalizedStroke && typeof normalizedStroke === 'object' && normalizedStroke.type === 'GRADIENT_OR_PATTERN') {
           // Handle gradients/patterns for stroke - store ID for future gradient stop editing
           if (!colorMap[elementPath]) colorMap[elementPath] = {};
           colorMap[elementPath].stroke = {
             original: 'GRADIENT',
-            current: strokeRaw, // Preserve the original gradient reference
+            current: effectiveStroke, // Preserve the original gradient reference
             gradientId: normalizedStroke.id, // Store ID for future gradient editing
             isGradient: true,
-            cannotCustomize: false // Will be editable in the future
+            cannotCustomize: false, // Will be editable in the future
+            isInherited: !!inheritedStroke // Track if this was inherited
           };
         } else if (normalizedStroke === 'GRADIENT_OR_PATTERN') {
           // Fallback for malformed gradient references
           if (!colorMap[elementPath]) colorMap[elementPath] = {};
           colorMap[elementPath].stroke = {
             original: 'GRADIENT',
-            current: strokeRaw,
+            current: effectiveStroke,
             isGradient: true,
-            cannotCustomize: true // Malformed, so not editable
+            cannotCustomize: true, // Malformed, so not editable
+            isInherited: !!inheritedStroke // Track if this was inherited
           };
         } else if (normalizedStroke) {
           detectedColors.add(normalizedStroke);
           if (!colorMap[elementPath]) colorMap[elementPath] = {};
           colorMap[elementPath].stroke = {
             original: normalizedStroke,
-            current: normalizedStroke
+            current: normalizedStroke,
+            isInherited: !!inheritedStroke // Track if this was inherited
           };
-        } else if (strokeRaw === 'none' || strokeRaw === 'transparent' || strokeRaw === 'currentColor') {
+        } else if (effectiveStroke === 'none' || effectiveStroke === 'transparent' || effectiveStroke === 'currentColor') {
           // Treat "none", "transparent", and "currentColor" as unspecified colors that can be customized
           if (!colorMap[elementPath]) colorMap[elementPath] = {};
           colorMap[elementPath].stroke = {
             original: 'UNSPECIFIED',
             current: '#000000FF', // Default to black
-            isUnspecified: true
+            isUnspecified: true,
+            isInherited: !!inheritedStroke // Track if this was inherited
           };
         }
       } else if (element.tagName.toLowerCase() === 'line' || element.tagName.toLowerCase() === 'polyline') {
         // Only add unspecified stroke for elements that commonly use strokes (excluding path)
+        // and only if no inherited color was found
         if (!colorMap[elementPath]) colorMap[elementPath] = {};
         colorMap[elementPath].stroke = {
           original: 'UNSPECIFIED', // Special marker for unspecified colors
           current: '#000000FF', // Default to black
-          isUnspecified: true
+          isUnspecified: true,
+          isInherited: false
         };
       }
       
@@ -493,7 +527,10 @@ export const buildElementColorMap = (svgString) => {
     // Then check all child elements
     colorableElements.forEach(el => {
       const elementPath = getElementPath(el, svgElement);
-      console.log('Processing element:', el.tagName, 'with path:', elementPath, 'fill:', el.getAttribute('fill'));
+      const directFill = el.getAttribute('fill');
+      const inheritedFill = directFill ? null : getInheritedColor(el, 'fill');
+      console.log('Processing element:', el.tagName, 'with path:', elementPath, 
+                  'direct fill:', directFill, 'inherited fill:', inheritedFill);
       processElementColors(el, elementPath);
     });
     
