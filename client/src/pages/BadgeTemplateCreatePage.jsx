@@ -395,15 +395,26 @@ const BadgeTemplateCreatePage = () => {
         }
       case ForegroundContentType.UPLOADED_ICON:
         if (template.defaultForegroundValue?.startsWith('upload://')) {
+          console.log(`[CreatePage] Uploaded icon config check:`, {
+            hasColorData: !!iconSvgColorData,
+            hasElementColorMap: !!(iconSvgColorData?.elementColorMap),
+            mapSize: iconSvgColorData?.elementColorMap ? Object.keys(iconSvgColorData.elementColorMap).length : 0,
+            elementColorMap: iconSvgColorData?.elementColorMap
+          });
+          
           if (iconSvgColorData && iconSvgColorData.elementColorMap && Object.keys(iconSvgColorData.elementColorMap).length > 0) {
-            return {
+            const config = {
               type: 'customizable-svg',
               version: 1,
               url: template.defaultForegroundValue,
               colorMappings: iconSvgColorData.elementColorMap,
             };
+            console.log(`[CreatePage] Created customizable SVG config:`, config);
+            return config;
           } else {
-            return createHostedAssetConfig(template.defaultForegroundValue);
+            const config = createHostedAssetConfig(template.defaultForegroundValue);
+            console.log(`[CreatePage] Created static asset config (no color mappings):`, config);
+            return config;
           }
         }
         return createHostedAssetConfig(uploadedBackgroundUrl || template.defaultForegroundValue);

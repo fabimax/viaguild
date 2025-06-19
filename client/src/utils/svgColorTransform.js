@@ -196,23 +196,23 @@ export const applyElementMappings = (svgString, elementColorMap) => {
  * @returns {string} - Transformed SVG content
  */
 export const applySvgColorTransform = (svgString, colorConfig) => {
-  if (!svgString || !colorConfig || !colorConfig.mappings) {
+  if (!svgString || !colorConfig || !colorConfig.colorMappings) {
     return svgString;
   }
   
-  // Check if mappings object has any actual mappings
-  const mappingEntries = Object.entries(colorConfig.mappings);
+  // Check if colorMappings object has any actual mappings
+  const mappingEntries = Object.entries(colorConfig.colorMappings);
   if (mappingEntries.length === 0) {
     // No actual mappings to apply, return original to avoid unnecessary DOM parsing/serialization
     return svgString;
   }
   
-  // Check if mappings are already in the correct element color map format
+  // Check if colorMappings are already in the correct element color map format
   // (path -> { fill: { original, current }, stroke: { original, current } })
-  const firstMapping = Object.values(colorConfig.mappings)[0];
+  const firstMapping = Object.values(colorConfig.colorMappings)[0];
   if (firstMapping && typeof firstMapping === 'object' && (firstMapping.fill || firstMapping.stroke)) {
     // Already in element color map format, use directly
-    return applyElementMappings(svgString, colorConfig.mappings);
+    return applyElementMappings(svgString, colorConfig.colorMappings);
   }
   
   // Legacy format: Convert simple path->color mappings to element color map format

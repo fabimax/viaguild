@@ -273,6 +273,8 @@ const BadgeDisplay = ({ badge }) => {
 
   // Apply color transformations to SVG content if needed
   const getTransformedForegroundValue = () => {
+    console.log(`[TRANSFORM] Starting - type: ${foregroundType}, isSvg: ${isSvgContent(foregroundValue)}, hasConfig: ${!!resolvedForegroundConfig}`);
+    
     // For system icons with color config, apply transformations
     if (foregroundType === 'SYSTEM_ICON' && isSvgContent(foregroundValue)) {
       if (resolvedForegroundConfig) {
@@ -281,20 +283,31 @@ const BadgeDisplay = ({ badge }) => {
     }
     // For uploaded icons with color config, apply transformations
     if (foregroundType === 'UPLOADED_ICON' && isSvgContent(foregroundValue)) {
+      console.log(`[TRANSFORM] Uploaded icon detected`);
       if (resolvedForegroundConfig) {
+        console.log(`[TRANSFORM] Config found:`, {
+          type: resolvedForegroundConfig.type,
+          hasColorMappings: !!resolvedForegroundConfig.colorMappings,
+          includesBlob: foregroundValue.includes('blob:'),
+          lengthOver50k: foregroundValue.length > 50000
+        });
+        
         // Check if this is already a transformed SVG from BadgeIconUpload (contains blob: URL references)
         // or if it's a complex SVG that should not be double-transformed
         if (foregroundValue.includes('blob:') || foregroundValue.length > 50000) {
+          console.log(`[TRANSFORM] Using viewBox fix for blob/large SVG`);
           // Even for large/blob SVGs, ensure viewBox for proper scaling
           return ensureSvgViewBox(foregroundValue);
         }
+        console.log(`[TRANSFORM] Applying color transform...`);
         // Only transform if we have SVG content that needs transformation
         const transformed = applySvgColorTransform(foregroundValue, resolvedForegroundConfig);
         if (transformed.length < foregroundValue.length * 0.5) {
-          console.warn('SVG significantly reduced in size - possible corruption!');
+          console.warn('[TRANSFORM] SVG significantly reduced in size - possible corruption!');
           // Return original with viewBox fix if corruption detected
           return ensureSvgViewBox(foregroundValue);
         }
+        console.log(`[TRANSFORM] Complete, length: ${transformed.length}`);
         return transformed;
       } else {
         // No color config but still ensure viewBox for proper scaling

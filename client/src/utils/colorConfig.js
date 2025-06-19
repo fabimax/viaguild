@@ -38,8 +38,8 @@ export function extractColor(config, fallback = '#000000') {
       
     case 'element-path':
       // Extract representative color from element mappings
-      if (config.mappings && typeof config.mappings === 'object') {
-        const mappings = Object.values(config.mappings);
+      if (config.colorMappings && typeof config.colorMappings === 'object') {
+        const mappings = Object.values(config.colorMappings);
         for (const mapping of mappings) {
           if (mapping.fill?.current) return mapping.fill.current;
           if (mapping.stroke?.current) return mapping.stroke.current;
@@ -163,14 +163,14 @@ export function createHostedAssetConfig(url) {
 
 /**
  * Create an element-path configuration object for SVG color mappings
- * @param {Object} mappings - Element path to color mappings
+ * @param {Object} colorMappings - Element path to color mappings
  * @returns {Object} Element-path configuration object
  */
-export function createElementPathConfig(mappings) {
+export function createElementPathConfig(colorMappings) {
   return {
     type: 'element-path',
     version: 1,
-    mappings: mappings
+    colorMappings: colorMappings
   };
 }
 
@@ -191,7 +191,7 @@ export function validateColorConfig(config) {
       return typeof config.url === 'string' && config.url.length > 0;
       
     case 'element-path':
-      return config.mappings && typeof config.mappings === 'object';
+      return config.colorMappings && typeof config.colorMappings === 'object';
       
     default:
       return false;
@@ -246,26 +246,24 @@ export function convertLegacyBackground(backgroundType, backgroundValue) {
  * @returns {string} Transformed SVG content
  */
 export function applySvgColorTransform(svgContent, config) {
-  if (!config) {
+  if (!config || !config.colorMappings) {
     return svgContent;
   }
   
-  // Handle both element-path and system-icon configs with mappings
-  let mappings = null;
-  if (config.type === 'element-path' && config.mappings) {
-    mappings = config.mappings;
-  } else if (config.type === 'system-icon' && config.colorMappings) {
-    mappings = config.colorMappings;
-  }
+  // All config types now use colorMappings as the standard field
+  const mappings = config.colorMappings;
   
-  if (!mappings) {
+  if (!mappings || Object.keys(mappings).length === 0) {
     return svgContent;
   }
   
   let transformedSvg = svgContent;
   
+  console.log(`[ColorTransform] Applying mappings for ${config.type}:`, mappings);
+  
   // Apply color mappings to SVG elements
   Object.entries(mappings).forEach(([elementPath, colorMapping]) => {
+    console.log(`[ColorTransform] Processing ${elementPath}:`, colorMapping);
     // Parse element path (e.g., "g[0]/path[1]", "circle[0]")
     const pathParts = elementPath.split('/');
     
