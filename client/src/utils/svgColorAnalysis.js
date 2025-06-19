@@ -33,8 +33,18 @@ const getElementPath = (element, root) => {
  * Returns null for gradients, patterns, and other non-solid colors
  */
 const parseAndNormalizeColor = (colorString) => {
-  if (!colorString || colorString === 'none' || colorString === 'transparent' || colorString === 'currentColor') {
+  if (!colorString || colorString === 'currentColor') {
     return null;
+  }
+  
+  // Handle 'none' as a valid color (no fill/stroke)
+  if (colorString === 'none') {
+    return 'none';
+  }
+  
+  // Handle 'transparent' as a valid color
+  if (colorString === 'transparent') {
+    return '#00000000'; // Fully transparent black
   }
   
   // Check for gradients and patterns
@@ -426,15 +436,19 @@ export const buildElementColorMap = (svgString) => {
             isInherited: !!inheritedFill // Track if this was inherited
           };
         } else if (normalizedFill) {
-          detectedColors.add(normalizedFill);
+          // Don't add 'none' to detected colors, but still track it
+          if (normalizedFill !== 'none') {
+            detectedColors.add(normalizedFill);
+          }
           if (!colorMap[elementPath]) colorMap[elementPath] = {};
           colorMap[elementPath].fill = {
             original: normalizedFill,
             current: normalizedFill,
             isInherited: !!inheritedFill // Track if this was inherited
           };
-        } else if (effectiveFill === 'none' || effectiveFill === 'transparent' || effectiveFill === 'currentColor') {
-          // Treat "none", "transparent", and "currentColor" as unspecified colors that can be customized
+        } else if (effectiveFill === 'currentColor') {
+          // Only treat "currentColor" as unspecified/customizable
+          // "none" and "transparent" are intentional choices that should be preserved
           if (!colorMap[elementPath]) colorMap[elementPath] = {};
           colorMap[elementPath].fill = {
             original: 'UNSPECIFIED',
@@ -486,15 +500,19 @@ export const buildElementColorMap = (svgString) => {
             isInherited: !!inheritedStroke // Track if this was inherited
           };
         } else if (normalizedStroke) {
-          detectedColors.add(normalizedStroke);
+          // Don't add 'none' to detected colors, but still track it
+          if (normalizedStroke !== 'none') {
+            detectedColors.add(normalizedStroke);
+          }
           if (!colorMap[elementPath]) colorMap[elementPath] = {};
           colorMap[elementPath].stroke = {
             original: normalizedStroke,
             current: normalizedStroke,
             isInherited: !!inheritedStroke // Track if this was inherited
           };
-        } else if (effectiveStroke === 'none' || effectiveStroke === 'transparent' || effectiveStroke === 'currentColor') {
-          // Treat "none", "transparent", and "currentColor" as unspecified colors that can be customized
+        } else if (effectiveStroke === 'currentColor') {
+          // Only treat "currentColor" as unspecified/customizable
+          // "none" and "transparent" are intentional choices that should be preserved
           if (!colorMap[elementPath]) colorMap[elementPath] = {};
           colorMap[elementPath].stroke = {
             original: 'UNSPECIFIED',
