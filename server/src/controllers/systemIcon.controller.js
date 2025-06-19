@@ -2,6 +2,25 @@ const systemIconService = require('../services/systemIcon.service');
 
 class SystemIconController {
   /**
+   * Get all available system icons
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
+  async getAllIcons(req, res) {
+    try {
+      const icons = await systemIconService.getAllIcons();
+      res.json({
+        success: true,
+        data: icons,
+        total: icons.length
+      });
+    } catch (error) {
+      console.error('Error fetching system icons:', error);
+      res.status(500).json({ error: 'Failed to fetch system icons' });
+    }
+  }
+
+  /**
    * Get SVG content of a system icon by its name
    * @param {Object} req - Express request object
    * @param {Object} res - Express response object

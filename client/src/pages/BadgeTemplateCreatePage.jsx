@@ -6,6 +6,7 @@ import BadgeDisplay from '../components/guilds/BadgeDisplay';
 import BadgeIconUpload from '../components/BadgeIconUpload';
 import BadgeBackgroundUpload from '../components/BadgeBackgroundUpload';
 import SvgColorCustomization from '../components/SvgColorCustomization';
+import SystemIconSelector from '../components/SystemIconSelector';
 import SystemIconService from '../services/systemIcon.service';
 import badgeService from '../services/badgeService';
 import { 
@@ -909,13 +910,12 @@ const BadgeTemplateCreatePage = () => {
                       maxLength={20}
                     />
                   ) : template.defaultForegroundType === ForegroundContentType.SYSTEM_ICON ? (
-                    <input
-                      type="text"
-                      id="defaultForegroundValue"
-                      name="defaultForegroundValue"
-                      value={template.defaultForegroundValue}
-                      onChange={handleInputChange}
-                      placeholder="Icon name (e.g., Shield, Star, Trophy)"
+                    <SystemIconSelector
+                      selectedIcon={template.defaultForegroundValue}
+                      onIconSelect={(iconName) => {
+                        setTemplate(prev => ({ ...prev, defaultForegroundValue: iconName }));
+                      }}
+                      selectedIconSvg={displayableForegroundSvg}
                     />
                   ) : template.defaultForegroundType === ForegroundContentType.UPLOADED_ICON ? (
                     <BadgeIconUpload
