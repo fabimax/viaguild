@@ -127,16 +127,32 @@ const SvgColorCustomization = ({
   onColorChange 
 }) => {
   const [expandedGroups, setExpandedGroups] = useState({});
+  const [expandedGradientSections, setExpandedGradientSections] = useState({});
   const [globalAdjustments, setGlobalAdjustments] = useState({
     hue: 0,      // -180 to +180
     saturation: 0, // -100 to +100  
     lightness: 0   // -100 to +100
   });
+  const [gradientAdjustments, setGradientAdjustments] = useState({});
 
   // Reset global adjustments when a new SVG is uploaded (only track the keys, not the values)
   useEffect(() => {
     setGlobalAdjustments({ hue: 0, saturation: 0, lightness: 0 });
+    setGradientAdjustments({});
   }, [Object.keys(elementColorMap || {}).join(',')]); // Only reset when the structure changes (new SVG)
+  
+  // Helper to get gradient-specific adjustments
+  const getGradientAdjustments = (gradientId) => {
+    return gradientAdjustments[gradientId] || { hue: 0, saturation: 0, lightness: 0 };
+  };
+  
+  // Helper to set gradient-specific adjustments
+  const setGradientSpecificAdjustments = (gradientId, adjustments) => {
+    setGradientAdjustments(prev => ({
+      ...prev,
+      [gradientId]: adjustments
+    }));
+  };
 
 
   if (!elementColorMap || Object.keys(elementColorMap).length === 0) {
@@ -259,6 +275,14 @@ const SvgColorCustomization = ({
     setExpandedGroups(prev => ({
       ...prev,
       [color]: !prev[color]
+    }));
+  };
+
+  const toggleGradientSection = (gradientId, section) => {
+    const key = `${gradientId}-${section}`;
+    setExpandedGradientSections(prev => ({
+      ...prev,
+      [key]: !prev[key]
     }));
   };
 
@@ -652,171 +676,401 @@ const SvgColorCustomization = ({
         
         {isExpanded && (
           <div className="color-group-items" style={{ paddingLeft: '30px', marginTop: '10px' }}>
-            {/* Show element unlink controls for gradients */}
-            {isGradient && gradientGroup && gradientGroup.elements.length > 1 && (
-              <div style={{ marginBottom: '15px', padding: '10px', background: '#f5f5f5', borderRadius: '4px' }}>
-                <h5 style={{ margin: '0 0 10px 0' }}>Unlink Elements</h5>
-                <p style={{ fontSize: '0.9em', color: '#666', margin: '0 0 10px 0' }}>
-                  Unlink an element to edit its gradient independently
-                </p>
-                {gradientGroup.elements.map(element => (
-                  <div key={element.slotId} style={{ marginBottom: '5px' }}>
-                    <span style={{ marginRight: '10px' }}>{element.label}</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        // Generate a new gradient ID for the cloned gradient
-                        const originalGradientId = gradientGroup.gradientId;
-                        const newGradientId = `${originalGradientId}-${element.elementPath.replace(/[^\w]/g, '_')}`;
-                        
-                        // Clone the gradient definition
-                        const updatedGradientDefinitions = { ...gradientDefinitions };
-                        if (gradientDefinitions[originalGradientId]) {
-                          updatedGradientDefinitions[newGradientId] = {
-                            ...gradientDefinitions[originalGradientId],
-                            stops: gradientDefinitions[originalGradientId].stops.map(stop => ({ ...stop }))
-                          };
-                        }
-                        
-                        // Update the element to use the new gradient
-                        const updatedElementColorMap = { ...elementColorMap };
-                        if (updatedElementColorMap[element.elementPath] && 
-                            updatedElementColorMap[element.elementPath][element.colorType]) {
-                          updatedElementColorMap[element.elementPath][element.colorType] = {
-                            ...updatedElementColorMap[element.elementPath][element.colorType],
-                            gradientId: newGradientId,
-                            current: `url(#${newGradientId})`
-                          };
-                        }
-                        
-                        // Call onColorChange with both updated maps
-                        onColorChange(updatedElementColorMap, updatedGradientDefinitions);
-                      }}
-                      style={{
-                        fontSize: '12px',
-                        padding: '2px 8px',
-                        background: '#4f46e5',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '3px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      Unlink
-                    </button>
+            {isGradient ? (
+              // Gradient-specific sections
+              <div>
+                {/* Gradient Adjustments Section */}
+                <div style={{ marginBottom: '15px' }}>
+                  <div style={{ marginBottom: '10px', padding: '10px', background: '#f8f9fa', borderRadius: '4px', border: '1px solid #e9ecef' }}>
+                    <h5 style={{ margin: '0 0 10px 0', color: '#495057' }}>Gradient Adjustments</h5>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                      {/* Hue Control */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <label style={{ fontSize: '0.8em', fontWeight: '500', color: '#495057' }}>
+                          Hue: {Math.round(getGradientAdjustments(gradientGroup?.gradientId).hue)}°
+                        </label>
+                        <input
+                          type="range"
+                          min="-180"
+                          max="180"
+                          step="1"
+                          value={getGradientAdjustments(gradientGroup?.gradientId).hue}
+                          onChange={(e) => {
+                            // Apply HSL adjustment only to this gradient
+                            const gradientId = gradientGroup?.gradientId;
+                            if (gradientId && gradientDefinitions[gradientId]) {
+                              const currentAdjustments = getGradientAdjustments(gradientId);
+                              const deltaHue = parseFloat(e.target.value) - currentAdjustments.hue;
+                              const updatedGradientDefinitions = { ...gradientDefinitions };
+                              const gradient = updatedGradientDefinitions[gradientId];
+                              
+                              gradient.stops = gradient.stops.map((stop) => {
+                                const adjustedColor = adjustColorHsl(stop.color, deltaHue, 0, 0);
+                                return { ...stop, color: adjustedColor };
+                              });
+                              
+                              // Update gradient-specific adjustments state
+                              setGradientSpecificAdjustments(gradientId, {
+                                ...currentAdjustments,
+                                hue: parseFloat(e.target.value)
+                              });
+                              
+                              onColorChange(elementColorMap, updatedGradientDefinitions);
+                            }
+                          }}
+                          style={{ width: '100%' }}
+                        />
+                      </div>
+                      
+                      {/* Saturation Control */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <label style={{ fontSize: '0.8em', fontWeight: '500', color: '#495057' }}>
+                          Saturation: {getGradientAdjustments(gradientGroup?.gradientId).saturation > 0 ? '+' : ''}{Math.round(getGradientAdjustments(gradientGroup?.gradientId).saturation)}%
+                        </label>
+                        <input
+                          type="range"
+                          min="-100"
+                          max="100"
+                          step="1"
+                          value={getGradientAdjustments(gradientGroup?.gradientId).saturation}
+                          onChange={(e) => {
+                            // Apply HSL adjustment only to this gradient
+                            const gradientId = gradientGroup?.gradientId;
+                            if (gradientId && gradientDefinitions[gradientId]) {
+                              const currentAdjustments = getGradientAdjustments(gradientId);
+                              const deltaSat = parseFloat(e.target.value) - currentAdjustments.saturation;
+                              const updatedGradientDefinitions = { ...gradientDefinitions };
+                              const gradient = updatedGradientDefinitions[gradientId];
+                              
+                              gradient.stops = gradient.stops.map((stop) => {
+                                const adjustedColor = adjustColorHsl(stop.color, 0, deltaSat, 0);
+                                return { ...stop, color: adjustedColor };
+                              });
+                              
+                              // Update gradient-specific adjustments state
+                              setGradientSpecificAdjustments(gradientId, {
+                                ...currentAdjustments,
+                                saturation: parseFloat(e.target.value)
+                              });
+                              
+                              onColorChange(elementColorMap, updatedGradientDefinitions);
+                            }
+                          }}
+                          style={{ width: '100%' }}
+                        />
+                      </div>
+                      
+                      {/* Lightness Control */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <label style={{ fontSize: '0.8em', fontWeight: '500', color: '#495057' }}>
+                          Lightness: {getGradientAdjustments(gradientGroup?.gradientId).lightness > 0 ? '+' : ''}{Math.round(getGradientAdjustments(gradientGroup?.gradientId).lightness)}%
+                        </label>
+                        <input
+                          type="range"
+                          min="-100"
+                          max="100"
+                          step="1"
+                          value={getGradientAdjustments(gradientGroup?.gradientId).lightness}
+                          onChange={(e) => {
+                            // Apply HSL adjustment only to this gradient
+                            const gradientId = gradientGroup?.gradientId;
+                            if (gradientId && gradientDefinitions[gradientId]) {
+                              const currentAdjustments = getGradientAdjustments(gradientId);
+                              const deltaLight = parseFloat(e.target.value) - currentAdjustments.lightness;
+                              const updatedGradientDefinitions = { ...gradientDefinitions };
+                              const gradient = updatedGradientDefinitions[gradientId];
+                              
+                              gradient.stops = gradient.stops.map((stop) => {
+                                const adjustedColor = adjustColorHsl(stop.color, 0, 0, deltaLight);
+                                return { ...stop, color: adjustedColor };
+                              });
+                              
+                              // Update gradient-specific adjustments state
+                              setGradientSpecificAdjustments(gradientId, {
+                                ...currentAdjustments,
+                                lightness: parseFloat(e.target.value)
+                              });
+                              
+                              onColorChange(elementColorMap, updatedGradientDefinitions);
+                            }
+                          }}
+                          style={{ width: '100%' }}
+                        />
+                      </div>
+                    </div>
+                    
+                    {/* Reset Gradient Button */}
+                    <div style={{ marginTop: '10px', textAlign: 'center' }}>
+                      <button 
+                        type="button" 
+                        onClick={() => {
+                          // Reset all stops in this gradient to original colors and reset adjustments
+                          const gradientId = gradientGroup?.gradientId;
+                          if (gradientId) {
+                            const updatedGradientDefinitions = { ...gradientDefinitions };
+                            const originalGradient = originalGradientDefinitions[gradientId];
+                            if (updatedGradientDefinitions[gradientId] && originalGradient) {
+                              updatedGradientDefinitions[gradientId] = {
+                                ...updatedGradientDefinitions[gradientId],
+                                stops: updatedGradientDefinitions[gradientId].stops.map((stop, idx) => ({
+                                  ...stop,
+                                  color: originalGradient.stops[idx]?.color || stop.color
+                                }))
+                              };
+                            }
+                            
+                            // Reset gradient-specific adjustments state
+                            setGradientSpecificAdjustments(gradientId, { hue: 0, saturation: 0, lightness: 0 });
+                            
+                            onColorChange(elementColorMap, updatedGradientDefinitions);
+                          }
+                        }} 
+                        className="reset-color-btn" 
+                        style={{ fontSize: '12px', padding: '4px 12px' }}
+                      >
+                        Reset Gradient
+                      </button>
+                    </div>
                   </div>
-                ))}
-              </div>
-            )}
-            
-            {/* Gradient stop controls */}
-            {slots.map((slot) => {
-              const { hex: slotHex, alpha: slotAlpha } = parseColorString(slot.currentColor);
-              return (
-                <div key={slot.id} style={{ marginBottom: '10px' }}>
-                  <label style={{ fontWeight: 'normal', marginBottom: '5px', display: 'block' }}>
-                    {slot.label}
-                    {slot.isGradientStop && (
-                      <span style={{ fontSize: '0.8em', color: '#666', marginLeft: '8px' }}>
-                        (Position: {slot.stopOffset})
-                      </span>
-                    )}
-                  </label>
-                  <div className="control-group svg-color-control">
-                    <input 
-                      type="color" 
-                      value={slotHex}
-                      onChange={(e) => {
-                        const newColor = formatHexWithAlpha(e.target.value, slotAlpha);
-                        
-                        if (slot.isGradientStop) {
-                          // Handle gradient stop color change
-                          // Create updated gradient definitions
-                          const updatedGradientDefinitions = { ...gradientDefinitions };
-                          if (updatedGradientDefinitions[slot.gradientId]) {
-                            updatedGradientDefinitions[slot.gradientId] = {
-                              ...updatedGradientDefinitions[slot.gradientId],
-                              stops: updatedGradientDefinitions[slot.gradientId].stops.map((stop, idx) =>
-                                idx === slot.stopIndex ? { ...stop, color: newColor } : stop
-                              )
-                            };
-                          }
-                          
-                          // Call onColorChange with gradient update info
-                          onColorChange(elementColorMap, updatedGradientDefinitions);
-                        } else {
-                          // Handle regular slot color change
-                          const updatedElementColorMap = { ...elementColorMap };
-                          if (!updatedElementColorMap[slot.elementPath]) {
-                            updatedElementColorMap[slot.elementPath] = {};
-                          }
-                          updatedElementColorMap[slot.elementPath][slot.colorType] = {
-                            original: slot.originalColor,
-                            current: newColor
-                          };
-                          onColorChange(updatedElementColorMap);
-                        }
-                      }}
-                    />
-                    <input 
-                      type="range" 
-                      min="0" max="1" step="0.01" 
-                      value={slotAlpha}
-                      onChange={(e) => {
-                        const newColor = formatHexWithAlpha(slotHex, parseFloat(e.target.value));
-                        
-                        if (slot.isGradientStop) {
-                          // Handle gradient stop alpha change
-                          // Create updated gradient definitions
-                          const updatedGradientDefinitions = { ...gradientDefinitions };
-                          if (updatedGradientDefinitions[slot.gradientId]) {
-                            updatedGradientDefinitions[slot.gradientId] = {
-                              ...updatedGradientDefinitions[slot.gradientId],
-                              stops: updatedGradientDefinitions[slot.gradientId].stops.map((stop, idx) =>
-                                idx === slot.stopIndex ? { ...stop, color: newColor } : stop
-                              )
-                            };
-                          }
-                          
-                          // Call onColorChange with gradient update
-                          onColorChange(elementColorMap, updatedGradientDefinitions);
-                        } else {
-                          // Handle regular slot alpha change
-                          const updatedElementColorMap = { ...elementColorMap };
-                          if (!updatedElementColorMap[slot.elementPath]) {
-                            updatedElementColorMap[slot.elementPath] = {};
-                          }
-                          updatedElementColorMap[slot.elementPath][slot.colorType] = {
-                            original: slot.originalColor,
-                            current: newColor
-                          };
-                          onColorChange(updatedElementColorMap);
-                        }
-                      }}
-                    />
-                    <span className="color-display-hex8">{slot.currentColor}</span>
+                </div>
+                
+                {/* Edit Individual Stops Section */}
+                <div style={{ marginBottom: '15px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
                     <button 
-                      type="button" 
-                      onClick={() => {
-                        if (slot.isGradientStop) {
-                          // Reset gradient stop to original color
-                          // Create updated gradient definitions with original color
-                          const updatedGradientDefinitions = { ...gradientDefinitions };
-                          const originalGradient = originalGradientDefinitions[slot.gradientId];
-                          if (updatedGradientDefinitions[slot.gradientId] && originalGradient) {
-                            const originalStopColor = originalGradient.stops[slot.stopIndex]?.color || slot.originalColor;
-                            updatedGradientDefinitions[slot.gradientId] = {
-                              ...updatedGradientDefinitions[slot.gradientId],
-                              stops: updatedGradientDefinitions[slot.gradientId].stops.map((stop, idx) =>
-                                idx === slot.stopIndex ? { ...stop, color: originalStopColor } : stop
-                              )
-                            };
+                      type="button"
+                      onClick={() => toggleGradientSection(gradientGroup.gradientId, 'stops')}
+                      style={{
+                        background: '#f0f0f0',
+                        border: '1px solid #ccc',
+                        borderRadius: '3px',
+                        cursor: 'pointer',
+                        fontSize: '14px',
+                        padding: '2px 8px',
+                        minWidth: '30px',
+                        lineHeight: '1',
+                        color: '#4f46e5'
+                      }}
+                      title={expandedGradientSections[`${gradientGroup.gradientId}-stops`] ? 'Collapse' : 'Expand'}
+                    >
+                      {expandedGradientSections[`${gradientGroup.gradientId}-stops`] ? '−' : '+'}
+                    </button>
+                    <h5 style={{ margin: 0, color: '#495057' }}>Edit Individual Stops</h5>
+                  </div>
+                  
+                  {expandedGradientSections[`${gradientGroup.gradientId}-stops`] && (
+                    <div style={{ paddingLeft: '20px' }}>
+                      {slots.map((slot) => {
+                        const { hex: slotHex, alpha: slotAlpha } = parseColorString(slot.currentColor);
+                        return (
+                          <div key={slot.id} style={{ marginBottom: '10px' }}>
+                            <label style={{ fontWeight: 'normal', marginBottom: '5px', display: 'block' }}>
+                              {slot.label}
+                              {slot.isGradientStop && (
+                                <span style={{ fontSize: '0.8em', color: '#666', marginLeft: '8px' }}>
+                                  (Position: {slot.stopOffset})
+                                </span>
+                              )}
+                            </label>
+                            <div className="control-group svg-color-control">
+                              <input 
+                                type="color" 
+                                value={slotHex}
+                                onChange={(e) => {
+                                  const newColor = formatHexWithAlpha(e.target.value, slotAlpha);
+                                  
+                                  if (slot.isGradientStop) {
+                                    const updatedGradientDefinitions = { ...gradientDefinitions };
+                                    if (updatedGradientDefinitions[slot.gradientId]) {
+                                      updatedGradientDefinitions[slot.gradientId] = {
+                                        ...updatedGradientDefinitions[slot.gradientId],
+                                        stops: updatedGradientDefinitions[slot.gradientId].stops.map((stop, idx) =>
+                                          idx === slot.stopIndex ? { ...stop, color: newColor } : stop
+                                        )
+                                      };
+                                    }
+                                    onColorChange(elementColorMap, updatedGradientDefinitions);
+                                  }
+                                }}
+                              />
+                              <input 
+                                type="range" 
+                                min="0" max="1" step="0.01" 
+                                value={slotAlpha}
+                                onChange={(e) => {
+                                  const newColor = formatHexWithAlpha(slotHex, parseFloat(e.target.value));
+                                  
+                                  if (slot.isGradientStop) {
+                                    const updatedGradientDefinitions = { ...gradientDefinitions };
+                                    if (updatedGradientDefinitions[slot.gradientId]) {
+                                      updatedGradientDefinitions[slot.gradientId] = {
+                                        ...updatedGradientDefinitions[slot.gradientId],
+                                        stops: updatedGradientDefinitions[slot.gradientId].stops.map((stop, idx) =>
+                                          idx === slot.stopIndex ? { ...stop, color: newColor } : stop
+                                        )
+                                      };
+                                    }
+                                    onColorChange(elementColorMap, updatedGradientDefinitions);
+                                  }
+                                }}
+                              />
+                              <span className="color-display-hex8">{slot.currentColor}</span>
+                              <button 
+                                type="button" 
+                                onClick={() => {
+                                  if (slot.isGradientStop) {
+                                    const updatedGradientDefinitions = { ...gradientDefinitions };
+                                    const originalGradient = originalGradientDefinitions[slot.gradientId];
+                                    if (updatedGradientDefinitions[slot.gradientId] && originalGradient) {
+                                      const originalStopColor = originalGradient.stops[slot.stopIndex]?.color || slot.originalColor;
+                                      updatedGradientDefinitions[slot.gradientId] = {
+                                        ...updatedGradientDefinitions[slot.gradientId],
+                                        stops: updatedGradientDefinitions[slot.gradientId].stops.map((stop, idx) =>
+                                          idx === slot.stopIndex ? { ...stop, color: originalStopColor } : stop
+                                        )
+                                      };
+                                    }
+                                    onColorChange(elementColorMap, updatedGradientDefinitions);
+                                  }
+                                }} 
+                                className="reset-color-btn" 
+                                style={{ fontSize: '12px', padding: '2px 8px', marginLeft: '8px' }}
+                              >
+                                Reset
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+                
+                {/* Unlink Elements Section */}
+                {gradientGroup && gradientGroup.elements.length > 1 && (
+                  <div style={{ marginBottom: '15px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+                      <button 
+                        type="button"
+                        onClick={() => toggleGradientSection(gradientGroup.gradientId, 'unlink')}
+                        style={{
+                          background: '#f0f0f0',
+                          border: '1px solid #ccc',
+                          borderRadius: '3px',
+                          cursor: 'pointer',
+                          fontSize: '14px',
+                          padding: '2px 8px',
+                          minWidth: '30px',
+                          lineHeight: '1',
+                          color: '#4f46e5'
+                        }}
+                        title={expandedGradientSections[`${gradientGroup.gradientId}-unlink`] ? 'Collapse' : 'Expand'}
+                      >
+                        {expandedGradientSections[`${gradientGroup.gradientId}-unlink`] ? '−' : '+'}
+                      </button>
+                      <h5 style={{ margin: 0, color: '#495057' }}>Unlink Elements</h5>
+                    </div>
+                    
+                    {expandedGradientSections[`${gradientGroup.gradientId}-unlink`] && (
+                      <div style={{ paddingLeft: '20px', padding: '10px', background: '#f5f5f5', borderRadius: '4px' }}>
+                        <p style={{ fontSize: '0.9em', color: '#666', margin: '0 0 10px 0' }}>
+                          Unlink an element to edit its gradient independently
+                        </p>
+                        {gradientGroup.elements.map(element => (
+                          <div key={element.slotId} style={{ marginBottom: '5px' }}>
+                            <span style={{ marginRight: '10px' }}>{element.label}</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const originalGradientId = gradientGroup.gradientId;
+                                const newGradientId = `${originalGradientId}-${element.elementPath.replace(/[^\w]/g, '_')}`;
+                                
+                                const updatedGradientDefinitions = { ...gradientDefinitions };
+                                if (gradientDefinitions[originalGradientId]) {
+                                  updatedGradientDefinitions[newGradientId] = {
+                                    ...gradientDefinitions[originalGradientId],
+                                    stops: gradientDefinitions[originalGradientId].stops.map(stop => ({ ...stop }))
+                                  };
+                                }
+                                
+                                const updatedElementColorMap = { ...elementColorMap };
+                                if (updatedElementColorMap[element.elementPath] && 
+                                    updatedElementColorMap[element.elementPath][element.colorType]) {
+                                  updatedElementColorMap[element.elementPath][element.colorType] = {
+                                    ...updatedElementColorMap[element.elementPath][element.colorType],
+                                    gradientId: newGradientId,
+                                    current: `url(#${newGradientId})`
+                                  };
+                                }
+                                
+                                onColorChange(updatedElementColorMap, updatedGradientDefinitions);
+                              }}
+                              style={{
+                                fontSize: '12px',
+                                padding: '2px 8px',
+                                background: '#4f46e5',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '3px',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              Unlink
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              // Solid color controls (existing logic)
+              slots.map((slot) => {
+                const { hex: slotHex, alpha: slotAlpha } = parseColorString(slot.currentColor);
+                return (
+                  <div key={slot.id} style={{ marginBottom: '10px' }}>
+                    <label style={{ fontWeight: 'normal', marginBottom: '5px', display: 'block' }}>
+                      {slot.label}
+                    </label>
+                    <div className="control-group svg-color-control">
+                      <input 
+                        type="color" 
+                        value={slotHex}
+                        onChange={(e) => {
+                          const newColor = formatHexWithAlpha(e.target.value, slotAlpha);
+                          const updatedElementColorMap = { ...elementColorMap };
+                          if (!updatedElementColorMap[slot.elementPath]) {
+                            updatedElementColorMap[slot.elementPath] = {};
                           }
-                          
-                          // Call onColorChange with gradient update
-                          onColorChange(elementColorMap, updatedGradientDefinitions);
-                        } else {
-                          // Reset solid color slot to original color
+                          updatedElementColorMap[slot.elementPath][slot.colorType] = {
+                            original: slot.originalColor,
+                            current: newColor
+                          };
+                          onColorChange(updatedElementColorMap);
+                        }}
+                      />
+                      <input 
+                        type="range" 
+                        min="0" max="1" step="0.01" 
+                        value={slotAlpha}
+                        onChange={(e) => {
+                          const newColor = formatHexWithAlpha(slotHex, parseFloat(e.target.value));
+                          const updatedElementColorMap = { ...elementColorMap };
+                          if (!updatedElementColorMap[slot.elementPath]) {
+                            updatedElementColorMap[slot.elementPath] = {};
+                          }
+                          updatedElementColorMap[slot.elementPath][slot.colorType] = {
+                            original: slot.originalColor,
+                            current: newColor
+                          };
+                          onColorChange(updatedElementColorMap);
+                        }}
+                      />
+                      <span className="color-display-hex8">{slot.currentColor}</span>
+                      <button 
+                        type="button" 
+                        onClick={() => {
                           const updatedElementColorMap = { ...elementColorMap };
                           if (!updatedElementColorMap[slot.elementPath]) {
                             updatedElementColorMap[slot.elementPath] = {};
@@ -826,17 +1080,17 @@ const SvgColorCustomization = ({
                             current: slot.originalColor
                           };
                           onColorChange(updatedElementColorMap);
-                        }
-                      }} 
-                      className="reset-color-btn" 
-                      style={{ fontSize: '12px', padding: '2px 8px', marginLeft: '8px' }}
-                    >
-                      Reset
-                    </button>
+                        }} 
+                        className="reset-color-btn" 
+                        style={{ fontSize: '12px', padding: '2px 8px', marginLeft: '8px' }}
+                      >
+                        Reset
+                      </button>
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })
+            )}
           </div>
         )}
       </div>
