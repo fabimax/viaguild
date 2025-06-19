@@ -283,7 +283,7 @@ function BadgeIconUpload({
             const transformedSvg = applySvgColorTransform(svgContent, {
               type: 'element-path',
               version: 1,
-              mappings: elementColorMap
+              colorMappings: elementColorMap
             });
             
             // Create preview from transformed SVG
@@ -958,7 +958,7 @@ function BadgeIconUpload({
             const transformedSvg = applySvgColorTransform(processedSvg, {
               type: 'element-path',
               version: 1,
-              mappings: elementColorMap
+              colorMappings: elementColorMap
             });
             
             // Create preview from transformed SVG
