@@ -470,16 +470,7 @@ const BadgeTemplateCreatePage = () => {
       // Template behavior
       isModifiableByIssuer: template.isModifiableByIssuer,
       allowsPushedInstanceUpdates: template.allowsPushedInstanceUpdates,
-      internalNotes: template.internalNotes,
-      
-      // Legacy foreground color configuration (for backward compatibility during transition)
-      ...(iconSvgColorData && iconSvgColorData.elementColorMap && Object.keys(iconSvgColorData.elementColorMap).length > 0 && {
-        defaultForegroundColorConfig: {
-          type: 'element-path',
-          version: 1,
-          mappings: iconSvgColorData.elementColorMap
-        }
-      })
+      internalNotes: template.internalNotes
     };
 
     return payload;
