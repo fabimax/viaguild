@@ -246,14 +246,26 @@ export function convertLegacyBackground(backgroundType, backgroundValue) {
  * @returns {string} Transformed SVG content
  */
 export function applySvgColorTransform(svgContent, config) {
-  if (!config || config.type !== 'element-path' || !config.mappings) {
+  if (!config) {
+    return svgContent;
+  }
+  
+  // Handle both element-path and system-icon configs with mappings
+  let mappings = null;
+  if (config.type === 'element-path' && config.mappings) {
+    mappings = config.mappings;
+  } else if (config.type === 'system-icon' && config.colorMappings) {
+    mappings = config.colorMappings;
+  }
+  
+  if (!mappings) {
     return svgContent;
   }
   
   let transformedSvg = svgContent;
   
   // Apply color mappings to SVG elements
-  Object.entries(config.mappings).forEach(([elementPath, colorMapping]) => {
+  Object.entries(mappings).forEach(([elementPath, colorMapping]) => {
     // Parse element path (e.g., "g[0]/path[1]", "circle[0]")
     const pathParts = elementPath.split('/');
     

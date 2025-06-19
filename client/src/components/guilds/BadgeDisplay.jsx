@@ -68,12 +68,14 @@ const BadgeDisplay = ({ badge }) => {
     
     // If we have a system icon name, fetch its SVG content
     if (type === 'SYSTEM_ICON' && value && !isSvgContent(value)) {
+      console.log(`[BadgeDisplay] Fetching system icon: ${value}`);
       SystemIconService.getSystemIconSvg(value)
         .then(svgContent => {
+          console.log(`[BadgeDisplay] ✓ Fetched '${value}' (${svgContent?.length} chars)`);
           if (isMounted) setCurrentFg({ type, value: svgContent });
         })
         .catch(err => {
-          console.error(`Failed to fetch system icon '${value}':`, err);
+          console.error(`[BadgeDisplay] ✗ Failed '${value}':`, err.message);
           if (isMounted) setCurrentFg({ type, value: '' });
         });
     } else if (type === 'UPLOADED_ICON' && value && !isSvgContent(value) && foregroundConfig?.type === 'customizable-svg') {
@@ -325,12 +327,29 @@ const BadgeDisplay = ({ badge }) => {
           </text>
         </svg>
       )}
-      {foregroundType === 'SYSTEM_ICON' && foregroundValue && (
-        <div 
-          className="badge-svg-icon"
-          dangerouslySetInnerHTML={{ __html: transformedForegroundValue }}
-        />
-      )}
+      {(() => {
+        if (foregroundType === 'SYSTEM_ICON') {
+          const hasValue = !!foregroundValue;
+          const hasTransformed = !!transformedForegroundValue;
+          console.log(`[BadgeDisplay] Render: value=${hasValue}, transformed=${hasTransformed}`);
+          
+          if (foregroundValue) {
+            return (
+              <div 
+                className="badge-svg-icon"
+                dangerouslySetInnerHTML={{ __html: transformedForegroundValue }}
+              />
+            );
+          } else {
+            return (
+              <div className="badge-svg-icon" style={{ border: '1px dashed red', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', color: 'red' }}>
+                Missing Icon
+              </div>
+            );
+          }
+        }
+        return null;
+      })()}
       {foregroundType === 'UPLOADED_ICON' && (
         transformedForegroundValue && transformedForegroundValue.trim() && 
         (isSvgContent(transformedForegroundValue) || transformedForegroundValue.startsWith('http') || transformedForegroundValue.startsWith('upload://')) ? (

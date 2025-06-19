@@ -358,6 +358,12 @@ const BadgeTemplateCreatePage = () => {
 
   // Helper to generate the full foreground config object
   const buildForegroundConfig = () => {
+    console.log(`[CreatePage] Building foreground config:`, {
+      type: template.defaultForegroundType,
+      value: template.defaultForegroundValue,
+      hasColorData: !!(systemIconColorData && systemIconColorData.elementColorMap)
+    });
+    
     switch (template.defaultForegroundType) {
       case ForegroundContentType.TEXT:
         return {
@@ -369,17 +375,23 @@ const BadgeTemplateCreatePage = () => {
       case ForegroundContentType.SYSTEM_ICON:
         // Use advanced color mapping if available, otherwise simple color
         if (systemIconColorData && systemIconColorData.elementColorMap) {
-          return createElementPathConfig(
-            template.defaultForegroundValue, // The icon name
-            systemIconColorData.elementColorMap
-          );
+          const config = {
+            type: 'system-icon',
+            version: 1,
+            value: template.defaultForegroundValue, // The icon name
+            colorMappings: systemIconColorData.elementColorMap
+          };
+          console.log(`[CreatePage] Created system icon config with mappings:`, config);
+          return config;
         } else {
-          return {
+          const config = {
             type: 'system-icon',
             version: 1,
             value: template.defaultForegroundValue, // The icon name
             color: template.defaultForegroundColor,
           };
+          console.log(`[CreatePage] Created simple system icon config:`, config);
+          return config;
         }
       case ForegroundContentType.UPLOADED_ICON:
         if (template.defaultForegroundValue?.startsWith('upload://')) {
