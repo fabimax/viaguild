@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import BadgeNavigation from '../components/BadgeNavigation';
@@ -22,6 +22,8 @@ const BadgeTemplatesPage = () => {
   });
   const [giveModalOpen, setGiveModalOpen] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState(null);
+  const [openDropdown, setOpenDropdown] = useState(null);
+  const dropdownRef = useRef(null);
   
   const isOwnPage = user && user.username.toLowerCase() === username.toLowerCase();
   
@@ -33,6 +35,20 @@ const BadgeTemplatesPage = () => {
     
     fetchTemplates();
   }, [user, token, isOwnPage, navigate]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setOpenDropdown(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   const fetchTemplates = async () => {
     try {
@@ -109,6 +125,14 @@ const BadgeTemplatesPage = () => {
     fetchTemplates();
   };
 
+  const toggleDropdown = (templateId) => {
+    setOpenDropdown(openDropdown === templateId ? null : templateId);
+  };
+
+  const closeDropdown = () => {
+    setOpenDropdown(null);
+  };
+
   const filteredTemplates = templates.filter(template => {
     if (filters.archived !== template.isArchived) return false;
     if (filters.tier && template.inherentTier !== filters.tier) return false;
@@ -138,7 +162,83 @@ const BadgeTemplatesPage = () => {
   }
 
   return (
-    <div className="badge-templates-page">
+    <>
+      <style>{`
+        .templates-filters {
+          margin-bottom: 2rem;
+        }
+        
+        .filter-row {
+          display: flex;
+          gap: 1rem;
+          align-items: center;
+          margin-bottom: 0.5rem;
+        }
+        
+        .filter-row:last-child {
+          margin-bottom: 0;
+        }
+        
+        .filter-row label {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          white-space: nowrap;
+        }
+        
+        .templates-grid {
+          margin-top: 2rem;
+        }
+        
+        .template-menu {
+          position: relative;
+          display: inline-block;
+        }
+        
+        .template-menu-dropdown {
+          position: absolute;
+          top: 100%;
+          right: 0;
+          background: white;
+          border: 1px solid #ddd;
+          border-radius: 4px;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+          min-width: 160px;
+          z-index: 1000;
+          padding: 4px 0;
+        }
+        
+        .template-menu-dropdown button {
+          display: block;
+          width: 100%;
+          text-align: left;
+          padding: 8px 16px;
+          border: none;
+          background: none;
+          cursor: pointer;
+          font-size: 14px;
+          color: #333;
+        }
+        
+        .template-menu-dropdown button:hover {
+          background-color: #f5f5f5;
+        }
+        
+        .template-menu-dropdown button.delete {
+          color: #dc3545;
+        }
+        
+        .template-menu-dropdown button.delete:hover {
+          background-color: #f8f9fa;
+        }
+        
+        .template-menu-dropdown hr {
+          margin: 4px 0;
+          border: none;
+          border-top: 1px solid #eee;
+        }
+      `}</style>
+      <div className="badge-templates-page">
       <div className="page-header">
         <h1>Badge Templates</h1>
         <p>Manage your badge templates and track their usage</p>
@@ -155,7 +255,7 @@ const BadgeTemplatesPage = () => {
       <div className="page-content">
         {/* Filters */}
         <div className="templates-filters">
-          <div className="filter-group">
+          <div className="filter-row">
             <label>
               <input
                 type="checkbox"
@@ -164,9 +264,7 @@ const BadgeTemplatesPage = () => {
               />
               Show Archived
             </label>
-          </div>
-          
-          <div className="filter-group">
+            
             <select
               value={filters.tier}
               onChange={(e) => setFilters(prev => ({ ...prev, tier: e.target.value }))}
@@ -178,7 +276,7 @@ const BadgeTemplatesPage = () => {
             </select>
           </div>
           
-          <div className="filter-group">
+          <div className="filter-row">
             <input
               type="text"
               placeholder="Search templates..."
@@ -215,6 +313,67 @@ const BadgeTemplatesPage = () => {
           <div className="templates-grid">
             {filteredTemplates.map(template => (
               <div key={template.id} className="template-card">
+                <div className="template-actions">
+                  <button 
+                    onClick={() => handleGiveBadge(template)}
+                    className="btn-primary btn-small"
+                  >
+                    Give Badge
+                  </button>
+                  
+                  <div className="template-menu" ref={dropdownRef}>
+                    <button 
+                      className="btn-secondary btn-small"
+                      onClick={() => toggleDropdown(template.id)}
+                    >
+                      Actions ▼
+                    </button>
+                    {openDropdown === template.id && (
+                      <div className="template-menu-dropdown">
+                        <button onClick={() => {
+                          navigate(`/users/${username}/badges/create?edit=${template.id}`);
+                          closeDropdown();
+                        }}>
+                          Edit
+                        </button>
+                        <button onClick={() => {
+                          handleDuplicateTemplate(template.id);
+                          closeDropdown();
+                        }}>
+                          Duplicate
+                        </button>
+                        <button onClick={() => {
+                          navigate(`/users/${username}/badges/templates/${template.id}/instances`);
+                          closeDropdown();
+                        }}>
+                          View Instances
+                        </button>
+                        <hr />
+                        <button 
+                          onClick={() => {
+                            handleArchiveTemplate(template.id);
+                            closeDropdown();
+                          }}
+                          className={template.isArchived ? 'restore' : 'archive'}
+                        >
+                          {template.isArchived ? 'Restore' : 'Archive'}
+                        </button>
+                        {template.usageCount === 0 && (
+                          <button 
+                            onClick={() => {
+                              handleDeleteTemplate(template.id);
+                              closeDropdown();
+                            }}
+                            className="delete"
+                          >
+                            Delete
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
                 <BadgeCard
                   badge={formatTemplateForCard(template)}
                   showActions={false}
@@ -235,47 +394,6 @@ const BadgeTemplatesPage = () => {
                   
                   <div className="template-slug">
                     Slug: <code>{template.templateSlug}</code>
-                  </div>
-                </div>
-                
-                <div className="template-actions">
-                  <button 
-                    onClick={() => handleGiveBadge(template)}
-                    className="btn-primary btn-small"
-                  >
-                    Give Badge
-                  </button>
-                  
-                  <div className="template-menu">
-                    <button className="btn-secondary btn-small">
-                      Actions ▼
-                    </button>
-                    <div className="template-menu-dropdown">
-                      <button onClick={() => navigate(`/users/${username}/badges/create?edit=${template.id}`)}>
-                        Edit
-                      </button>
-                      <button onClick={() => handleDuplicateTemplate(template.id)}>
-                        Duplicate
-                      </button>
-                      <button onClick={() => navigate(`/users/${username}/badges/templates/${template.id}/instances`)}>
-                        View Instances
-                      </button>
-                      <hr />
-                      <button 
-                        onClick={() => handleArchiveTemplate(template.id)}
-                        className={template.isArchived ? 'restore' : 'archive'}
-                      >
-                        {template.isArchived ? 'Restore' : 'Archive'}
-                      </button>
-                      {template.usageCount === 0 && (
-                        <button 
-                          onClick={() => handleDeleteTemplate(template.id)}
-                          className="delete"
-                        >
-                          Delete
-                        </button>
-                      )}
-                    </div>
                   </div>
                 </div>
               </div>
@@ -300,7 +418,8 @@ const BadgeTemplatesPage = () => {
           onSuccess={handleBadgeGiven}
         />
       )}
-    </div>
+      </div>
+    </>
   );
 };
 

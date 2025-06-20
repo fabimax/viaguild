@@ -708,7 +708,35 @@ const BadgeTemplateCreatePage = () => {
   }
 
   return (
-    <div className="badge-template-create-page">
+    <>
+      <style>{`
+        .checkbox-row {
+          display: flex !important;
+          align-items: center !important;
+          justify-content: flex-start !important;
+          gap: 0.5rem !important;
+          margin-left: 0 !important;
+          padding-left: 0 !important;
+        }
+        .checkbox-row label {
+          margin: 0 !important;
+          white-space: nowrap;
+        }
+        .checkbox-row input[type="checkbox"] {
+          width: auto !important;
+          flex-shrink: 0 !important;
+        }
+        .control-group label {
+          display: flex !important;
+          align-items: center !important;
+          gap: 0.5rem !important;
+        }
+        .control-group label input[type="checkbox"] {
+          width: auto !important;
+          flex-shrink: 0 !important;
+        }
+      `}</style>
+      <div className="badge-template-create-page">
       <div className="page-header">
         <h1>Create Badge Template</h1>
         <p>Design a reusable badge template for giving to others</p>
@@ -1451,7 +1479,8 @@ const BadgeTemplateCreatePage = () => {
           <button onClick={() => setError(null)} className="error-dismiss">×</button>
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 };
 
