@@ -4,6 +4,7 @@ import DOMPurify from 'dompurify';
 import { buildElementColorMap } from '../utils/svgColorAnalysis';
 import { applyGradientChanges } from '../utils/svgColorTransform';
 import SvgColorCustomization from './SvgColorCustomization';
+import { useBlobUrl } from '../hooks/useBlobUrl';
 
 // Helper to convert a 6-digit hex and an alpha (0-1) to an 8-digit hex (or 6 if alpha is 1)
 const formatHexWithAlpha = (hex, alpha = 1) => {
@@ -145,7 +146,7 @@ function BadgeIconUpload({
   isLoading = false,
   templateSlug = 'badge-icon'
 }) {
-  const [previewIcon, setPreviewIcon] = useState(null);
+  const { blobUrl: previewIcon, setUrl: setPreviewIcon } = useBlobUrl();
   const [error, setError] = useState('');
   const [internalLoading, setInternalLoading] = useState(false);
   const [uploadedUrl, setUploadedUrl] = useState(null);
@@ -287,21 +288,17 @@ function BadgeIconUpload({
             });
             
             // Create preview from transformed SVG
-            const blob = new Blob([transformedSvg], { type: 'image/svg+xml' });
-            const previewUrl = URL.createObjectURL(blob);
-            setPreviewIcon(previewUrl);
+            setPreviewIcon(transformedSvg);
             return;
           } catch (error) {
             console.error('Failed to apply initial color transformations:', error);
           }
         }
         
-        // Fallback: Create preview blob URL from original
-        const blob = new Blob([svgContent], { type: 'image/svg+xml' });
-        const previewUrl = URL.createObjectURL(blob);
-        setPreviewIcon(previewUrl);
+        // Fallback: Create preview from original
+        setPreviewIcon(svgContent);
       } else {
-        // Regular image
+        // Regular image - use hosted URL directly (not a blob)
         setPreviewIcon(tempAsset.hostedUrl);
       }
       
@@ -581,10 +578,8 @@ function BadgeIconUpload({
         });
       }
       
-      // Create preview blob URL
-      const blob = new Blob([systemIconSvg], { type: 'image/svg+xml' });
-      const previewUrl = URL.createObjectURL(blob);
-      setPreviewIcon(previewUrl);
+      // Create preview from system icon SVG
+      setPreviewIcon(systemIconSvg);
       
       // Notify parent component about the system icon
       onIconChange(`system://${systemIconName}`, systemIconSvg, null);
@@ -1036,12 +1031,7 @@ function BadgeIconUpload({
     updatedSvg = updatedSvg.replace(/stroke="currentColor"/gi, `stroke="${formattedColor}"`);
     
     // Update preview
-    const blob = new Blob([updatedSvg], { type: 'image/svg+xml' });
-    const newUrl = URL.createObjectURL(blob);
-    if (previewIcon && previewIcon.startsWith('blob:')) {
-      URL.revokeObjectURL(previewIcon);
-    }
-    setPreviewIcon(newUrl);
+    setPreviewIcon(updatedSvg);
     // Only use upload reference - no fallback to direct URLs
     if (uploadId) {
       const referenceValue = `upload://${uploadId}`;
@@ -1176,12 +1166,7 @@ function BadgeIconUpload({
     setSvgColorData(newColorData);
     
     // Update preview
-    const blob = new Blob([updatedSvg], { type: 'image/svg+xml' });
-    const newUrl = URL.createObjectURL(blob);
-    if (previewIcon && previewIcon.startsWith('blob:')) {
-      URL.revokeObjectURL(previewIcon);
-    }
-    setPreviewIcon(newUrl);
+    setPreviewIcon(updatedSvg);
     // Keep using the upload reference if we have one
     const referenceValue = uploadId ? `upload://${uploadId}` : (uploadedUrl || newUrl);
     onIconChange(referenceValue, updatedSvg, uploadedUrl);
@@ -1231,12 +1216,7 @@ function BadgeIconUpload({
     setSvgColorData(newColorData);
     
     // Update preview
-    const blob = new Blob([updatedSvg], { type: 'image/svg+xml' });
-    const newUrl = URL.createObjectURL(blob);
-    if (previewIcon && previewIcon.startsWith('blob:')) {
-      URL.revokeObjectURL(previewIcon);
-    }
-    setPreviewIcon(newUrl);
+    setPreviewIcon(updatedSvg);
     // Only use upload reference - no fallback to direct URLs
     if (uploadId) {
       const referenceValue = `upload://${uploadId}`;
