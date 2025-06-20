@@ -735,6 +735,12 @@ const BadgeTemplateCreatePage = () => {
           width: auto !important;
           flex-shrink: 0 !important;
         }
+        
+        /* Fix range slider appearance at extremes by removing default padding */
+        input[type="range"] {
+          padding: 0; /* Remove any padding that might affect positioning */
+        }
+        
       `}</style>
       <div className="badge-template-create-page">
       <div className="page-header">
