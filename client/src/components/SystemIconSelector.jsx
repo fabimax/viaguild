@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import SystemIconService from '../services/systemIcon.service';
+import SvgPreview from './SvgPreview';
 
 const SystemIconSelector = ({ 
   selectedIcon, 
   onIconSelect, 
-  selectedIconSvg 
+  selectedIconSvg,
+  colorData
 }) => {
   const [availableIcons, setAvailableIcons] = useState([]);
   const [iconSvgs, setIconSvgs] = useState({});
@@ -160,19 +162,15 @@ const SystemIconSelector = ({
           
           {selectedIcon && selectedIconSvg ? (
             <div style={{ textAlign: 'center' }}>
-              <div 
+              <SvgPreview 
+                svgContent={selectedIconSvg}
+                colorData={colorData}
+                size={80}
+                alt={`${selectedIcon} icon preview`}
                 style={{
-                  width: '80px',
-                  height: '80px',
                   border: '2px solid #dee2e6',
-                  borderRadius: '4px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: 'white',
                   marginBottom: '10px'
                 }}
-                dangerouslySetInnerHTML={{ __html: selectedIconSvg }}
               />
               <p style={{ 
                 margin: 0, 
@@ -184,21 +182,16 @@ const SystemIconSelector = ({
               </p>
             </div>
           ) : (
-            <div style={{
-              width: '80px',
-              height: '80px',
-              border: '2px dashed #dee2e6',
-              borderRadius: '4px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: 'white',
-              marginBottom: '10px',
-              color: '#6c757d',
-              fontSize: '12px'
-            }}>
-              No icon selected
-            </div>
+            <SvgPreview 
+              svgContent={null}
+              colorData={colorData}
+              size={80}
+              placeholder="No Icon Selected"
+              style={{
+                border: '2px dashed #dee2e6',
+                marginBottom: '10px'
+              }}
+            />
           )}
         </div>
 
@@ -357,12 +350,18 @@ const SystemIconSelector = ({
 SystemIconSelector.propTypes = {
   selectedIcon: PropTypes.string,
   onIconSelect: PropTypes.func.isRequired,
-  selectedIconSvg: PropTypes.string
+  selectedIconSvg: PropTypes.string,
+  colorData: PropTypes.shape({
+    elementColorMap: PropTypes.object,
+    colorSlots: PropTypes.array,
+    gradientDefinitions: PropTypes.object
+  })
 };
 
 SystemIconSelector.defaultProps = {
   selectedIcon: null,
-  selectedIconSvg: null
+  selectedIconSvg: null,
+  colorData: null
 };
 
 export default SystemIconSelector;

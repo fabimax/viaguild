@@ -4,7 +4,7 @@ import DOMPurify from 'dompurify';
 import { buildElementColorMap } from '../utils/svgColorAnalysis';
 import { applyGradientChanges } from '../utils/svgColorTransform';
 import SvgColorCustomization from './SvgColorCustomization';
-import { useBlobUrl } from '../hooks/useBlobUrl';
+import SvgPreview from './SvgPreview';
 
 // Helper to convert a 6-digit hex and an alpha (0-1) to an 8-digit hex (or 6 if alpha is 1)
 const formatHexWithAlpha = (hex, alpha = 1) => {
@@ -146,7 +146,7 @@ function BadgeIconUpload({
   isLoading = false,
   templateSlug = 'badge-icon'
 }) {
-  const { blobUrl: previewIcon, setUrl: setPreviewIcon } = useBlobUrl();
+  const [previewIcon, setPreviewIcon] = useState(null);
   const [error, setError] = useState('');
   const [internalLoading, setInternalLoading] = useState(false);
   const [uploadedUrl, setUploadedUrl] = useState(null);
@@ -287,7 +287,7 @@ function BadgeIconUpload({
               colorMappings: elementColorMap
             });
             
-            // Create preview from transformed SVG
+            // Store transformed SVG for preview
             setPreviewIcon(transformedSvg);
             return;
           } catch (error) {
@@ -295,7 +295,7 @@ function BadgeIconUpload({
           }
         }
         
-        // Fallback: Create preview from original
+        // Fallback: Store original SVG for preview
         setPreviewIcon(svgContent);
       } else {
         // Regular image - use hosted URL directly (not a blob)
@@ -578,7 +578,7 @@ function BadgeIconUpload({
         });
       }
       
-      // Create preview from system icon SVG
+      // Store system icon SVG for preview
       setPreviewIcon(systemIconSvg);
       
       // Notify parent component about the system icon
@@ -1030,7 +1030,7 @@ function BadgeIconUpload({
     // Also handle stroke="currentColor" if present
     updatedSvg = updatedSvg.replace(/stroke="currentColor"/gi, `stroke="${formattedColor}"`);
     
-    // Update preview
+    // Store updated SVG for preview
     setPreviewIcon(updatedSvg);
     // Only use upload reference - no fallback to direct URLs
     if (uploadId) {
@@ -1165,7 +1165,7 @@ function BadgeIconUpload({
     
     setSvgColorData(newColorData);
     
-    // Update preview
+    // Store updated SVG for preview
     setPreviewIcon(updatedSvg);
     // Keep using the upload reference if we have one
     const referenceValue = uploadId ? `upload://${uploadId}` : (uploadedUrl || newUrl);
@@ -1215,7 +1215,7 @@ function BadgeIconUpload({
     
     setSvgColorData(newColorData);
     
-    // Update preview
+    // Store updated SVG for preview
     setPreviewIcon(updatedSvg);
     // Only use upload reference - no fallback to direct URLs
     if (uploadId) {
@@ -1292,69 +1292,46 @@ function BadgeIconUpload({
   return (
     <div className="badge-icon-upload">
       <div className="icon-preview-container" style={{ position: 'relative', display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
-        {previewIcon ? (
-          <>
-            <img 
-              src={previewIcon} 
-              alt="Icon preview" 
-              className="icon-image"
-              style={{ 
-                width: '80px', 
-                height: '80px', 
-                objectFit: 'contain',
-                border: '1px solid #ccc',
-                borderRadius: '4px',
-                background: '#f5f5f5',
-                display: 'block'
-              }}
-              onError={(e) => {
-                e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"%3E%3Ctext x="50" y="50" text-anchor="middle" dominant-baseline="middle" font-size="40"%3E?%3C/text%3E%3C/svg%3E';
-              }}
-            />
-            {/* Only show remove button when not in color-only mode */}
-            {!colorOnlyMode && (
-              <button
-                type="button"
-                className="remove-icon-btn"
-                onClick={handleRemoveIcon}
-                aria-label="Remove icon"
-                disabled={isComponentLoading}
-                style={{
-                  width: '24px',
-                  height: '24px',
-                  borderRadius: '50%',
-                  border: '1px solid #ccc',
-                  background: '#fff',
-                  cursor: 'pointer',
-                  fontSize: '14px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  lineHeight: '1',
-                  padding: '0',
-                  color: '#666',
-                  marginTop: '0'
-                }}
-              >
-                ✕
-              </button>
-            )}
-          </>
-        ) : (
-          <div className="icon-placeholder" style={{
-            width: '80px',
-            height: '80px',
-            border: '2px dashed #ccc',
-            borderRadius: '4px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: '#f9f9f9',
-            fontSize: '12px',
-            color: '#999'
-          }}>
-            <span>No Icon</span>
-          </div>
+        <SvgPreview 
+          svgContent={isSvg ? previewIcon : null}
+          colorData={svgColorData}
+          size={80}
+          alt="Icon preview"
+          placeholder="No Icon"
+          style={{
+            background: previewIcon && !isSvg ? `url(${previewIcon})` : '#ffffff',
+            backgroundSize: 'contain',
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat'
+          }}
+        />
+        {/* Only show remove button when not in color-only mode and we have an icon */}
+        {!colorOnlyMode && previewIcon && (
+          <button
+            type="button"
+            className="remove-icon-btn"
+            onClick={handleRemoveIcon}
+            aria-label="Remove icon"
+            disabled={isComponentLoading}
+            style={{
+              width: '24px',
+              height: '24px',
+              borderRadius: '50%',
+              border: '1px solid #ccc',
+              background: '#fff',
+              cursor: 'pointer',
+              fontSize: '14px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              lineHeight: '1',
+              padding: '0',
+              color: '#666',
+              marginTop: '0'
+            }}
+          >
+            ✕
+          </button>
         )}
       </div>
       

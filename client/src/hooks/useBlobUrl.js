@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 
 /**
  * Custom hook that manages blob URLs with automatic cleanup
@@ -9,7 +9,7 @@ export const useBlobUrl = () => {
   const currentUrlRef = useRef(null);
 
   // Create a new blob URL or set regular URL, automatically cleaning up previous blobs
-  const setUrl = (data, options = { type: 'image/svg+xml' }) => {
+  const setUrl = useCallback((data, options = { type: 'image/svg+xml' }) => {
     // Clean up previous blob URL if it exists
     if (currentUrlRef.current) {
       URL.revokeObjectURL(currentUrlRef.current);
@@ -36,16 +36,16 @@ export const useBlobUrl = () => {
     setBlobUrl(newUrl);
     
     return newUrl;
-  };
+  }, []); // Empty dependency array - this function doesn't depend on any external values
 
   // Clear the current blob URL
-  const clearBlobUrl = () => {
+  const clearBlobUrl = useCallback(() => {
     if (currentUrlRef.current) {
       URL.revokeObjectURL(currentUrlRef.current);
       currentUrlRef.current = null;
     }
     setBlobUrl(null);
-  };
+  }, []);
 
   // Cleanup on unmount - guaranteed to run
   useEffect(() => {

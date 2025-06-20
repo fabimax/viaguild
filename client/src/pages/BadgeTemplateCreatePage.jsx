@@ -930,6 +930,7 @@ const BadgeTemplateCreatePage = () => {
                         setTemplate(prev => ({ ...prev, defaultForegroundValue: iconName }));
                       }}
                       selectedIconSvg={displayableForegroundSvg}
+                      colorData={systemIconColorData}
                     />
                   ) : template.defaultForegroundType === ForegroundContentType.UPLOADED_ICON ? (
                     <BadgeIconUpload
