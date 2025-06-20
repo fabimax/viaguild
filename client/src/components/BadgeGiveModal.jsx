@@ -81,7 +81,6 @@ const BadgeGiveModal = ({ isOpen, onClose, template, onSuccess }) => {
   // Live preview state
   const [previewSvgContent, setPreviewSvgContent] = useState(null);
   const [transformedSvgContent, setTransformedSvgContent] = useState(null);
-  const [previewBlobUrl, setPreviewBlobUrl] = useState(null);
   const [svgColorData, setSvgColorData] = useState(null); // For SVG color analysis like BadgeTemplateCreatePage
 
   // Load allocations when modal opens
@@ -99,7 +98,7 @@ const BadgeGiveModal = ({ isOpen, onClose, template, onSuccess }) => {
         foregroundType: template.defaultForegroundType,
         foregroundValue: template.defaultForegroundValue?.substring(0, 100) + '...',
         hasColorConfig: !!(template.defaultForegroundColorConfig || (template.defaultForegroundConfig && template.defaultForegroundConfig.colorMappings)),
-        colorConfigKeys: (template.defaultForegroundColorConfig ? Object.keys(template.defaultForegroundColorConfig.mappings || {}) : 
+        colorConfigKeys: (template.defaultForegroundColorConfig ? Object.keys(template.defaultForegroundColorConfig.colorMappings || {}) : 
                          (template.defaultForegroundConfig && template.defaultForegroundConfig.colorMappings ? Object.keys(template.defaultForegroundConfig.colorMappings) : []))
       });
       
@@ -290,12 +289,8 @@ const BadgeGiveModal = ({ isOpen, onClose, template, onSuccess }) => {
       setError('');
       setPreviewSvgContent(null);
       setTransformedSvgContent(null);
-      if (previewBlobUrl) {
-        URL.revokeObjectURL(previewBlobUrl);
-        setPreviewBlobUrl(null);
-      }
     }
-  }, [isOpen, previewBlobUrl]);
+  }, [isOpen]);
 
   const loadAllocations = async () => {
     try {
@@ -377,7 +372,7 @@ const BadgeGiveModal = ({ isOpen, onClose, template, onSuccess }) => {
         // Special handling for config objects
         if (key.endsWith('Config')) {
           // Include if it has mappings with actual data or proper config structure
-          if (value && ((value.mappings && Object.keys(value.mappings).length > 0) || 
+          if (value && ((value.colorMappings && Object.keys(value.colorMappings).length > 0) || 
                       (value.type && (value.color || value.url)))) {
             acc[key] = value;
             console.log(`Including ${key}:`, value);
@@ -452,35 +447,18 @@ const BadgeGiveModal = ({ isOpen, onClose, template, onSuccess }) => {
                          (template.defaultForegroundConfig && template.defaultForegroundConfig.colorMappings ? {
                            type: 'element-path',
                            version: 1,
-                           mappings: template.defaultForegroundConfig.colorMappings
+                           colorMappings: template.defaultForegroundConfig.colorMappings
                          } : null);
       
       console.log('Transforming SVG with color config:', colorConfig);
       
-      // Transform the SVG (same as BadgeIconUpload does)
+      // Transform the SVG (no blob URL needed - pass content directly to BadgeDisplay)
       const transformedSvg = applySvgColorTransform(previewSvgContent, colorConfig);
       console.log('SVG transformation result length:', transformedSvg?.length || 0);
       setTransformedSvgContent(transformedSvg);
-      
-      // Create blob URL for preview (same as BadgeIconUpload does)
-      const blob = new Blob([transformedSvg], { type: 'image/svg+xml' });
-      const newBlobUrl = URL.createObjectURL(blob);
-      
-      // Clean up previous blob URL
-      if (previewBlobUrl) {
-        URL.revokeObjectURL(previewBlobUrl);
-      }
-      
-      setPreviewBlobUrl(newBlobUrl);
-      console.log('Created transformed SVG blob URL:', newBlobUrl);
     } else {
       // No color config, use original SVG
       setTransformedSvgContent(previewSvgContent);
-      
-      if (previewBlobUrl) {
-        URL.revokeObjectURL(previewBlobUrl);
-        setPreviewBlobUrl(null);
-      }
     }
   }, [previewSvgContent, customizations.overrideForegroundColorConfig, template.defaultForegroundColorConfig, template.defaultForegroundConfig]);
 
@@ -520,7 +498,7 @@ const BadgeGiveModal = ({ isOpen, onClose, template, onSuccess }) => {
         (template.defaultForegroundColorConfig ? {
           type: 'element-path',
           version: 1,
-          mappings: template.defaultForegroundColorConfig.mappings
+          colorMappings: template.defaultForegroundColorConfig.colorMappings
         } : null) ||
         createSimpleColorConfig(customizations.overrideForegroundColor || template.defaultForegroundColor),
       
@@ -817,12 +795,12 @@ const BadgeGiveModal = ({ isOpen, onClose, template, onSuccess }) => {
                               const newMappings = {};
                               
                               // Copy existing overrides if any
-                              if (prev.overrideForegroundColorConfig?.mappings) {
-                                Object.keys(prev.overrideForegroundColorConfig.mappings).forEach(path => {
+                              if (prev.overrideForegroundColorConfig?.colorMappings) {
+                                Object.keys(prev.overrideForegroundColorConfig.colorMappings).forEach(path => {
                                   newMappings[path] = {};
-                                  Object.keys(prev.overrideForegroundColorConfig.mappings[path]).forEach(type => {
+                                  Object.keys(prev.overrideForegroundColorConfig.colorMappings[path]).forEach(type => {
                                     newMappings[path][type] = { 
-                                      ...prev.overrideForegroundColorConfig.mappings[path][type] 
+                                      ...prev.overrideForegroundColorConfig.colorMappings[path][type] 
                                     };
                                   });
                                 });
@@ -858,12 +836,12 @@ const BadgeGiveModal = ({ isOpen, onClose, template, onSuccess }) => {
                                 overrideForegroundColorConfig: {
                                   type: 'element-path',
                                   version: 1,
-                                  mappings: newMappings
+                                  colorMappings: newMappings
                                 },
                                 overrideForegroundConfig: {
                                   type: 'element-path',
                                   version: 1,
-                                  mappings: newMappings
+                                  colorMappings: newMappings
                                 }
                               };
                             });
@@ -879,12 +857,12 @@ const BadgeGiveModal = ({ isOpen, onClose, template, onSuccess }) => {
                               const newMappings = {};
                               
                               // Copy existing overrides if any
-                              if (prev.overrideForegroundColorConfig?.mappings) {
-                                Object.keys(prev.overrideForegroundColorConfig.mappings).forEach(path => {
+                              if (prev.overrideForegroundColorConfig?.colorMappings) {
+                                Object.keys(prev.overrideForegroundColorConfig.colorMappings).forEach(path => {
                                   newMappings[path] = {};
-                                  Object.keys(prev.overrideForegroundColorConfig.mappings[path]).forEach(type => {
+                                  Object.keys(prev.overrideForegroundColorConfig.colorMappings[path]).forEach(type => {
                                     newMappings[path][type] = { 
-                                      ...prev.overrideForegroundColorConfig.mappings[path][type] 
+                                      ...prev.overrideForegroundColorConfig.colorMappings[path][type] 
                                     };
                                   });
                                 });
@@ -920,12 +898,12 @@ const BadgeGiveModal = ({ isOpen, onClose, template, onSuccess }) => {
                                 overrideForegroundColorConfig: {
                                   type: 'element-path',
                                   version: 1,
-                                  mappings: newMappings
+                                  colorMappings: newMappings
                                 },
                                 overrideForegroundConfig: {
                                   type: 'element-path',
                                   version: 1,
-                                  mappings: newMappings
+                                  colorMappings: newMappings
                                 }
                               };
                             });
@@ -946,12 +924,12 @@ const BadgeGiveModal = ({ isOpen, onClose, template, onSuccess }) => {
                               const newMappings = {};
                               
                               // Copy existing overrides if any
-                              if (prev.overrideForegroundColorConfig?.mappings) {
-                                Object.keys(prev.overrideForegroundColorConfig.mappings).forEach(path => {
+                              if (prev.overrideForegroundColorConfig?.colorMappings) {
+                                Object.keys(prev.overrideForegroundColorConfig.colorMappings).forEach(path => {
                                   newMappings[path] = {};
-                                  Object.keys(prev.overrideForegroundColorConfig.mappings[path]).forEach(type => {
+                                  Object.keys(prev.overrideForegroundColorConfig.colorMappings[path]).forEach(type => {
                                     newMappings[path][type] = { 
-                                      ...prev.overrideForegroundColorConfig.mappings[path][type] 
+                                      ...prev.overrideForegroundColorConfig.colorMappings[path][type] 
                                     };
                                   });
                                 });
@@ -980,12 +958,12 @@ const BadgeGiveModal = ({ isOpen, onClose, template, onSuccess }) => {
                                 overrideForegroundColorConfig: {
                                   type: 'element-path',
                                   version: 1,
-                                  mappings: newMappings
+                                  colorMappings: newMappings
                                 },
                                 overrideForegroundConfig: {
                                   type: 'element-path',
                                   version: 1,
-                                  mappings: newMappings
+                                  colorMappings: newMappings
                                 }
                               };
                             });
@@ -1000,12 +978,12 @@ const BadgeGiveModal = ({ isOpen, onClose, template, onSuccess }) => {
                               const newMappings = {};
                               
                               // Copy existing overrides if any
-                              if (prev.overrideForegroundColorConfig?.mappings) {
-                                Object.keys(prev.overrideForegroundColorConfig.mappings).forEach(path => {
+                              if (prev.overrideForegroundColorConfig?.colorMappings) {
+                                Object.keys(prev.overrideForegroundColorConfig.colorMappings).forEach(path => {
                                   newMappings[path] = {};
-                                  Object.keys(prev.overrideForegroundColorConfig.mappings[path]).forEach(type => {
+                                  Object.keys(prev.overrideForegroundColorConfig.colorMappings[path]).forEach(type => {
                                     newMappings[path][type] = { 
-                                      ...prev.overrideForegroundColorConfig.mappings[path][type] 
+                                      ...prev.overrideForegroundColorConfig.colorMappings[path][type] 
                                     };
                                   });
                                 });
@@ -1032,12 +1010,12 @@ const BadgeGiveModal = ({ isOpen, onClose, template, onSuccess }) => {
                                 overrideForegroundColorConfig: {
                                   type: 'element-path',
                                   version: 1,
-                                  mappings: newMappings
+                                  colorMappings: newMappings
                                 },
                                 overrideForegroundConfig: {
                                   type: 'element-path',
                                   version: 1,
-                                  mappings: newMappings
+                                  colorMappings: newMappings
                                 }
                               };
                             });
@@ -1064,7 +1042,7 @@ const BadgeGiveModal = ({ isOpen, onClose, template, onSuccess }) => {
                                 // Check if all slots in group have same current color
                                 const allSameColor = slots.every(slot => {
                                   // Get current color from overrides or default
-                                  const currentConfig = customizations.overrideForegroundColorConfig?.mappings || {};
+                                  const currentConfig = customizations.overrideForegroundColorConfig?.colorMappings || {};
                                   let currentColor = slot.currentColor;
                                   if (currentConfig[slot.elementPath] && currentConfig[slot.elementPath][slot.colorType]) {
                                     currentColor = currentConfig[slot.elementPath][slot.colorType].current;
@@ -1078,7 +1056,7 @@ const BadgeGiveModal = ({ isOpen, onClose, template, onSuccess }) => {
                                 
                                 // Get group current color
                                 const firstSlot = slots[0];
-                                const currentConfig = customizations.overrideForegroundColorConfig?.mappings || {};
+                                const currentConfig = customizations.overrideForegroundColorConfig?.colorMappings || {};
                                 let groupCurrentColor = firstSlot.currentColor;
                                 if (currentConfig[firstSlot.elementPath] && currentConfig[firstSlot.elementPath][firstSlot.colorType]) {
                                   groupCurrentColor = currentConfig[firstSlot.elementPath][firstSlot.colorType].current;
@@ -1192,7 +1170,7 @@ const BadgeGiveModal = ({ isOpen, onClose, template, onSuccess }) => {
                                         </div>
                                         {slots.map((slot) => {
                                         // Get current color for this specific slot
-                                        const currentConfig = customizations.overrideForegroundColorConfig?.mappings || {};
+                                        const currentConfig = customizations.overrideForegroundColorConfig?.colorMappings || {};
                                         let slotCurrentColor = slot.currentColor;
                                         if (currentConfig[slot.elementPath] && currentConfig[slot.elementPath][slot.colorType]) {
                                           slotCurrentColor = currentConfig[slot.elementPath][slot.colorType].current;
