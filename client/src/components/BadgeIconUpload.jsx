@@ -1327,7 +1327,8 @@ function BadgeIconUpload({
   
   return (
     <div className="badge-icon-upload">
-      <div className="icon-preview-container" style={{ position: 'relative', display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+      <div style={{ display: 'flex', justifyContent: 'center' }}>
+        <div className="icon-preview-container" style={{ position: 'relative', display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
         <BadgeForegroundDisplay 
           content={previewIcon}
           isSvg={isSvg}
@@ -1364,29 +1365,36 @@ function BadgeIconUpload({
             ✕
           </button>
         )}
+        </div>
       </div>
       
       {/* Only show upload controls when not in color-only mode */}
       {!colorOnlyMode && (
-        <div className="icon-controls">
-          <button
-            type="button"
-            className="upload-icon-btn"
-            onClick={handleUploadClick}
-            disabled={isComponentLoading}
-          >
-            {isComponentLoading ? 'Processing...' : (previewIcon ? 'Change Icon' : 'Upload Icon')}
-          </button>
+        <>
+          <div className="icon-controls" style={{ textAlign: 'center' }}>
+            <button
+              type="button"
+              className="upload-icon-btn"
+              onClick={handleUploadClick}
+              disabled={isComponentLoading}
+            >
+              {isComponentLoading ? 'Processing...' : (previewIcon ? 'Change Icon' : 'Upload Icon')}
+            </button>
+            
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              accept="image/jpeg, image/png, image/gif, image/webp, image/svg+xml"
+              className="file-input"
+              disabled={isComponentLoading}
+            />
+          </div>
           
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileChange}
-            accept="image/jpeg, image/png, image/gif, image/webp, image/svg+xml"
-            className="file-input"
-            disabled={isComponentLoading}
-          />
-        </div>
+          <div className="icon-help" style={{ textAlign: 'center' }}>
+            <small>Upload an icon up to 2MB. SVG files recommended for color customization.</small>
+          </div>
+        </>
       )}
       
       {error && <div className="icon-error">{error}</div>}
@@ -1495,10 +1503,6 @@ function BadgeIconUpload({
           }}
         />
       )}
-      
-      <div className="icon-help">
-        <small>Upload an icon up to 2MB. SVG files recommended for color customization.</small>
-      </div>
     </div>
   );
 }

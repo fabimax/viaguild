@@ -74,6 +74,7 @@ const BadgeTemplateCreatePage = () => {
   const [uploadedIconSvg, setUploadedIconSvg] = useState(null);
   const [iconSvgColorData, setIconSvgColorData] = useState(null);
   const [systemIconColorData, setSystemIconColorData] = useState(null);
+  const [systemIconOriginalGradientDefinitions, setSystemIconOriginalGradientDefinitions] = useState({});
   const [systemIconName, setSystemIconName] = useState(null); // Store the original icon name
   const [uploadedBackgroundUrl, setUploadedBackgroundUrl] = useState(null);
   const [slugWasIncremented, setSlugWasIncremented] = useState(false);
@@ -166,6 +167,8 @@ const BadgeTemplateCreatePage = () => {
               elementColorMap: colorMapResult.elementColorMap,
               gradientDefinitions: colorMapResult.gradientDefinitions || {}
             });
+            // Store original gradient definitions
+            setSystemIconOriginalGradientDefinitions(colorMapResult.gradientDefinitions || {});
             // Set initial displayable SVG (will be updated with transformations below)
             setDisplayableForegroundSvg(svgContent);
           } else {
@@ -181,6 +184,7 @@ const BadgeTemplateCreatePage = () => {
     } else {
       // Clear system icon data when switching away from system icons
       setSystemIconColorData(null);
+      setSystemIconOriginalGradientDefinitions({});
       setSystemIconName(null);
       if (template.defaultForegroundType !== ForegroundContentType.SYSTEM_ICON) {
         setDisplayableForegroundSvg(null);
@@ -251,6 +255,7 @@ const BadgeTemplateCreatePage = () => {
       setDisplayableForegroundSvg(null);
       setIconSvgColorData(null);
       setSystemIconColorData(null);
+      setSystemIconOriginalGradientDefinitions({});
       setSystemIconName(null);
     } else if (newType === ForegroundContentType.SYSTEM_ICON) {
       // When switching to system icon, clear uploaded icon state
@@ -259,6 +264,7 @@ const BadgeTemplateCreatePage = () => {
     } else if (newType === ForegroundContentType.UPLOADED_ICON) {
       // When switching to uploaded icon, clear system icon state
       setSystemIconColorData(null);
+      setSystemIconOriginalGradientDefinitions({});
       setSystemIconName(null);
     }
   }, [template.defaultForegroundType]);
@@ -741,6 +747,12 @@ const BadgeTemplateCreatePage = () => {
           padding: 0; /* Remove any padding that might affect positioning */
         }
         
+        /* Center the SVG display by adding left margin */
+        img.svg-display {
+          margin-left: 30px;
+        }
+        
+        
       `}</style>
       <div className="badge-template-create-page">
       <div className="page-header">
@@ -1006,10 +1018,12 @@ const BadgeTemplateCreatePage = () => {
                     title="System Icon Color Customization"
                     elementColorMap={systemIconColorData.elementColorMap}
                     gradientDefinitions={systemIconColorData.gradientDefinitions || {}}
-                    onColorChange={(updatedColorMap) => {
+                    originalGradientDefinitions={systemIconOriginalGradientDefinitions}
+                    onColorChange={(updatedColorMap, updatedGradientDefinitions) => {
                       setSystemIconColorData(prev => ({
                         ...prev,
                         elementColorMap: updatedColorMap,
+                        gradientDefinitions: updatedGradientDefinitions || prev.gradientDefinitions,
                         lastUpdated: Date.now() // Force re-render
                       }));
                     }}

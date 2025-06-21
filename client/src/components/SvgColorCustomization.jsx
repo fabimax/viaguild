@@ -132,17 +132,31 @@ const SvgColorCustomization = ({
   const [globalAdjustments, setGlobalAdjustments] = useState({
     hue: 0,      // -180 to +180
     saturation: 0, // -100 to +100  
-    lightness: 0   // -100 to +100
+    lightness: 0,   // -100 to +100
+    alpha: 0       // -100 to +100
   });
   const [gradientAdjustments, setGradientAdjustments] = useState({});
   const [gradientTransparency, setGradientTransparency] = useState({});
+  
+  // Group adjustments state
+  const [groupAdjustments, setGroupAdjustments] = useState({}); // { groupId: { hue: 0, saturation: 0, lightness: 0, alpha: 0 } }
+  const [elementGroups, setElementGroups] = useState({}); // { elementId: groupId }
+  const [groups, setGroups] = useState({}); // { groupId: { name: "Group 1", id: "group1" } }
+  const [selectionMode, setSelectionMode] = useState(null); // null or groupId being edited
+  const [selectedElements, setSelectedElements] = useState(new Set()); // temp selection state
 
   // Reset global adjustments when a new SVG is uploaded (only track the keys, not the values)
   useEffect(() => {
-    setGlobalAdjustments({ hue: 0, saturation: 0, lightness: 0 });
+    setGlobalAdjustments({ hue: 0, saturation: 0, lightness: 0, alpha: 0 });
     setGradientAdjustments({});
     setGradientTransparency({});
     setOpenGradientPicker(null);
+    // Reset group state
+    setGroupAdjustments({});
+    setElementGroups({});
+    setGroups({});
+    setSelectionMode(null);
+    setSelectedElements(new Set());
   }, [Object.keys(elementColorMap || {}).join(',')]); // Only reset when the structure changes (new SVG)
 
   // Close gradient picker when clicking outside
@@ -159,7 +173,7 @@ const SvgColorCustomization = ({
   
   // Helper to get gradient-specific adjustments
   const getGradientAdjustments = (gradientId) => {
-    return gradientAdjustments[gradientId] || { hue: 0, saturation: 0, lightness: 0 };
+    return gradientAdjustments[gradientId] || { hue: 0, saturation: 0, lightness: 0, alpha: 0 };
   };
   
   // Helper to get gradient transparency
@@ -173,6 +187,113 @@ const SvgColorCustomization = ({
       ...prev,
       [gradientId]: adjustments
     }));
+  };
+  
+  // Helper to create a new group
+  const createNewGroup = () => {
+    const existingGroupNumbers = Object.values(groups).map(group => {
+      const match = group.name.match(/^Group (\d+)$/);
+      return match ? parseInt(match[1]) : 0;
+    });
+    const nextNumber = Math.max(0, ...existingGroupNumbers) + 1;
+    const groupId = `group${nextNumber}`;
+    const groupName = `Group ${nextNumber}`;
+    
+    // Create the group
+    setGroups(prev => ({
+      ...prev,
+      [groupId]: { name: groupName, id: groupId }
+    }));
+    
+    // Initialize group adjustments
+    setGroupAdjustments(prev => ({
+      ...prev,
+      [groupId]: { hue: 0, saturation: 0, lightness: 0, alpha: 0 }
+    }));
+    
+    return groupId;
+  };
+  
+  // Helper to reset a group to original colors
+  const resetGroup = (groupId) => {
+    // Reset group adjustments
+    setGroupAdjustments(prev => ({
+      ...prev,
+      [groupId]: { hue: 0, saturation: 0, lightness: 0, alpha: 0 }
+    }));
+    
+    // Get all elements in this group and reset them to original colors
+    const elementsInGroup = Object.keys(elementGroups).filter(elementId => 
+      elementGroups[elementId] === groupId
+    );
+    
+    if (elementsInGroup.length === 0) return;
+    
+    const updatedElementColorMap = { ...elementColorMap };
+    const updatedGradientDefinitions = { ...gradientDefinitions };
+    
+    elementsInGroup.forEach(elementId => {
+      if (elementId.startsWith('group-')) {
+        // Handle group-level color resets
+        const originalColor = elementId.replace('group-', '');
+        const slots = solidColorGroups[originalColor] || [];
+        
+        slots.forEach(slot => {
+          if (!updatedElementColorMap[slot.elementPath]) {
+            updatedElementColorMap[slot.elementPath] = {};
+          }
+          updatedElementColorMap[slot.elementPath][slot.colorType] = {
+            original: slot.originalColor,
+            current: slot.originalColor
+          };
+        });
+      } else if (elementId.startsWith('slot-') || elementId.startsWith('stop-')) {
+        // Handle individual slot/stop resets
+        let foundSlot = null;
+        
+        // Search in solid color groups
+        Object.values(solidColorGroups).forEach(slots => {
+          const slot = slots.find(s => `slot-${s.id}` === elementId || `stop-${s.id}` === elementId);
+          if (slot) foundSlot = slot;
+        });
+        
+        // Search in gradient groups if not found
+        if (!foundSlot) {
+          Object.values(gradientGroups).forEach(gradientGroup => {
+            const slot = gradientGroup.stops.find(s => `slot-${s.id}` === elementId || `stop-${s.id}` === elementId);
+            if (slot) foundSlot = slot;
+          });
+        }
+        
+        if (foundSlot) {
+          if (foundSlot.isGradientStop) {
+            // Reset gradient stop
+            const gradientId = foundSlot.gradientId;
+            const originalGradient = originalGradientDefinitions[gradientId];
+            if (updatedGradientDefinitions[gradientId] && originalGradient) {
+              const originalStopColor = originalGradient.stops[foundSlot.stopIndex]?.color || foundSlot.originalColor;
+              updatedGradientDefinitions[gradientId] = {
+                ...updatedGradientDefinitions[gradientId],
+                stops: updatedGradientDefinitions[gradientId].stops.map((stop, idx) => 
+                  idx === foundSlot.stopIndex ? { ...stop, color: originalStopColor } : stop
+                )
+              };
+            }
+          } else {
+            // Reset solid color slot
+            if (!updatedElementColorMap[foundSlot.elementPath]) {
+              updatedElementColorMap[foundSlot.elementPath] = {};
+            }
+            updatedElementColorMap[foundSlot.elementPath][foundSlot.colorType] = {
+              original: foundSlot.originalColor,
+              current: foundSlot.originalColor
+            };
+          }
+        }
+      }
+    });
+    
+    onColorChange(updatedElementColorMap, updatedGradientDefinitions);
   };
 
 
@@ -317,26 +438,43 @@ const SvgColorCustomization = ({
     const deltaHue = newAdjustments.hue - globalAdjustments.hue;
     const deltaSat = newAdjustments.saturation - globalAdjustments.saturation;
     const deltaLight = newAdjustments.lightness - globalAdjustments.lightness;
+    const deltaAlpha = newAdjustments.alpha - globalAdjustments.alpha;
     
     Object.keys(updatedElementColorMap).forEach(path => {
       const element = updatedElementColorMap[path];
       if (element.fill && !element.fill.isGradient) {
+        // First apply HSL adjustments
         const adjustedColor = adjustColorHsl(
           element.fill.current, // Use current color, not original
           deltaHue,             // Apply only the delta change
           deltaSat, 
           deltaLight
         );
-        element.fill.current = adjustedColor;
+        // Then apply alpha adjustment if needed
+        if (deltaAlpha !== 0) {
+          const { hex, alpha } = parseColorString(adjustedColor);
+          const newAlpha = Math.max(0, Math.min(1, alpha + (deltaAlpha / 100)));
+          element.fill.current = formatHexWithAlpha(hex, newAlpha);
+        } else {
+          element.fill.current = adjustedColor;
+        }
       }
       if (element.stroke && !element.stroke.isGradient) {
+        // First apply HSL adjustments
         const adjustedColor = adjustColorHsl(
           element.stroke.current, // Use current color, not original
           deltaHue,               // Apply only the delta change
           deltaSat, 
           deltaLight
         );
-        element.stroke.current = adjustedColor;
+        // Then apply alpha adjustment if needed
+        if (deltaAlpha !== 0) {
+          const { hex, alpha } = parseColorString(adjustedColor);
+          const newAlpha = Math.max(0, Math.min(1, alpha + (deltaAlpha / 100)));
+          element.stroke.current = formatHexWithAlpha(hex, newAlpha);
+        } else {
+          element.stroke.current = adjustedColor;
+        }
       }
     });
 
@@ -346,14 +484,214 @@ const SvgColorCustomization = ({
       const gradient = updatedGradientDefinitions[gradientId];
       if (gradient) {
         gradient.stops = gradient.stops.map((stop) => {
+          // First apply HSL adjustments
           const adjustedColor = adjustColorHsl(
             stop.color,    // Use current stop color, not original
             deltaHue,      // Apply only the delta change
             deltaSat, 
             deltaLight
           );
-          return { ...stop, color: adjustedColor };
+          // Then apply alpha adjustment if needed
+          if (deltaAlpha !== 0) {
+            const { hex, alpha } = parseColorString(adjustedColor);
+            const newAlpha = Math.max(0, Math.min(1, alpha + (deltaAlpha / 100)));
+            return { ...stop, color: formatHexWithAlpha(hex, newAlpha) };
+          } else {
+            return { ...stop, color: adjustedColor };
+          }
         });
+      }
+    });
+
+    // Notify parent of changes
+    onColorChange(updatedElementColorMap, updatedGradientDefinitions);
+  };
+
+  // Apply group HSL adjustments to all elements in a specific group
+  const handleGroupAdjustment = (groupId, type, value) => {
+    const currentAdjustments = groupAdjustments[groupId] || { hue: 0, saturation: 0, lightness: 0, alpha: 0 };
+    const newAdjustments = { ...currentAdjustments, [type]: parseFloat(value) };
+    
+    // Update group adjustments state
+    setGroupAdjustments(prev => ({
+      ...prev,
+      [groupId]: newAdjustments
+    }));
+
+    // Calculate deltas
+    const deltaHue = newAdjustments.hue - currentAdjustments.hue;
+    const deltaSat = newAdjustments.saturation - currentAdjustments.saturation;
+    const deltaLight = newAdjustments.lightness - currentAdjustments.lightness;
+    const deltaAlpha = newAdjustments.alpha - currentAdjustments.alpha;
+
+    // Get all elements assigned to this group
+    const elementsInGroup = Object.keys(elementGroups).filter(elementId => 
+      elementGroups[elementId] === groupId
+    );
+
+    if (elementsInGroup.length === 0) return; // No elements in group
+
+    const updatedElementColorMap = { ...elementColorMap };
+    const updatedGradientDefinitions = { ...gradientDefinitions };
+
+    elementsInGroup.forEach(elementId => {
+      if (elementId.startsWith('group-')) {
+        // Handle group-level color adjustments (e.g., group-#FF0000 or group-linearGradient123)
+        const originalColor = elementId.replace('group-', '');
+        
+        // Check if it's a solid color group
+        const solidSlots = solidColorGroups[originalColor] || [];
+        if (solidSlots.length > 0) {
+          solidSlots.forEach(slot => {
+            if (!updatedElementColorMap[slot.elementPath]) {
+              updatedElementColorMap[slot.elementPath] = {};
+            }
+            
+            const currentColor = slot.currentColor;
+            // Apply HSL adjustments
+            const adjustedColor = adjustColorHsl(currentColor, deltaHue, deltaSat, deltaLight);
+            
+            // Apply alpha adjustment if needed
+            let finalColor = adjustedColor;
+            if (deltaAlpha !== 0) {
+              const { hex, alpha } = parseColorString(adjustedColor);
+              const newAlpha = Math.max(0, Math.min(1, alpha + (deltaAlpha / 100)));
+              finalColor = formatHexWithAlpha(hex, newAlpha);
+            }
+            
+            updatedElementColorMap[slot.elementPath][slot.colorType] = {
+              original: slot.originalColor,
+              current: finalColor
+            };
+          });
+        }
+        
+        // Check if it's a gradient group
+        const gradientGroup = gradientGroups[originalColor];
+        if (gradientGroup && gradientGroup.gradientId) {
+          const gradientId = gradientGroup.gradientId;
+          if (updatedGradientDefinitions[gradientId]) {
+            updatedGradientDefinitions[gradientId] = {
+              ...updatedGradientDefinitions[gradientId],
+              stops: updatedGradientDefinitions[gradientId].stops.map((stop) => {
+                // Apply HSL adjustments
+                const adjustedColor = adjustColorHsl(stop.color, deltaHue, deltaSat, deltaLight);
+                
+                // Apply alpha adjustment if needed
+                let finalColor = adjustedColor;
+                if (deltaAlpha !== 0) {
+                  const { hex, alpha } = parseColorString(adjustedColor);
+                  const newAlpha = Math.max(0, Math.min(1, alpha + (deltaAlpha / 100)));
+                  finalColor = formatHexWithAlpha(hex, newAlpha);
+                }
+                
+                return { ...stop, color: finalColor };
+              })
+            };
+          }
+        }
+      } else if (elementId.startsWith('slot-')) {
+        // Handle individual slot adjustments
+        // Find the slot in solidColorGroups or gradientGroups
+        let foundSlot = null;
+        
+        // Search in solid color groups
+        Object.values(solidColorGroups).forEach(slots => {
+          const slot = slots.find(s => `slot-${s.id}` === elementId);
+          if (slot) foundSlot = slot;
+        });
+        
+        // Search in gradient groups if not found in solid colors
+        if (!foundSlot) {
+          Object.values(gradientGroups).forEach(gradientGroup => {
+            const slot = gradientGroup.stops.find(s => `slot-${s.id}` === elementId);
+            if (slot) foundSlot = slot;
+          });
+        }
+        
+        if (foundSlot) {
+          if (foundSlot.isGradientStop) {
+            // Handle gradient stop
+            const gradientId = foundSlot.gradientId;
+            if (updatedGradientDefinitions[gradientId]) {
+              updatedGradientDefinitions[gradientId] = {
+                ...updatedGradientDefinitions[gradientId],
+                stops: updatedGradientDefinitions[gradientId].stops.map((stop, idx) => {
+                  if (idx === foundSlot.stopIndex) {
+                    // Apply HSL adjustments
+                    const adjustedColor = adjustColorHsl(stop.color, deltaHue, deltaSat, deltaLight);
+                    
+                    // Apply alpha adjustment if needed
+                    let finalColor = adjustedColor;
+                    if (deltaAlpha !== 0) {
+                      const { hex, alpha } = parseColorString(adjustedColor);
+                      const newAlpha = Math.max(0, Math.min(1, alpha + (deltaAlpha / 100)));
+                      finalColor = formatHexWithAlpha(hex, newAlpha);
+                    }
+                    
+                    return { ...stop, color: finalColor };
+                  }
+                  return stop;
+                })
+              };
+            }
+          } else {
+            // Handle solid color slot
+            if (!updatedElementColorMap[foundSlot.elementPath]) {
+              updatedElementColorMap[foundSlot.elementPath] = {};
+            }
+            
+            const currentColor = foundSlot.currentColor;
+            // Apply HSL adjustments
+            const adjustedColor = adjustColorHsl(currentColor, deltaHue, deltaSat, deltaLight);
+            
+            // Apply alpha adjustment if needed
+            let finalColor = adjustedColor;
+            if (deltaAlpha !== 0) {
+              const { hex, alpha } = parseColorString(adjustedColor);
+              const newAlpha = Math.max(0, Math.min(1, alpha + (deltaAlpha / 100)));
+              finalColor = formatHexWithAlpha(hex, newAlpha);
+            }
+            
+            updatedElementColorMap[foundSlot.elementPath][foundSlot.colorType] = {
+              original: foundSlot.originalColor,
+              current: finalColor
+            };
+          }
+        }
+      } else if (elementId.startsWith('stop-')) {
+        // Handle individual gradient stops (same as slot- logic above for gradient stops)
+        let foundSlot = null;
+        Object.values(gradientGroups).forEach(gradientGroup => {
+          const slot = gradientGroup.stops.find(s => `stop-${s.id}` === elementId);
+          if (slot) foundSlot = slot;
+        });
+        
+        if (foundSlot && foundSlot.isGradientStop) {
+          const gradientId = foundSlot.gradientId;
+          if (updatedGradientDefinitions[gradientId]) {
+            updatedGradientDefinitions[gradientId] = {
+              ...updatedGradientDefinitions[gradientId],
+              stops: updatedGradientDefinitions[gradientId].stops.map((stop, idx) => {
+                if (idx === foundSlot.stopIndex) {
+                  // Apply HSL adjustments
+                  const adjustedColor = adjustColorHsl(stop.color, deltaHue, deltaSat, deltaLight);
+                  
+                  // Apply alpha adjustment if needed
+                  let finalColor = adjustedColor;
+                  if (deltaAlpha !== 0) {
+                    const { hex, alpha } = parseColorString(adjustedColor);
+                    const newAlpha = Math.max(0, Math.min(1, alpha + (deltaAlpha / 100)));
+                    finalColor = formatHexWithAlpha(hex, newAlpha);
+                  }
+                  
+                  return { ...stop, color: finalColor };
+                }
+                return stop;
+              })
+            };
+          }
+        }
       }
     });
 
@@ -552,14 +890,15 @@ const SvgColorCustomization = ({
               cursor: canExpand ? 'pointer' : 'default',
               fontSize: '14px',
               padding: '2px 6px',
-              minWidth: '24px',
+              width: '27px',
+              height: '20px',
               lineHeight: '1',
-              color: canExpand ? '#4f46e5' : '#adb5bd',
+              color: canExpand ? '#333' : '#adb5bd',
               opacity: canExpand ? 1 : 0.5
             }}
             title={canExpand ? (isExpanded ? 'Collapse' : 'Expand') : 'Single item - no expansion'}
           >
-            {canExpand ? (isExpanded ? '−' : '+') : '•'}
+            {canExpand ? (isExpanded ? '▼' : '▶') : '•'}
           </button>
           
           {/* Color picker - only for solid colors */}
@@ -776,6 +1115,58 @@ const SvgColorCustomization = ({
                         style={{ width: '100%' }}
                       />
                     </div>
+                    
+                    {/* Alpha */}
+                    <div>
+                      <label style={{ fontSize: '12px', color: '#666', marginBottom: '2px', display: 'block' }}>
+                        Alpha: {getGradientAdjustments(gradientGroup?.gradientId).alpha > 0 ? '+' : ''}{getGradientAdjustments(gradientGroup?.gradientId).alpha}%
+                      </label>
+                      <input
+                        type="range"
+                        min="-100" max="100" step="1"
+                        value={getGradientAdjustments(gradientGroup?.gradientId).alpha}
+                        onChange={(e) => {
+                          const gradientId = gradientGroup?.gradientId;
+                          const newAlpha = parseInt(e.target.value);
+                          const currentAdj = getGradientAdjustments(gradientId);
+                          setGradientSpecificAdjustments(gradientId, { ...currentAdj, alpha: newAlpha });
+                          
+                          // Apply HSL and alpha adjustments to gradient
+                          const updatedGradientDefinitions = { ...gradientDefinitions };
+                          const gradient = updatedGradientDefinitions[gradientId];
+                          const originalGradient = originalGradientDefinitions[gradientId];
+                          
+                          if (gradient && originalGradient) {
+                            gradient.stops = gradient.stops.map((stop, idx) => {
+                              const originalStop = originalGradient.stops[idx];
+                              if (originalStop) {
+                                const { hex: originalHex, alpha: originalAlpha } = parseColorString(originalStop.color);
+                                // First apply HSL adjustments
+                                const adjustedColor = adjustColorHsl(originalHex, currentAdj.hue, currentAdj.saturation, currentAdj.lightness);
+                                // Then apply alpha adjustment
+                                const newAlphaValue = Math.max(0, Math.min(1, originalAlpha + (newAlpha / 100)));
+                                return { ...stop, color: formatHexWithAlpha(adjustedColor, newAlphaValue) };
+                              }
+                              return stop;
+                            });
+                            onColorChange(elementColorMap, updatedGradientDefinitions);
+                          }
+                        }}
+                        className="transparency-slider"
+                        style={{ 
+                          width: '100%',
+                          height: '4px',
+                          appearance: 'none',
+                          WebkitAppearance: 'none',
+                          background: 'linear-gradient(to right, transparent, #000)',
+                          borderRadius: '4px',
+                          outline: 'none',
+                          border: 'none',
+                          padding: '4px',
+                          margin: '5px 0'
+                        }}
+                      />
+                    </div>
                   </div>
                 </div>
               )}
@@ -911,7 +1302,7 @@ const SvgColorCustomization = ({
                   // Reset gradient adjustments state (for the popup sliders)
                   setGradientAdjustments(prev => ({
                     ...prev,
-                    [gradientId]: { hue: 0, saturation: 0, lightness: 0 }
+                    [gradientId]: { hue: 0, saturation: 0, lightness: 0, alpha: 0 }
                   }));
                   
                   onColorChange(elementColorMap, updatedGradientDefinitions);
@@ -939,13 +1330,174 @@ const SvgColorCustomization = ({
               border: '1px solid #ccc',
               borderRadius: '3px',
               cursor: 'pointer',
-              minWidth: '24px',
+              width: '24px',
+              height: '24px',
               color: '#666'
             }}
             title="Reset to original"
           >
             ↻
           </button>
+          
+          {/* Add to Group button, group label, or selection checkbox */}
+          {selectionMode ? (
+            <input
+              type="checkbox"
+              checked={selectedElements.has(`group-${originalColor}`) || elementGroups[`group-${originalColor}`] === selectionMode}
+              onChange={(e) => {
+                const elementId = `group-${originalColor}`;
+                
+                if (e.target.checked) {
+                  // Add to selection
+                  setSelectedElements(prev => {
+                    const newSet = new Set(prev);
+                    newSet.add(elementId);
+                    // If this is a gradient group, also auto-select all its individual stops
+                    if (isGradient && gradientGroup && gradientGroup.stops) {
+                      gradientGroup.stops.forEach(stop => {
+                        newSet.add(`stop-${stop.id}`);
+                      });
+                    }
+                    // If this is a solid color group, also auto-select all its individual slots
+                    if (!isGradient && solidColorGroups[originalColor]) {
+                      solidColorGroups[originalColor].forEach(slot => {
+                        newSet.add(`slot-${slot.id}`);
+                      });
+                    }
+                    return newSet;
+                  });
+                } else {
+                  // Remove from selection AND from current group if already assigned
+                  setSelectedElements(prev => {
+                    const newSet = new Set(prev);
+                    newSet.delete(elementId);
+                    // If this is a gradient group, also auto-unselect all its individual stops
+                    if (isGradient && gradientGroup && gradientGroup.stops) {
+                      gradientGroup.stops.forEach(stop => {
+                        newSet.delete(`stop-${stop.id}`);
+                      });
+                    }
+                    // If this is a solid color group, also auto-unselect all its individual slots
+                    if (!isGradient && solidColorGroups[originalColor]) {
+                      solidColorGroups[originalColor].forEach(slot => {
+                        newSet.delete(`slot-${slot.id}`);
+                      });
+                    }
+                    return newSet;
+                  });
+                  
+                  // If this element was already assigned to the current group, remove it
+                  if (elementGroups[elementId] === selectionMode) {
+                    setElementGroups(prev => {
+                      const newElementGroups = { ...prev };
+                      delete newElementGroups[elementId];
+                      
+                      // Also remove all child elements from the group
+                      if (isGradient && gradientGroup && gradientGroup.stops) {
+                        gradientGroup.stops.forEach(stop => {
+                          delete newElementGroups[`stop-${stop.id}`];
+                        });
+                      }
+                      if (!isGradient && solidColorGroups[originalColor]) {
+                        solidColorGroups[originalColor].forEach(slot => {
+                          delete newElementGroups[`slot-${slot.id}`];
+                        });
+                      }
+                      
+                      return newElementGroups;
+                    });
+                  }
+                }
+              }}
+              style={{
+                width: '14px',
+                height: '14px',
+                margin: '5px',
+                cursor: 'pointer'
+              }}
+            />
+          ) : (console.log('Checking elementGroups for:', `group-${originalColor}`, 'Current assignment:', elementGroups[`group-${originalColor}`], 'All elementGroups:', elementGroups), elementGroups[`group-${originalColor}`]) ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <span style={{
+                fontSize: '11px',
+                background: '#e3f2fd',
+                color: '#1976d2',
+                padding: '2px 6px',
+                borderRadius: '3px',
+                border: '1px solid #bbdefb',
+                fontWeight: '500'
+              }}>
+                {groups[elementGroups[`group-${originalColor}`]]?.name || 'Unknown Group'}
+              </span>
+              <button 
+                type="button" 
+                onClick={() => {
+                  // Remove from current group
+                  setElementGroups(prev => {
+                    const newElementGroups = { ...prev };
+                    delete newElementGroups[`group-${originalColor}`];
+                    return newElementGroups;
+                  });
+                }} 
+                style={{ 
+                  fontSize: '12px', 
+                  padding: '2px 4px',
+                  background: 'transparent',
+                  border: '1px solid #ccc',
+                  borderRadius: '3px',
+                  cursor: 'pointer',
+                  width: '20px',
+                  height: '20px',
+                  color: '#666'
+                }}
+                title="Remove from group"
+              >
+                ×
+              </button>
+            </div>
+          ) : Object.keys(groups).length > 0 ? (
+            <select
+              defaultValue=""
+              onChange={(e) => {
+                console.log('Dropdown changed:', { 
+                  selectedValue: e.target.value,
+                  selectedIndex: e.target.selectedIndex,
+                  optionText: e.target.options[e.target.selectedIndex]?.text 
+                });
+                if (e.target.value) {
+                  setElementGroups(prev => {
+                    const newGroups = {
+                      ...prev,
+                      [`group-${originalColor}`]: e.target.value
+                    };
+                    console.log('Assigning element to group:', {
+                      elementId: `group-${originalColor}`,
+                      groupId: e.target.value,
+                      newGroups
+                    });
+                    return newGroups;
+                  });
+                }
+              }}
+              style={{
+                fontSize: '9px',
+                padding: '2px 2px',
+                background: 'transparent',
+                border: '1px solid #ccc',
+                borderRadius: '3px',
+                cursor: 'pointer',
+                width: '52px',
+                height: '24px',
+                color: '#666'
+              }}
+              title="Add to group"
+            >
+              <option value="" disabled style={{ display: 'none' }}>Select</option>
+              {Object.entries(groups).map(([groupId, group]) => (
+                <option key={groupId} value={groupId}>{group.name}</option>
+              ))}
+            </select>
+          ) : null}
           
           {/* Spacer to push content to right */}
           <div style={{ flex: 1 }} />
@@ -1068,7 +1620,7 @@ const SvgColorCustomization = ({
                         }}
                         title={expandedGradientSections[`${gradientGroup.gradientId}-unlink`] ? 'Collapse' : 'Expand'}
                       >
-                        {expandedGradientSections[`${gradientGroup.gradientId}-unlink`] ? '−' : '+'}
+                        {expandedGradientSections[`${gradientGroup.gradientId}-unlink`] ? '▼' : '▶'}
                       </button>
                       <h5 style={{ margin: 0, color: '#495057' }}>Unlink Elements</h5>
                     </div>
@@ -1126,33 +1678,14 @@ const SvgColorCustomization = ({
                   </div>
                 )}
 
-                {/* Edit Individual Stops Section */}
+                {/* Edit Gradient Stops Section */}
                 <div style={{ marginBottom: '15px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-                    <button 
-                      type="button"
-                      onClick={() => toggleGradientSection(gradientGroup.gradientId, 'stops')}
-                      style={{
-                        background: '#f0f0f0',
-                        border: '1px solid #ccc',
-                        borderRadius: '3px',
-                        cursor: 'pointer',
-                        fontSize: '14px',
-                        padding: '2px 8px',
-                        minWidth: '30px',
-                        lineHeight: '1',
-                        color: '#4f46e5'
-                      }}
-                      title={expandedGradientSections[`${gradientGroup.gradientId}-stops`] ? 'Collapse' : 'Expand'}
-                    >
-                      {expandedGradientSections[`${gradientGroup.gradientId}-stops`] ? '−' : '+'}
-                    </button>
-                    <h5 style={{ margin: 0, color: '#495057' }}>Edit Individual Stops</h5>
+                    <h5 style={{ margin: 0, color: '#495057' }}>Edit Gradient Stops</h5>
                   </div>
                   
-                  {expandedGradientSections[`${gradientGroup.gradientId}-stops`] && (
-                    <div style={{ paddingLeft: '20px' }}>
-                      {slots.map((slot) => {
+                  <div style={{ paddingLeft: '20px' }}>
+                    {slots.map((slot) => {
                         const { hex: slotHex, alpha: slotAlpha } = parseColorString(slot.currentColor);
                         return (
                           <div key={slot.id} style={{ marginBottom: '8px' }}>
@@ -1270,13 +1803,151 @@ const SvgColorCustomization = ({
                                   border: '1px solid #ccc',
                                   borderRadius: '3px',
                                   cursor: 'pointer',
-                                  minWidth: '20px',
+                                  width: '20px',
+                                  height: '20px',
                                   color: '#666'
                                 }}
                                 title="Reset to original"
                               >
                                 ↻
                               </button>
+                              
+                              {/* Add to Group button, group label, or selection checkbox for individual gradient stop */}
+                              {selectionMode ? (
+                                <input
+                                  type="checkbox"
+                                  checked={selectedElements.has(`stop-${slot.id}`) || elementGroups[`stop-${slot.id}`] === selectionMode}
+                                  onChange={(e) => {
+                                    const elementId = `stop-${slot.id}`;
+                                    
+                                    if (e.target.checked) {
+                                      // Add to selection
+                                      setSelectedElements(prev => {
+                                        const newSet = new Set(prev);
+                                        newSet.add(elementId);
+                                        return newSet;
+                                      });
+                                    } else {
+                                      // Remove from selection
+                                      setSelectedElements(prev => {
+                                        const newSet = new Set(prev);
+                                        newSet.delete(elementId);
+                                        // If unchecking this gradient stop, also uncheck the parent gradient group
+                                        if (slot.gradientId) {
+                                          // Find the gradient group that contains this stop
+                                          Object.keys(gradientGroups).forEach(originalColor => {
+                                            const gradientGroup = gradientGroups[originalColor];
+                                            if (gradientGroup.gradientId === slot.gradientId) {
+                                              const parentGroupId = `group-${originalColor}`;
+                                              newSet.delete(parentGroupId);
+                                            }
+                                          });
+                                        }
+                                        return newSet;
+                                      });
+                                      
+                                      // If this element was already assigned to the current group, remove it
+                                      if (elementGroups[elementId] === selectionMode) {
+                                        setElementGroups(prev => {
+                                          const newElementGroups = { ...prev };
+                                          delete newElementGroups[elementId];
+                                          return newElementGroups;
+                                        });
+                                      }
+                                    }
+                                  }}
+                                  style={{
+                                    width: '12px',
+                                    height: '12px',
+                                    margin: '4px',
+                                    cursor: 'pointer'
+                                  }}
+                                />
+                              ) : elementGroups[`stop-${slot.id}`] ? (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                                  <span style={{
+                                    fontSize: '10px',
+                                    background: '#e3f2fd',
+                                    color: '#1976d2',
+                                    padding: '1px 4px',
+                                    borderRadius: '2px',
+                                    border: '1px solid #bbdefb',
+                                    fontWeight: '500'
+                                  }}>
+                                    {groups[elementGroups[`stop-${slot.id}`]]?.name || 'Unknown'}
+                                  </span>
+                                  <button 
+                                    type="button" 
+                                    onClick={() => {
+                                      // Remove from current group
+                                      setElementGroups(prev => {
+                                        const newElementGroups = { ...prev };
+                                        const currentGroupId = elementGroups[`stop-${slot.id}`];
+                                        delete newElementGroups[`stop-${slot.id}`];
+                                        
+                                        // Also remove the parent gradient group if it was in the same group
+                                        if (slot.gradientId && currentGroupId) {
+                                          // Find the gradient group that contains this stop
+                                          Object.keys(gradientGroups).forEach(originalColor => {
+                                            const gradientGroup = gradientGroups[originalColor];
+                                            if (gradientGroup.gradientId === slot.gradientId) {
+                                              const parentGroupId = `group-${originalColor}`;
+                                              if (newElementGroups[parentGroupId] === currentGroupId) {
+                                                delete newElementGroups[parentGroupId];
+                                              }
+                                            }
+                                          });
+                                        }
+                                        
+                                        return newElementGroups;
+                                      });
+                                    }} 
+                                    style={{ 
+                                      fontSize: '10px', 
+                                      padding: '1px 3px',
+                                      background: 'transparent',
+                                      border: '1px solid #ccc',
+                                      borderRadius: '2px',
+                                      cursor: 'pointer',
+                                      width: '16px',
+                                      height: '16px',
+                                      color: '#666'
+                                    }}
+                                    title="Remove from group"
+                                  >
+                                    ×
+                                  </button>
+                                </div>
+                              ) : Object.keys(groups).length > 0 ? (
+                                <select
+                                  defaultValue=""
+                                  onChange={(e) => {
+                                    if (e.target.value) {
+                                      setElementGroups(prev => ({
+                                        ...prev,
+                                        [`stop-${slot.id}`]: e.target.value
+                                      }));
+                                    }
+                                  }}
+                                  style={{
+                                    fontSize: '8px',
+                                    padding: '1px 1px',
+                                    background: 'transparent',
+                                    border: '1px solid #ccc',
+                                    borderRadius: '3px',
+                                    cursor: 'pointer',
+                                    width: '42px',
+                                    height: '20px',
+                                    color: '#666'
+                                  }}
+                                  title="Add to group"
+                                >
+                                  <option value="" disabled style={{ display: 'none' }}>Select</option>
+                                  {Object.entries(groups).map(([groupId, group]) => (
+                                    <option key={groupId} value={groupId}>{group.name}</option>
+                                  ))}
+                                </select>
+                              ) : null}
                               
                               {/* Current hex value */}
                               <span style={{ 
@@ -1292,7 +1963,6 @@ const SvgColorCustomization = ({
                         );
                       })}
                     </div>
-                  )}
                 </div>
               </div>
             ) : (
@@ -1397,13 +2067,132 @@ const SvgColorCustomization = ({
                           border: '1px solid #ccc',
                           borderRadius: '3px',
                           cursor: 'pointer',
-                          minWidth: '20px',
+                          width: '20px',
+                          height: '20px',
                           color: '#666'
                         }}
                         title="Reset to original"
                       >
                         ↻
                       </button>
+                      
+                      {/* Add to Group button, group label, or selection checkbox for individual slot */}
+                      {selectionMode ? (
+                        <input
+                          type="checkbox"
+                          checked={selectedElements.has(`slot-${slot.id}`) || elementGroups[`slot-${slot.id}`] === selectionMode}
+                          onChange={(e) => {
+                            const elementId = `slot-${slot.id}`;
+                            
+                            if (e.target.checked) {
+                              // Add to selection
+                              setSelectedElements(prev => {
+                                const newSet = new Set(prev);
+                                newSet.add(elementId);
+                                return newSet;
+                              });
+                            } else {
+                              // Remove from selection
+                              setSelectedElements(prev => {
+                                const newSet = new Set(prev);
+                                newSet.delete(elementId);
+                                // If unchecking this slot, also uncheck the parent group
+                                const parentGroupId = `group-${slot.originalColor}`;
+                                newSet.delete(parentGroupId);
+                                return newSet;
+                              });
+                              
+                              // If this element was already assigned to the current group, remove it
+                              if (elementGroups[elementId] === selectionMode) {
+                                setElementGroups(prev => {
+                                  const newElementGroups = { ...prev };
+                                  delete newElementGroups[elementId];
+                                  return newElementGroups;
+                                });
+                              }
+                            }
+                          }}
+                          style={{
+                            width: '12px',
+                            height: '12px',
+                            margin: '4px',
+                            cursor: 'pointer'
+                          }}
+                        />
+                      ) : elementGroups[`slot-${slot.id}`] ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                          <span style={{
+                            fontSize: '10px',
+                            background: '#e3f2fd',
+                            color: '#1976d2',
+                            padding: '1px 4px',
+                            borderRadius: '2px',
+                            border: '1px solid #bbdefb',
+                            fontWeight: '500'
+                          }}>
+                            {groups[elementGroups[`slot-${slot.id}`]]?.name || 'Unknown'}
+                          </span>
+                          <button 
+                            type="button" 
+                            onClick={() => {
+                              // Remove from current group
+                              setElementGroups(prev => {
+                                const newElementGroups = { ...prev };
+                                delete newElementGroups[`slot-${slot.id}`];
+                                // Also remove the parent solid color group if it was in the same group
+                                const parentGroupId = `group-${slot.originalColor}`;
+                                if (newElementGroups[parentGroupId] === elementGroups[`slot-${slot.id}`]) {
+                                  delete newElementGroups[parentGroupId];
+                                }
+                                return newElementGroups;
+                              });
+                            }} 
+                            style={{ 
+                              fontSize: '10px', 
+                              padding: '1px 3px',
+                              background: 'transparent',
+                              border: '1px solid #ccc',
+                              borderRadius: '2px',
+                              cursor: 'pointer',
+                              width: '16px',
+                              height: '16px',
+                              color: '#666'
+                            }}
+                            title="Remove from group"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ) : Object.keys(groups).length > 0 ? (
+                        <select
+                          defaultValue=""
+                          onChange={(e) => {
+                            if (e.target.value) {
+                              setElementGroups(prev => ({
+                                ...prev,
+                                [`slot-${slot.id}`]: e.target.value
+                              }));
+                            }
+                          }}
+                          style={{
+                            fontSize: '8px',
+                            padding: '1px 1px',
+                            background: 'transparent',
+                            border: '1px solid #ccc',
+                            borderRadius: '3px',
+                            cursor: 'pointer',
+                            width: '42px',
+                            height: '20px',
+                            color: '#666'
+                          }}
+                          title="Add to group"
+                        >
+                          <option value="" disabled style={{ display: 'none' }}>Select</option>
+                          {Object.entries(groups).map(([groupId, group]) => (
+                            <option key={groupId} value={groupId}>{group.name}</option>
+                          ))}
+                        </select>
+                      ) : null}
                       
                       {/* Current hex value */}
                       <span style={{ 
@@ -1435,7 +2224,10 @@ const SvgColorCustomization = ({
           type="button"
           onClick={() => {
             // Reset global adjustments state
-            setGlobalAdjustments({ hue: 0, saturation: 0, lightness: 0 });
+            setGlobalAdjustments({ hue: 0, saturation: 0, lightness: 0, alpha: 0 });
+            
+            // Reset gradient adjustments state
+            setGradientAdjustments({});
             
             // Reset all solid colors to original
             const updatedElementColorMap = { ...elementColorMap };
@@ -1502,7 +2294,7 @@ const SvgColorCustomization = ({
           <h4 style={{ margin: '0', color: '#495057', fontSize: '1em' }}>Global Adjustments</h4>
         </div>
         
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px', alignItems: 'center' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '15px', alignItems: 'center' }}>
           {/* Hue Control */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -1548,14 +2340,15 @@ const SvgColorCustomization = ({
                 style={{
                   fontSize: '10px',
                   padding: '2px 6px',
-                  background: '#6c757d',
-                  color: 'white',
-                  border: 'none',
+                  background: 'transparent',
+                  border: '1px solid #ccc',
                   borderRadius: '3px',
-                  cursor: 'pointer'
+                  cursor: 'pointer',
+                  color: '#666'
                 }}
+                title="Reset hue"
               >
-                Reset Hue
+                ↻
               </button>
             </div>
             <input
@@ -1600,7 +2393,259 @@ const SvgColorCustomization = ({
               style={{ width: '100%' }}
             />
           </div>
+          
+          {/* Alpha Control */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <label style={{ fontSize: '0.85em', fontWeight: '500', color: '#495057' }}>
+              Alpha: {globalAdjustments.alpha > 0 ? '+' : ''}{globalAdjustments.alpha}%
+            </label>
+            <input
+              type="range"
+              min="-100"
+              max="100"
+              step="1"
+              value={globalAdjustments.alpha}
+              onChange={(e) => handleGlobalAdjustment('alpha', e.target.value)}
+              className="transparency-slider"
+              style={{ 
+                width: '100%',
+                height: '4px',
+                appearance: 'none',
+                WebkitAppearance: 'none',
+                background: 'linear-gradient(to right, transparent, #000)',
+                borderRadius: '4px',
+                outline: 'none',
+                border: 'none',
+                padding: '4px',
+                margin: '5px 0'
+              }}
+            />
+          </div>
         </div>
+      </div>
+      
+      {/* Group Adjustments Section */}
+      <div className="group-adjustments" style={{ marginBottom: '20px', padding: '12px', background: '#f8f9fa', borderRadius: '4px', border: '1px solid #e9ecef' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+          <h4 style={{ margin: '0', color: '#495057', fontSize: '1em' }}>Group Adjustments</h4>
+          <button
+            type="button"
+            onClick={() => {
+              createNewGroup();
+            }}
+            style={{
+              fontSize: '12px',
+              padding: '4px 8px',
+              background: '#28a745',
+              color: 'white',
+              border: 'none',
+              borderRadius: '3px',
+              cursor: 'pointer'
+            }}
+          >
+            + Create Group
+          </button>
+        </div>
+        
+        
+        {/* Group adjustment panels will be rendered here */}
+        {Object.entries(groups).map(([groupId, group]) => {
+          const adjustments = groupAdjustments[groupId] || { hue: 0, saturation: 0, lightness: 0, alpha: 0 };
+          
+          return (
+            <div key={groupId} style={{ marginTop: '15px', padding: '10px', background: '#ffffff', borderRadius: '4px', border: '1px solid #dee2e6' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                <h5 style={{ margin: '0', color: '#495057' }}>{group.name} Adjustments</h5>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (selectionMode === groupId) {
+                        // Finish selecting - assign selected elements to this group (single membership)
+                        setElementGroups(prev => {
+                          const newElementGroups = { ...prev };
+                          selectedElements.forEach(elementId => {
+                            newElementGroups[elementId] = groupId;
+                          });
+                          return newElementGroups;
+                        });
+                        // Exit selection mode
+                        setSelectionMode(null);
+                        setSelectedElements(new Set());
+                      } else {
+                        // Enter selection mode for this group
+                        setSelectionMode(groupId);
+                        setSelectedElements(new Set());
+                      }
+                    }}
+                    style={{
+                      fontSize: '11px',
+                      padding: '3px 6px',
+                      background: selectionMode === groupId ? '#dc3545' : '#007bff',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '3px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {selectionMode === groupId ? 'Finish Selecting' : 'Select Elements'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      // Delete group
+                      setGroups(prev => {
+                        const newGroups = { ...prev };
+                        delete newGroups[groupId];
+                        return newGroups;
+                      });
+                      setGroupAdjustments(prev => {
+                        const newAdjustments = { ...prev };
+                        delete newAdjustments[groupId];
+                        return newAdjustments;
+                      });
+                      // Remove elements from this group
+                      setElementGroups(prev => {
+                        const newElementGroups = { ...prev };
+                        Object.keys(newElementGroups).forEach(elementId => {
+                          if (newElementGroups[elementId] === groupId) {
+                            delete newElementGroups[elementId];
+                          }
+                        });
+                        return newElementGroups;
+                      });
+                      if (selectionMode === groupId) {
+                        setSelectionMode(null);
+                        setSelectedElements(new Set());
+                      }
+                    }}
+                    style={{
+                      fontSize: '11px',
+                      padding: '3px 6px',
+                      background: '#dc3545',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '3px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+              
+              {/* Group adjustment sliders */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '15px', alignItems: 'center', marginBottom: '10px' }}>
+                {/* Hue Control */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '0.85em', fontWeight: '500', color: '#495057' }}>
+                    Hue: {adjustments.hue}°
+                  </label>
+                  <input
+                    type="range"
+                    min="-180"
+                    max="180"
+                    step="1"
+                    value={adjustments.hue}
+                    onChange={(e) => {
+                      const newHue = parseInt(e.target.value);
+                      handleGroupAdjustment(groupId, 'hue', newHue);
+                    }}
+                    style={{ width: '100%' }}
+                  />
+                </div>
+                
+                {/* Saturation Control */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '0.85em', fontWeight: '500', color: '#495057' }}>
+                    Saturation: {adjustments.saturation > 0 ? '+' : ''}{adjustments.saturation}%
+                  </label>
+                  <input
+                    type="range"
+                    min="-100"
+                    max="100"
+                    step="1"
+                    value={adjustments.saturation}
+                    onChange={(e) => {
+                      const newSaturation = parseInt(e.target.value);
+                      handleGroupAdjustment(groupId, 'saturation', newSaturation);
+                    }}
+                    style={{ width: '100%' }}
+                  />
+                </div>
+                
+                {/* Lightness Control */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '0.85em', fontWeight: '500', color: '#495057' }}>
+                    Lightness: {adjustments.lightness > 0 ? '+' : ''}{adjustments.lightness}%
+                  </label>
+                  <input
+                    type="range"
+                    min="-100"
+                    max="100"
+                    step="1"
+                    value={adjustments.lightness}
+                    onChange={(e) => {
+                      const newLightness = parseInt(e.target.value);
+                      handleGroupAdjustment(groupId, 'lightness', newLightness);
+                    }}
+                    style={{ width: '100%' }}
+                  />
+                </div>
+                
+                {/* Alpha Control */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '0.85em', fontWeight: '500', color: '#495057' }}>
+                    Alpha: {adjustments.alpha > 0 ? '+' : ''}{adjustments.alpha}%
+                  </label>
+                  <input
+                    type="range"
+                    min="-100"
+                    max="100"
+                    step="1"
+                    value={adjustments.alpha}
+                    onChange={(e) => {
+                      const newAlpha = parseInt(e.target.value);
+                      handleGroupAdjustment(groupId, 'alpha', newAlpha);
+                    }}
+                    className="transparency-slider"
+                    style={{ 
+                      width: '100%',
+                      height: '4px',
+                      appearance: 'none',
+                      WebkitAppearance: 'none',
+                      background: 'linear-gradient(to right, transparent, #000)',
+                      borderRadius: '4px',
+                      outline: 'none',
+                      border: 'none',
+                      padding: '4px',
+                      margin: '5px 0'
+                    }}
+                  />
+                </div>
+              </div>
+              
+              {/* Reset button */}
+              <button
+                type="button"
+                onClick={() => {
+                  resetGroup(groupId);
+                }}
+                style={{
+                  fontSize: '11px',
+                  padding: '4px 8px',
+                  background: '#6c757d',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '3px',
+                  cursor: 'pointer'
+                }}
+              >
+                Reset Group
+              </button>
+            </div>
+          );
+        })}
       </div>
       
       {/* Solid Colors Section */}
