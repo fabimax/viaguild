@@ -1329,7 +1329,7 @@ function BadgeIconUpload({
     <div className="badge-icon-upload">
       <div className="icon-preview-container" style={{ position: 'relative', display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
         <BadgeForegroundDisplay 
-          content={isSvg ? svgContent : previewIcon}
+          content={previewIcon}
           isSvg={isSvg}
           colorData={svgColorData}
           size={80}
