@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import SystemIconService from '../services/systemIcon.service';
-import SvgPreview from './SvgPreview';
+import SvgDisplay from './SvgDisplay';
 
 const SystemIconSelector = ({ 
   selectedIcon, 
@@ -162,7 +162,7 @@ const SystemIconSelector = ({
           
           {selectedIcon && selectedIconSvg ? (
             <div style={{ textAlign: 'center' }}>
-              <SvgPreview 
+              <SvgDisplay 
                 svgContent={selectedIconSvg}
                 colorData={colorData}
                 size={80}
@@ -182,7 +182,7 @@ const SystemIconSelector = ({
               </p>
             </div>
           ) : (
-            <SvgPreview 
+            <SvgDisplay 
               svgContent={null}
               colorData={colorData}
               size={80}

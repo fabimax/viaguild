@@ -1,5 +1,6 @@
 const { PrismaClient } = require('@prisma/client');
 const r2Service = require('../services/r2.service.js');
+const { validateBufferMagicNumber } = require('../utils/fileValidation.js');
 
 const prisma = new PrismaClient();
 
@@ -83,6 +84,14 @@ const uploadController = {
         } else {
           console.log('Previous URL is the saved avatar, not deleting');
         }
+      }
+      
+      // Validate magic number before processing
+      try {
+        validateBufferMagicNumber(req.file.buffer, req.file.mimetype);
+      } catch (validationError) {
+        console.error('Magic number validation failed for avatar:', validationError.message);
+        return res.status(400).json({ error: validationError.message });
       }
       
       // Upload to R2 with multiple sizes
@@ -188,6 +197,14 @@ const uploadController = {
         }
       }
 
+      // Validate magic number before processing
+      try {
+        validateBufferMagicNumber(req.file.buffer, req.file.mimetype);
+      } catch (validationError) {
+        console.error('Magic number validation failed for guild avatar:', validationError.message);
+        return res.status(400).json({ error: validationError.message });
+      }
+      
       // Upload to R2
       const result = await r2Service.uploadGuildAvatar(
         req.file.buffer,
@@ -255,6 +272,14 @@ const uploadController = {
         return res.status(400).json({ error: 'No file uploaded' });
       }
 
+      // Validate magic number before processing
+      try {
+        validateBufferMagicNumber(req.file.buffer, req.file.mimetype);
+      } catch (validationError) {
+        console.error('Magic number validation failed for cluster avatar:', validationError.message);
+        return res.status(400).json({ error: validationError.message });
+      }
+      
       // Upload to R2 - reuse guild avatar method as they're similar
       // Note: Old avatar cleanup should happen when the cluster profile is saved
       const result = await r2Service.uploadGuildAvatar(
@@ -326,7 +351,9 @@ const uploadController = {
    */
   async uploadBadgeIcon(req, res) {
     try {
+      console.log(`UPLOAD: Badge icon upload request - User authenticated: ${!!req.user}, User ID: ${req.user?.id}`);
       if (!req.user) {
+        console.log('UPLOAD: No user in request, returning 401');
         return res.status(401).json({ error: 'Unauthorized' });
       }
 
@@ -342,6 +369,14 @@ const uploadController = {
       const maxSize = 2 * 1024 * 1024; // 2MB
       if (file.buffer.length > maxSize) {
         return res.status(400).json({ error: 'File too large. Maximum size is 2MB for badge icons.' });
+      }
+      
+      // Validate magic number before processing
+      try {
+        validateBufferMagicNumber(file.buffer, file.mimetype);
+      } catch (validationError) {
+        console.error('Magic number validation failed:', validationError.message);
+        return res.status(400).json({ error: validationError.message });
       }
       
       // SINGLE PREVIEW SYSTEM: Delete any existing temp badge icon for this user
@@ -846,6 +881,14 @@ const uploadController = {
       if (!allowedExtensions.includes(fileExtension)) {
         return res.status(400).json({ error: 'Invalid file type. Only JPEG, PNG, GIF, WebP, and SVG are allowed for backgrounds.' });
       }
+      
+      // Validate magic number before processing
+      try {
+        validateBufferMagicNumber(req.file.buffer, req.file.mimetype);
+      } catch (validationError) {
+        console.error('Magic number validation failed for badge background:', validationError.message);
+        return res.status(400).json({ error: validationError.message });
+      }
 
       // SINGLE GLOBAL PREVIEW SYSTEM: Delete any existing temp background upload for this user
       const existingTempAsset = await req.prisma.uploadedAsset.findFirst({
@@ -1115,6 +1158,63 @@ const uploadController = {
         success: true,
         message: 'Badge background deletion attempted'
       });
+    }
+  },
+
+  /**
+   * Secure proxy to serve asset content
+   * GET /api/upload/asset/:assetId/content
+   * Requires authentication and ownership verification
+   */
+  async getAssetContent(req, res) {
+    try {
+      const { assetId } = req.params;
+      
+      // Find asset and verify ownership
+      const asset = await req.prisma.uploadedAsset.findUnique({
+        where: { id: assetId },
+        select: { 
+          storageIdentifier: true, 
+          status: true, 
+          uploaderId: true,
+          mimeType: true,
+          assetType: true
+        }
+      });
+      
+      if (!asset) {
+        return res.status(404).json({ error: 'Asset not found' });
+      }
+      
+      if (asset.status === 'DELETED') {
+        return res.status(410).json({ error: 'Asset has been deleted' });
+      }
+      
+      // Verify ownership - user can only access their own assets
+      if (asset.uploaderId !== req.user.id) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+      
+      // Fetch content from R2
+      const { GetObjectCommand } = require('@aws-sdk/client-s3');
+      const getObjectResult = await r2Service.client.send(new GetObjectCommand({
+        Bucket: r2Service.bucketName,
+        Key: asset.storageIdentifier,
+      }));
+      
+      // Set appropriate headers
+      res.set({
+        'Content-Type': asset.mimeType || 'application/octet-stream',
+        'Cache-Control': 'private, max-age=3600', // Cache for 1 hour but mark as private
+        'X-Asset-Type': asset.assetType
+      });
+      
+      // Stream the content
+      getObjectResult.Body.pipe(res);
+      
+    } catch (error) {
+      console.error('Error serving asset content:', error);
+      res.status(500).json({ error: 'Failed to retrieve asset content' });
     }
   },
 };

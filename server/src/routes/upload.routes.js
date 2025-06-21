@@ -262,6 +262,17 @@ router.post(
 );
 
 /**
+ * Secure proxy to serve asset content
+ * GET /api/upload/asset/:assetId/content
+ * Requires authentication and ownership
+ */
+router.get(
+  '/asset/:assetId/content',
+  authenticate,
+  uploadController.getAssetContent
+);
+
+/**
  * Error handling middleware for multer
  */
 router.use((error, req, res, next) => {

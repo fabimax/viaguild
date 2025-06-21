@@ -4,16 +4,16 @@ import { useBlobUrl } from '../hooks/useBlobUrl';
 import { applySvgColorTransform } from '../utils/svgColorTransform';
 
 /**
- * Common SVG preview component that displays SVG content with live color transformations
- * Provides memory-safe blob URL management and consistent preview behavior
- * Used across the app for all SVG preview needs
+ * SVG display component that renders SVG content with live color transformations
+ * Provides memory-safe blob URL management and consistent display behavior
+ * Used across the app for all SVG rendering needs
  */
-const SvgPreview = ({ 
+const SvgDisplay = ({ 
   svgContent, 
   colorData, 
   size = 80,
   className = '',
-  alt = 'SVG Preview',
+  alt = 'SVG Display',
   style = {},
   placeholder = 'No icon'
 }) => {
@@ -44,7 +44,7 @@ const SvgPreview = ({
   if (!previewUrl) {
     return (
       <div 
-        className={`svg-preview-placeholder ${className}`}
+        className={`svg-display-placeholder ${className}`}
         style={{ 
           width: size, 
           height: size,
@@ -69,7 +69,7 @@ const SvgPreview = ({
     <img 
       src={previewUrl}
       alt={alt}
-      className={`svg-preview ${className}`}
+      className={`svg-display ${className}`}
       style={{ 
         width: size, 
         height: size,
@@ -85,7 +85,7 @@ const SvgPreview = ({
   );
 };
 
-SvgPreview.propTypes = {
+SvgDisplay.propTypes = {
   svgContent: PropTypes.string,
   colorData: PropTypes.shape({
     elementColorMap: PropTypes.object,
@@ -99,4 +99,4 @@ SvgPreview.propTypes = {
   placeholder: PropTypes.string
 };
 
-export default SvgPreview;
+export default SvgDisplay;

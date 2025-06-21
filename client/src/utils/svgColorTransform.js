@@ -165,6 +165,8 @@ export const applyElementMappings = (svgString, elementColorMap) => {
   const parserError = svgElement.querySelector('parsererror');
   if (parserError) {
     console.error('SVG parsing error:', parserError.textContent);
+    console.error('Invalid SVG content in applyElementMappings:', svgString ? `"${svgString.substring(0, 200)}..."` : 'undefined/null');
+    console.error('SVG content type:', typeof svgString);
     return svgString; // Return original if parsing fails
   }
   

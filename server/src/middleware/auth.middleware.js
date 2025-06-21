@@ -8,6 +8,7 @@ const config = require('../config/config');
  */
 const authenticate = async (req, res, next) => {
   try {
+    console.log(`AUTH: ${req.method} ${req.path} - Checking authentication`);
     // Get token from header or query parameter
     let token;
     
@@ -23,8 +24,11 @@ const authenticate = async (req, res, next) => {
     }
     
     if (!token) {
+      console.log(`AUTH: ${req.method} ${req.path} - No token found, returning 401`);
       return res.status(401).json({ message: 'Authentication required' });
     }
+    
+    console.log(`AUTH: ${req.method} ${req.path} - Token found, verifying...`);
 
     // Verify token
     const decoded = jwt.verify(token, config.JWT_SECRET);
@@ -35,18 +39,23 @@ const authenticate = async (req, res, next) => {
     });
 
     if (!user) {
+      console.log(`AUTH: ${req.method} ${req.path} - User not found in database, returning 401`);
       return res.status(401).json({ message: 'User not found' });
     }
 
+    console.log(`AUTH: ${req.method} ${req.path} - Authentication successful for user ${user.id}`);
     // Add user to request object
     req.user = user;
 
     next();
   } catch (error) {
+    console.log(`AUTH: ${req.method} ${req.path} - Authentication error: ${error.name} - ${error.message}`);
     if (error.name === 'JsonWebTokenError') {
+      console.log(`AUTH: ${req.method} ${req.path} - Invalid token, returning 401`);
       return res.status(401).json({ message: 'Invalid token' });
     }
     if (error.name === 'TokenExpiredError') {
+      console.log(`AUTH: ${req.method} ${req.path} - Token expired, returning 401`);
       return res.status(401).json({ message: 'Token expired' });
     }
     next(error);

@@ -4,7 +4,7 @@ import DOMPurify from 'dompurify';
 import { buildElementColorMap } from '../utils/svgColorAnalysis';
 import { applyGradientChanges } from '../utils/svgColorTransform';
 import SvgColorCustomization from './SvgColorCustomization';
-import SvgPreview from './SvgPreview';
+import BadgeForegroundDisplay from './BadgeForegroundDisplay';
 
 // Helper to convert a 6-digit hex and an alpha (0-1) to an 8-digit hex (or 6 if alpha is 1)
 const formatHexWithAlpha = (hex, alpha = 1) => {
@@ -206,9 +206,14 @@ function BadgeIconUpload({
       
       let processedSvgContent = null;
       
-      if (isSvgAsset && tempAsset.hostedUrl) {
-        // Fetch and process SVG content
-        const svgResponse = await fetch(tempAsset.hostedUrl);
+      if (isSvgAsset && tempAsset.id) {
+        // Fetch SVG content through secure proxy instead of direct R2 URL
+        const token = localStorage.getItem('token');
+        const svgResponse = await fetch(`http://localhost:3000/api/upload/asset/${tempAsset.id}/content`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
         const svgContent = await svgResponse.text();
         setSvgContent(svgContent);
         processedSvgContent = svgContent;
@@ -298,8 +303,9 @@ function BadgeIconUpload({
         // Fallback: Store original SVG for preview
         setPreviewIcon(svgContent);
       } else {
-        // Regular image - use hosted URL directly (not a blob)
-        setPreviewIcon(tempAsset.hostedUrl);
+        // Regular image - use proxy URL for secure access
+        const proxyUrl = `http://localhost:3000/api/upload/asset/${tempAsset.id}/content`;
+        setPreviewIcon(proxyUrl);
       }
       
       // Notify parent component about the loaded upload
@@ -366,7 +372,11 @@ function BadgeIconUpload({
         // Quick load from localStorage, but still verify with server
         setUploadedUrl(localSync.iconUrl);
         setUploadId(localSync.assetId);
-        setPreviewIcon(localSync.iconUrl);
+        // Use proxy URL if we have asset ID, otherwise use direct URL
+        const previewUrl = localSync.assetId ? 
+          `http://localhost:3000/api/upload/asset/${localSync.assetId}/content` : 
+          localSync.iconUrl;
+        setPreviewIcon(previewUrl);
       }
       
       // Then check server for authoritative data
@@ -393,7 +403,9 @@ function BadgeIconUpload({
           if (newSyncData.assetId !== uploadId) {
             setUploadedUrl(newSyncData.iconUrl);
             setUploadId(newSyncData.assetId);
-            setPreviewIcon(newSyncData.iconUrl);
+            // Use proxy URL for secure access
+            const previewUrl = `http://localhost:3000/api/upload/asset/${newSyncData.assetId}/content`;
+            setPreviewIcon(previewUrl);
             setIsSvg(newSyncData.metadata?.type === 'svg');
             
             // Update parent component with proper SVG content if available
@@ -604,13 +616,20 @@ function BadgeIconUpload({
     if (!token) return;
     
     try {
-      await fetch(`http://localhost:3000/api/upload/badge-icon/${assetId}`, {
+      const response = await fetch(`http://localhost:3000/api/upload/badge-icon/${assetId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
-      console.log('Deleted previous temp upload:', assetId);
+      
+      if (response.ok) {
+        console.log('Deleted previous temp upload:', assetId);
+      } else if (response.status === 404) {
+        console.log('Previous temp upload already deleted:', assetId);
+      } else {
+        console.warn('Failed to delete previous upload:', response.status, response.statusText);
+      }
     } catch (error) {
       console.error('Failed to delete previous upload:', error);
       // Don't block on cleanup errors
@@ -870,6 +889,8 @@ function BadgeIconUpload({
         const elementPaths = Object.keys(elementColorMap);
         console.log('Element paths found:', elementPaths);
         
+        let finalColorData = null; // Store the final color data to pass to parent
+        
         if (elementPaths.length > 0) {
           // Convert to display format for UI
           const colorSlots = [];
@@ -920,17 +941,21 @@ function BadgeIconUpload({
           console.log('colorSlots being set:', colorSlots);
           console.log('First slot details:', colorSlots[0]);
           setSvgColorData(colorData);
-          onSvgDataChange?.(processedSvg, colorData);
+          finalColorData = colorData; // Store for parent notification
         } else {
           setSvgColorData(null);
-          onSvgDataChange?.(processedSvg, null);
+          finalColorData = null;
         }
         
-        // Upload SVG to R2 as temporary asset
+        // Upload SVG to R2 as temporary asset - must succeed before updating parent
         const uploadResponse = await uploadToR2(file);
         const uploadedUrl = uploadResponse.data.iconUrl;
         const assetId = uploadResponse.data.assetId; // Get the upload ID
         console.log('Asset uploaded successfully. Reference:', `upload://${assetId}`);
+        
+        // Now that upload succeeded, notify parent component about SVG data
+        // Use the fresh finalColorData that was just created above
+        onSvgDataChange?.(processedSvg, finalColorData);
         
         // Store sync data for other tabs (metadata is defined below)
         const syncMetadata = {
@@ -984,12 +1009,14 @@ function BadgeIconUpload({
         // Regular image upload
         setSvgContent('');
         setSvgColorData(null);
-        onSvgDataChange?.(null, null);
         
-        // Upload to R2 as temporary asset
+        // Upload to R2 as temporary asset - must succeed before updating parent
         const uploadResponse = await uploadToR2(file);
         const uploadedUrl = uploadResponse.data.iconUrl;
         const assetId = uploadResponse.data.assetId;
+        
+        // Now that upload succeeded, notify parent component
+        onSvgDataChange?.(null, null);
         
         // Store sync data for other tabs
         storeSyncData(uploadedUrl, assetId, { type: 'image' });
@@ -1006,7 +1033,16 @@ function BadgeIconUpload({
     } catch (err) {
       console.error('Error handling file:', err);
       setError(err.message || 'Failed to process icon. Please try again.');
-      setPreviewIcon(currentIcon);
+      // Reset state on upload failure to prevent showing misleading preview
+      setPreviewIcon(null);
+      setSvgContent('');
+      setSvgColorData(null);
+      setIsSvg(false);
+      setUploadedUrl(null);
+      setUploadId(null);
+      // Reset parent component state too
+      onIconChange(null, null, null);
+      onSvgDataChange?.(null, null);
     } finally {
       setInternalLoading(false);
     }
@@ -1292,18 +1328,13 @@ function BadgeIconUpload({
   return (
     <div className="badge-icon-upload">
       <div className="icon-preview-container" style={{ position: 'relative', display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
-        <SvgPreview 
-          svgContent={isSvg ? previewIcon : null}
+        <BadgeForegroundDisplay 
+          content={isSvg ? svgContent : previewIcon}
+          isSvg={isSvg}
           colorData={svgColorData}
           size={80}
           alt="Icon preview"
           placeholder="No Icon"
-          style={{
-            background: previewIcon && !isSvg ? `url(${previewIcon})` : '#ffffff',
-            backgroundSize: 'contain',
-            backgroundPosition: 'center',
-            backgroundRepeat: 'no-repeat'
-          }}
         />
         {/* Only show remove button when not in color-only mode and we have an icon */}
         {!colorOnlyMode && previewIcon && (
