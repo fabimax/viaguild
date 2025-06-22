@@ -21,10 +21,10 @@ function extractColor(config, fallback = '#000000') {
     case 'system-icon':
       return config.color || fallback;
       
-    case 'element-path':
+    case 'customizable-svg':
       // Extract representative color from element mappings
-      if (config.mappings && typeof config.mappings === 'object') {
-        const mappings = Object.values(config.mappings);
+      if (config.colorMappings && typeof config.colorMappings === 'object') {
+        const mappings = Object.values(config.colorMappings);
         for (const mapping of mappings) {
           if (mapping.fill?.current) return mapping.fill.current;
           if (mapping.stroke?.current) return mapping.stroke.current;
@@ -112,17 +112,22 @@ function createHostedAssetConfig(url) {
 }
 
 /**
- * Create an element-path configuration object for SVG color mappings
- * @param {Object} mappings - Element path to color mappings
- * @returns {Object} Element-path configuration object
+ * Create a customizable-svg configuration object for SVG color mappings
+ * @param {Object} colorMappings - Element path to color mappings
+ * @param {string} url - Asset URL for the SVG
+ * @param {number} scale - Optional scale factor
+ * @returns {Object} Customizable-svg configuration object
  */
-function createElementPathConfig(mappings) {
+function createCustomizableSvgConfig(colorMappings, url, scale) {
   return {
-    type: 'element-path',
+    type: 'customizable-svg',
     version: 1,
-    mappings: mappings
+    url: url,
+    scale: scale,
+    colorMappings: colorMappings
   };
 }
+
 
 /**
  * Validate a color configuration object
@@ -144,8 +149,8 @@ function validateColorConfig(config) {
     case 'hosted-asset':
       return typeof config.url === 'string' && config.url.length > 0;
       
-    case 'element-path':
-      return config.mappings && typeof config.mappings === 'object';
+    case 'customizable-svg':
+      return config.colorMappings && typeof config.colorMappings === 'object';
       
     default:
       return false;
@@ -159,6 +164,6 @@ module.exports = {
   extractBorderStyle,
   createSimpleColorConfig,
   createHostedAssetConfig,
-  createElementPathConfig,
+  createCustomizableSvgConfig,
   validateColorConfig
 };

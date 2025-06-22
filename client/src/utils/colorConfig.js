@@ -36,7 +36,7 @@ export function extractColor(config, fallback = '#000000') {
       }
       return fallback;
       
-    case 'element-path':
+    case 'customizable-svg':
       // Extract representative color from element mappings
       if (config.colorMappings && typeof config.colorMappings === 'object') {
         const mappings = Object.values(config.colorMappings);
@@ -162,17 +162,22 @@ export function createHostedAssetConfig(url) {
 }
 
 /**
- * Create an element-path configuration object for SVG color mappings
+ * Create a customizable-svg configuration object for SVG color mappings
  * @param {Object} colorMappings - Element path to color mappings
- * @returns {Object} Element-path configuration object
+ * @param {string} url - Asset URL for the SVG
+ * @param {number} scale - Optional scale factor
+ * @returns {Object} Customizable-svg configuration object
  */
-export function createElementPathConfig(colorMappings) {
+export function createCustomizableSvgConfig(colorMappings, url, scale) {
   return {
-    type: 'element-path',
+    type: 'customizable-svg',
     version: 1,
+    url: url,
+    scale: scale,
     colorMappings: colorMappings
   };
 }
+
 
 /**
  * Validate a color configuration object
@@ -190,7 +195,7 @@ export function validateColorConfig(config) {
     case 'static-image-asset':
       return typeof config.url === 'string' && config.url.length > 0;
       
-    case 'element-path':
+    case 'customizable-svg':
       return config.colorMappings && typeof config.colorMappings === 'object';
       
     default:

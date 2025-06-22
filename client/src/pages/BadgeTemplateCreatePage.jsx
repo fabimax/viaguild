@@ -12,7 +12,7 @@ import badgeService from '../services/badgeService';
 import { 
   createSimpleColorConfig,
   createHostedAssetConfig,
-  createElementPathConfig 
+  createCustomizableSvgConfig 
 } from '../utils/colorConfig';
 import { applySvgColorTransform } from '../utils/svgColorTransform';
 import { buildElementColorMap } from '../utils/svgColorAnalysis';
@@ -195,9 +195,9 @@ const BadgeTemplateCreatePage = () => {
       // Apply color transformations if we have color data
       if (iconSvgColorData && iconSvgColorData.elementColorMap) {
         const transformedSvg = applySvgColorTransform(uploadedIconSvg, {
-          type: 'element-path',
+          type: 'customizable-svg',
           version: 1,
-          mappings: iconSvgColorData.elementColorMap
+          colorMappings: iconSvgColorData.elementColorMap
         });
         setDisplayableForegroundSvg(transformedSvg);
       } else {
@@ -218,9 +218,9 @@ const BadgeTemplateCreatePage = () => {
       SystemIconService.getSystemIconSvg(systemIconName)
         .then(originalSvg => {
           const transformedSvg = applySvgColorTransform(originalSvg, {
-            type: 'element-path',
+            type: 'customizable-svg',
             version: 1,
-            mappings: systemIconColorData.elementColorMap
+            colorMappings: systemIconColorData.elementColorMap
           });
           setDisplayableForegroundSvg(transformedSvg);
         })
@@ -364,11 +364,6 @@ const BadgeTemplateCreatePage = () => {
 
   // Helper to generate the full foreground config object
   const buildForegroundConfig = () => {
-    console.log(`[CreatePage] Building foreground config:`, {
-      type: template.defaultForegroundType,
-      value: template.defaultForegroundValue,
-      hasColorData: !!(systemIconColorData && systemIconColorData.elementColorMap)
-    });
     
     switch (template.defaultForegroundType) {
       case ForegroundContentType.TEXT:
@@ -387,7 +382,6 @@ const BadgeTemplateCreatePage = () => {
             value: template.defaultForegroundValue, // The icon name
             colorMappings: systemIconColorData.elementColorMap
           };
-          console.log(`[CreatePage] Created system icon config with mappings:`, config);
           return config;
         } else {
           const config = {
@@ -697,9 +691,9 @@ const BadgeTemplateCreatePage = () => {
       : createSimpleColorConfig(template.defaultBackgroundValue),
     foregroundConfig: (
       (iconSvgColorData && iconSvgColorData.elementColorMap && Object.keys(iconSvgColorData.elementColorMap).length > 0)
-        ? createElementPathConfig(iconSvgColorData.elementColorMap)
+        ? createCustomizableSvgConfig(iconSvgColorData.elementColorMap, template.defaultForegroundValue)
         : (systemIconColorData && systemIconColorData.elementColorMap && Object.keys(systemIconColorData.elementColorMap).length > 0)
-          ? createElementPathConfig(systemIconColorData.elementColorMap) 
+          ? createCustomizableSvgConfig(systemIconColorData.elementColorMap) 
           : createSimpleColorConfig(template.defaultForegroundType === ForegroundContentType.UPLOADED_ICON 
               ? '#000000' 
               : template.defaultForegroundColor)

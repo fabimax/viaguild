@@ -30,7 +30,7 @@ const SvgDisplay = ({
     let transformedSvg = svgContent;
     if (colorData && colorData.elementColorMap) {
       transformedSvg = applySvgColorTransform(svgContent, {
-        type: 'element-path',
+        type: 'customizable-svg',
         version: 1,
         colorMappings: colorData.elementColorMap
       });

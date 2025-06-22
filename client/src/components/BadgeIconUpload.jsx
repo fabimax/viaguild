@@ -287,7 +287,7 @@ function BadgeIconUpload({
           try {
             const { applySvgColorTransform } = await import('../utils/svgColorTransform');
             const transformedSvg = applySvgColorTransform(svgContent, {
-              type: 'element-path',
+              type: 'customizable-svg',
               version: 1,
               colorMappings: elementColorMap
             });
@@ -976,7 +976,7 @@ function BadgeIconUpload({
           try {
             const { applySvgColorTransform } = await import('../utils/svgColorTransform');
             const transformedSvg = applySvgColorTransform(processedSvg, {
-              type: 'element-path',
+              type: 'customizable-svg',
               version: 1,
               colorMappings: elementColorMap
             });

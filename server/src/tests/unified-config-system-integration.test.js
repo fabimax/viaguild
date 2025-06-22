@@ -296,7 +296,7 @@ describe('Unified Config System Integration Tests', () => {
       
       // Element-path config
       const elementConfig = {
-        type: 'element-path',
+        type: 'customizable-svg',
         version: 1,
         mappings: {
           'path[0]': { fill: { current: '#00FF00' } },

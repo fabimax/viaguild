@@ -78,16 +78,22 @@ const BadgeDisplay = ({ badge }) => {
           console.error(`[BadgeDisplay] ✗ Failed '${value}':`, err.message);
           if (isMounted) setCurrentFg({ type, value: '' });
         });
-    } else if (type === 'UPLOADED_ICON' && value && !isSvgContent(value) && foregroundConfig?.type === 'customizable-svg') {
-      // For customizable SVGs, fetch the SVG content through our server proxy to avoid CORS
-      import('../../services/api.js').then(({ default: api }) => {
-        return api.get('/fetch-svg', { params: { url: value } });
+    } else if (type === 'UPLOADED_ICON' && value && value.startsWith('upload://')) {
+      // Resolve upload:// URLs to actual hosted URLs using the proper authenticated endpoint
+      import('../../services/badgeService.js').then(({ default: badgeService }) => {
+        const assetId = value.replace('upload://', '');
+        return badgeService.getAssetUrl(assetId);
       })
-        .then(response => {
-          if (isMounted) setCurrentFg({ type, value: response.data });
+        .then(realUrl => {
+          if (isMounted && realUrl) {
+            setCurrentFg({ type, value: realUrl });
+          } else if (isMounted) {
+            console.error(`Failed to resolve upload URL: ${value}`);
+            setCurrentFg({ type, value: '' });
+          }
         })
         .catch(err => {
-          console.error(`Failed to fetch customizable SVG from '${value}':`, err);
+          console.error(`Error resolving upload URL '${value}':`, err);
           if (isMounted) setCurrentFg({ type, value: '' });
         });
     } else {

@@ -445,7 +445,7 @@ const BadgeGiveModal = ({ isOpen, onClose, template, onSuccess }) => {
       const colorConfig = customizations.overrideForegroundColorConfig || 
                          template.defaultForegroundColorConfig ||
                          (template.defaultForegroundConfig && template.defaultForegroundConfig.colorMappings ? {
-                           type: 'element-path',
+                           type: 'customizable-svg',
                            version: 1,
                            colorMappings: template.defaultForegroundConfig.colorMappings
                          } : null);
@@ -496,7 +496,7 @@ const BadgeGiveModal = ({ isOpen, onClose, template, onSuccess }) => {
       foregroundConfig: customizations.overrideForegroundConfig || 
         template.defaultForegroundConfig ||
         (template.defaultForegroundColorConfig ? {
-          type: 'element-path',
+          type: 'customizable-svg',
           version: 1,
           colorMappings: template.defaultForegroundColorConfig.colorMappings
         } : null) ||
@@ -834,12 +834,12 @@ const BadgeGiveModal = ({ isOpen, onClose, template, onSuccess }) => {
                               return {
                                 ...prev,
                                 overrideForegroundColorConfig: {
-                                  type: 'element-path',
+                                  type: 'customizable-svg',
                                   version: 1,
                                   colorMappings: newMappings
                                 },
                                 overrideForegroundConfig: {
-                                  type: 'element-path',
+                                  type: 'customizable-svg',
                                   version: 1,
                                   colorMappings: newMappings
                                 }
@@ -896,12 +896,12 @@ const BadgeGiveModal = ({ isOpen, onClose, template, onSuccess }) => {
                               return {
                                 ...prev,
                                 overrideForegroundColorConfig: {
-                                  type: 'element-path',
+                                  type: 'customizable-svg',
                                   version: 1,
                                   colorMappings: newMappings
                                 },
                                 overrideForegroundConfig: {
-                                  type: 'element-path',
+                                  type: 'customizable-svg',
                                   version: 1,
                                   colorMappings: newMappings
                                 }
@@ -956,12 +956,12 @@ const BadgeGiveModal = ({ isOpen, onClose, template, onSuccess }) => {
                               return {
                                 ...prev,
                                 overrideForegroundColorConfig: {
-                                  type: 'element-path',
+                                  type: 'customizable-svg',
                                   version: 1,
                                   colorMappings: newMappings
                                 },
                                 overrideForegroundConfig: {
-                                  type: 'element-path',
+                                  type: 'customizable-svg',
                                   version: 1,
                                   colorMappings: newMappings
                                 }
@@ -1008,12 +1008,12 @@ const BadgeGiveModal = ({ isOpen, onClose, template, onSuccess }) => {
                               return {
                                 ...prev,
                                 overrideForegroundColorConfig: {
-                                  type: 'element-path',
+                                  type: 'customizable-svg',
                                   version: 1,
                                   colorMappings: newMappings
                                 },
                                 overrideForegroundConfig: {
-                                  type: 'element-path',
+                                  type: 'customizable-svg',
                                   version: 1,
                                   colorMappings: newMappings
                                 }
