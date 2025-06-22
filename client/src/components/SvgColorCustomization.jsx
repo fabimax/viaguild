@@ -524,94 +524,174 @@ const SvgColorCustomization = ({
     const deltaLight = newAdjustments.lightness - currentAdjustments.lightness;
     const deltaAlpha = newAdjustments.alpha - currentAdjustments.alpha;
 
-    // Get all elements assigned to this group
-    const elementsInGroup = Object.keys(elementGroups).filter(elementId => 
-      elementGroups[elementId] === groupId
-    );
+    // Use callback to get current elementGroups state at time of execution
+    setElementGroups(currentElementGroups => {
+      // Get all elements assigned to this group using current state
+      const elementsInGroup = Object.keys(currentElementGroups).filter(elementId => 
+        currentElementGroups[elementId] === groupId
+      );
+      
+      
 
-    if (elementsInGroup.length === 0) return; // No elements in group
+      if (elementsInGroup.length === 0) return currentElementGroups; // No elements in group
 
-    const updatedElementColorMap = { ...elementColorMap };
-    const updatedGradientDefinitions = { ...gradientDefinitions };
+      const updatedElementColorMap = { ...elementColorMap };
+      const updatedGradientDefinitions = { ...gradientDefinitions };
+      const processedPaths = new Set(); // Track which paths we've already processed
 
-    elementsInGroup.forEach(elementId => {
-      if (elementId.startsWith('group-')) {
-        // Handle group-level color adjustments (e.g., group-#FF0000 or group-linearGradient123)
-        const originalColor = elementId.replace('group-', '');
-        
-        // Check if it's a solid color group
-        const solidSlots = solidColorGroups[originalColor] || [];
-        if (solidSlots.length > 0) {
-          solidSlots.forEach(slot => {
-            if (!updatedElementColorMap[slot.elementPath]) {
-              updatedElementColorMap[slot.elementPath] = {};
-            }
-            
-            const currentColor = slot.currentColor;
-            // Apply HSL adjustments
-            const adjustedColor = adjustColorHsl(currentColor, deltaHue, deltaSat, deltaLight);
-            
-            // Apply alpha adjustment if needed
-            let finalColor = adjustedColor;
-            if (deltaAlpha !== 0) {
-              const { hex, alpha } = parseColorString(adjustedColor);
-              const newAlpha = Math.max(0, Math.min(1, alpha + (deltaAlpha / 100)));
-              finalColor = formatHexWithAlpha(hex, newAlpha);
-            }
-            
-            updatedElementColorMap[slot.elementPath][slot.colorType] = {
-              original: slot.originalColor,
-              current: finalColor
-            };
-          });
-        }
-        
-        // Check if it's a gradient group
-        const gradientGroup = gradientGroups[originalColor];
-        if (gradientGroup && gradientGroup.gradientId) {
-          const gradientId = gradientGroup.gradientId;
-          if (updatedGradientDefinitions[gradientId]) {
-            updatedGradientDefinitions[gradientId] = {
-              ...updatedGradientDefinitions[gradientId],
-              stops: updatedGradientDefinitions[gradientId].stops.map((stop) => {
-                // Apply HSL adjustments
-                const adjustedColor = adjustColorHsl(stop.color, deltaHue, deltaSat, deltaLight);
-                
-                // Apply alpha adjustment if needed
-                let finalColor = adjustedColor;
-                if (deltaAlpha !== 0) {
-                  const { hex, alpha } = parseColorString(adjustedColor);
-                  const newAlpha = Math.max(0, Math.min(1, alpha + (deltaAlpha / 100)));
-                  finalColor = formatHexWithAlpha(hex, newAlpha);
-                }
-                
-                return { ...stop, color: finalColor };
-              })
-            };
+      elementsInGroup.forEach(elementId => {
+        if (elementId.startsWith('group-')) {
+          // Handle group-level color adjustments (e.g., group-#FF0000 or group-linearGradient123)
+          const originalColor = elementId.replace('group-', '');
+          
+          // Check if it's a solid color group
+          const solidSlots = solidColorGroups[originalColor] || [];
+          if (elementId === 'group-#EB7830FF') {
+            console.log('[GROUP-BUG] solidColorGroups[#EB7830FF] contains:', solidSlots.length, 'slots');
+            console.log('[GROUP-BUG] Slot paths:', solidSlots.map(s => s.elementPath));
           }
-        }
-      } else if (elementId.startsWith('slot-')) {
-        // Handle individual slot adjustments
-        // Find the slot in solidColorGroups or gradientGroups
-        let foundSlot = null;
-        
-        // Search in solid color groups
-        Object.values(solidColorGroups).forEach(slots => {
-          const slot = slots.find(s => `slot-${s.id}` === elementId);
-          if (slot) foundSlot = slot;
-        });
-        
-        // Search in gradient groups if not found in solid colors
-        if (!foundSlot) {
-          Object.values(gradientGroups).forEach(gradientGroup => {
-            const slot = gradientGroup.stops.find(s => `slot-${s.id}` === elementId);
+          if (solidSlots.length > 0) {
+            solidSlots.forEach(slot => {
+              // Skip if we've already processed this path
+              const pathKey = `${slot.elementPath}-${slot.colorType}`;
+              if (processedPaths.has(pathKey)) {
+                return;
+              }
+              processedPaths.add(pathKey);
+              
+              if (!updatedElementColorMap[slot.elementPath]) {
+                updatedElementColorMap[slot.elementPath] = {};
+              }
+              
+              const currentColor = slot.currentColor;
+              // Apply HSL adjustments
+              const adjustedColor = adjustColorHsl(currentColor, deltaHue, deltaSat, deltaLight);
+              
+              // Apply alpha adjustment if needed
+              let finalColor = adjustedColor;
+              if (deltaAlpha !== 0) {
+                const { hex, alpha } = parseColorString(adjustedColor);
+                const newAlpha = Math.max(0, Math.min(1, alpha + (deltaAlpha / 100)));
+                finalColor = formatHexWithAlpha(hex, newAlpha);
+              }
+              
+              updatedElementColorMap[slot.elementPath][slot.colorType] = {
+                original: slot.originalColor,
+                current: finalColor
+              };
+              
+            });
+          }
+          
+          // Check if it's a gradient group
+          const gradientGroup = gradientGroups[originalColor];
+          if (gradientGroup && gradientGroup.gradientId) {
+            const gradientId = gradientGroup.gradientId;
+            if (updatedGradientDefinitions[gradientId]) {
+              updatedGradientDefinitions[gradientId] = {
+                ...updatedGradientDefinitions[gradientId],
+                stops: updatedGradientDefinitions[gradientId].stops.map((stop) => {
+                  // Apply HSL adjustments
+                  const adjustedColor = adjustColorHsl(stop.color, deltaHue, deltaSat, deltaLight);
+                  
+                  // Apply alpha adjustment if needed
+                  let finalColor = adjustedColor;
+                  if (deltaAlpha !== 0) {
+                    const { hex, alpha } = parseColorString(adjustedColor);
+                    const newAlpha = Math.max(0, Math.min(1, alpha + (deltaAlpha / 100)));
+                    finalColor = formatHexWithAlpha(hex, newAlpha);
+                  }
+                  
+                  return { ...stop, color: finalColor };
+                })
+              };
+            }
+          }
+        } else if (elementId.startsWith('slot-')) {
+          // Handle individual slot adjustments
+          // Find the slot in solidColorGroups or gradientGroups
+          let foundSlot = null;
+          
+          // Search in solid color groups
+          Object.values(solidColorGroups).forEach(slots => {
+            const slot = slots.find(s => `slot-${s.id}` === elementId);
             if (slot) foundSlot = slot;
           });
-        }
-        
-        if (foundSlot) {
-          if (foundSlot.isGradientStop) {
-            // Handle gradient stop
+          
+          // Search in gradient groups if not found in solid colors
+          if (!foundSlot) {
+            Object.values(gradientGroups).forEach(gradientGroup => {
+              const slot = gradientGroup.stops.find(s => `slot-${s.id}` === elementId);
+              if (slot) foundSlot = slot;
+            });
+          }
+          
+          if (foundSlot) {
+            if (foundSlot.isGradientStop) {
+              // Handle gradient stop
+              const gradientId = foundSlot.gradientId;
+              if (updatedGradientDefinitions[gradientId]) {
+                updatedGradientDefinitions[gradientId] = {
+                  ...updatedGradientDefinitions[gradientId],
+                  stops: updatedGradientDefinitions[gradientId].stops.map((stop, idx) => {
+                    if (idx === foundSlot.stopIndex) {
+                      // Apply HSL adjustments
+                      const adjustedColor = adjustColorHsl(stop.color, deltaHue, deltaSat, deltaLight);
+                      
+                      // Apply alpha adjustment if needed
+                      let finalColor = adjustedColor;
+                      if (deltaAlpha !== 0) {
+                        const { hex, alpha } = parseColorString(adjustedColor);
+                        const newAlpha = Math.max(0, Math.min(1, alpha + (deltaAlpha / 100)));
+                        finalColor = formatHexWithAlpha(hex, newAlpha);
+                      }
+                      
+                      return { ...stop, color: finalColor };
+                    }
+                    return stop;
+                  })
+                };
+              }
+            } else {
+              // Handle solid color slot
+              const pathKey = `${foundSlot.elementPath}-${foundSlot.colorType}`;
+              if (processedPaths.has(pathKey)) {
+                return; // Skip if already processed
+              }
+              processedPaths.add(pathKey);
+              
+              if (!updatedElementColorMap[foundSlot.elementPath]) {
+                updatedElementColorMap[foundSlot.elementPath] = {};
+              }
+              
+              const currentColor = foundSlot.currentColor;
+              // Apply HSL adjustments
+              const adjustedColor = adjustColorHsl(currentColor, deltaHue, deltaSat, deltaLight);
+              
+              // Apply alpha adjustment if needed
+              let finalColor = adjustedColor;
+              if (deltaAlpha !== 0) {
+                const { hex, alpha } = parseColorString(adjustedColor);
+                const newAlpha = Math.max(0, Math.min(1, alpha + (deltaAlpha / 100)));
+                finalColor = formatHexWithAlpha(hex, newAlpha);
+              }
+              
+              updatedElementColorMap[foundSlot.elementPath][foundSlot.colorType] = {
+                original: foundSlot.originalColor,
+                current: finalColor
+              };
+              
+            }
+          }
+        } else if (elementId.startsWith('stop-')) {
+          // Handle individual gradient stops (same as slot- logic above for gradient stops)
+          let foundSlot = null;
+          Object.values(gradientGroups).forEach(gradientGroup => {
+            const slot = gradientGroup.stops.find(s => `stop-${s.id}` === elementId);
+            if (slot) foundSlot = slot;
+          });
+          
+          if (foundSlot && foundSlot.isGradientStop) {
             const gradientId = foundSlot.gradientId;
             if (updatedGradientDefinitions[gradientId]) {
               updatedGradientDefinitions[gradientId] = {
@@ -635,68 +715,23 @@ const SvgColorCustomization = ({
                 })
               };
             }
-          } else {
-            // Handle solid color slot
-            if (!updatedElementColorMap[foundSlot.elementPath]) {
-              updatedElementColorMap[foundSlot.elementPath] = {};
-            }
-            
-            const currentColor = foundSlot.currentColor;
-            // Apply HSL adjustments
-            const adjustedColor = adjustColorHsl(currentColor, deltaHue, deltaSat, deltaLight);
-            
-            // Apply alpha adjustment if needed
-            let finalColor = adjustedColor;
-            if (deltaAlpha !== 0) {
-              const { hex, alpha } = parseColorString(adjustedColor);
-              const newAlpha = Math.max(0, Math.min(1, alpha + (deltaAlpha / 100)));
-              finalColor = formatHexWithAlpha(hex, newAlpha);
-            }
-            
-            updatedElementColorMap[foundSlot.elementPath][foundSlot.colorType] = {
-              original: foundSlot.originalColor,
-              current: finalColor
-            };
           }
         }
-      } else if (elementId.startsWith('stop-')) {
-        // Handle individual gradient stops (same as slot- logic above for gradient stops)
-        let foundSlot = null;
-        Object.values(gradientGroups).forEach(gradientGroup => {
-          const slot = gradientGroup.stops.find(s => `stop-${s.id}` === elementId);
-          if (slot) foundSlot = slot;
-        });
-        
-        if (foundSlot && foundSlot.isGradientStop) {
-          const gradientId = foundSlot.gradientId;
-          if (updatedGradientDefinitions[gradientId]) {
-            updatedGradientDefinitions[gradientId] = {
-              ...updatedGradientDefinitions[gradientId],
-              stops: updatedGradientDefinitions[gradientId].stops.map((stop, idx) => {
-                if (idx === foundSlot.stopIndex) {
-                  // Apply HSL adjustments
-                  const adjustedColor = adjustColorHsl(stop.color, deltaHue, deltaSat, deltaLight);
-                  
-                  // Apply alpha adjustment if needed
-                  let finalColor = adjustedColor;
-                  if (deltaAlpha !== 0) {
-                    const { hex, alpha } = parseColorString(adjustedColor);
-                    const newAlpha = Math.max(0, Math.min(1, alpha + (deltaAlpha / 100)));
-                    finalColor = formatHexWithAlpha(hex, newAlpha);
-                  }
-                  
-                  return { ...stop, color: finalColor };
-                }
-                return stop;
-              })
-            };
-          }
-        }
-      }
-    });
+      });
 
-    // Notify parent of changes
-    onColorChange(updatedElementColorMap, updatedGradientDefinitions);
+      // Notify parent of changes
+      const allPaths = Object.keys(updatedElementColorMap);
+      const modifiedPaths = Array.from(processedPaths).map(p => p.split('-')[0]); // Extract path from pathKey
+      console.log('[GROUP-BUG]', `Group ${groupId}: ${elementsInGroup.length} elements → ${modifiedPaths.length} modified paths (${allPaths.length} total in map)`);
+      if (modifiedPaths.length !== elementsInGroup.length) {
+        console.log('[GROUP-BUG] Elements in group:', elementsInGroup);
+        console.log('[GROUP-BUG] Actually modified paths:', modifiedPaths);
+      }
+      onColorChange(updatedElementColorMap, updatedGradientDefinitions);
+      
+      // Return the unchanged elementGroups state
+      return currentElementGroups;
+    });
   };
 
   const handleGroupColorChange = (originalColor, newHex, newAlpha, isGradient = false) => {
@@ -1436,6 +1471,13 @@ const SvgColorCustomization = ({
                   setElementGroups(prev => {
                     const newElementGroups = { ...prev };
                     delete newElementGroups[`group-${originalColor}`];
+                    
+                    // Also remove all individual slots of this color from the group
+                    const solidSlots = solidColorGroups[originalColor] || [];
+                    solidSlots.forEach(slot => {
+                      delete newElementGroups[`slot-${slot.id}`];
+                    });
+                    
                     return newElementGroups;
                   });
                 }} 
