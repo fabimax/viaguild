@@ -221,6 +221,279 @@ const SvgColorCustomization = ({
     return groupId;
   };
   
+  // Helper to get the display color for group color picker
+  const getGroupDisplayColor = (groupId) => {
+    const elementsInGroup = Object.keys(elementGroups).filter(elementId => 
+      elementGroups[elementId] === groupId
+    );
+    
+    if (elementsInGroup.length === 0) {
+      return 'linear-gradient(45deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #4b0082, #9400d3)';
+    }
+    
+    const colors = new Set();
+    
+    elementsInGroup.forEach(elementId => {
+      if (elementId.startsWith('group-')) {
+        // Handle group-level colors
+        const originalColor = elementId.replace('group-', '');
+        colors.add(originalColor.substring(0, 7)); // Remove alpha for comparison
+      } else if (elementId.startsWith('stop-')) {
+        // Handle individual gradient stops
+        const [_, gradientId, stopIndex] = elementId.split('-');
+        const gradientDef = gradientDefinitions[gradientId];
+        if (gradientDef && gradientDef.stops[parseInt(stopIndex)]) {
+          const stopColor = gradientDef.stops[parseInt(stopIndex)].color;
+          const { hex } = parseColorString(stopColor);
+          colors.add(hex);
+        }
+      } else {
+        // Handle individual element paths
+        const element = elementColorMap[elementId];
+        if (element) {
+          if (element.fill && !element.fill.isGradient) {
+            const { hex } = parseColorString(element.fill.current);
+            colors.add(hex);
+          }
+          if (element.stroke && !element.stroke.isGradient) {
+            const { hex } = parseColorString(element.stroke.current);
+            colors.add(hex);
+          }
+          if (element.fill && element.fill.isGradient) {
+            const gradientDef = gradientDefinitions[element.fill.gradientId];
+            if (gradientDef) {
+              gradientDef.stops.forEach(stop => {
+                const { hex } = parseColorString(stop.color);
+                colors.add(hex);
+              });
+            }
+          }
+          if (element.stroke && element.stroke.isGradient) {
+            const gradientDef = gradientDefinitions[element.stroke.gradientId];
+            if (gradientDef) {
+              gradientDef.stops.forEach(stop => {
+                const { hex } = parseColorString(stop.color);
+                colors.add(hex);
+              });
+            }
+          }
+        }
+      }
+    });
+    
+    const uniqueColors = Array.from(colors);
+    if (uniqueColors.length === 0) {
+      return 'linear-gradient(45deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #4b0082, #9400d3)';
+    } else if (uniqueColors.length === 1) {
+      return uniqueColors[0];
+    } else {
+      return 'linear-gradient(45deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #4b0082, #9400d3)';
+    }
+  };
+
+  // Helper to apply a color to all elements in a group
+  const applyColorToGroup = (groupId, newColor) => {
+    console.log('[GROUP COLOR] Applying color', newColor, 'to group', groupId);
+    
+    const elementsInGroup = Object.keys(elementGroups).filter(elementId => 
+      elementGroups[elementId] === groupId
+    );
+    
+    console.log('[GROUP COLOR] Elements in group:', elementsInGroup);
+    
+    if (elementsInGroup.length === 0) {
+      console.log('[GROUP COLOR] No elements in group, returning');
+      return;
+    }
+    
+    const updatedElementColorMap = { ...elementColorMap };
+    const updatedGradientDefinitions = { ...gradientDefinitions };
+    
+    elementsInGroup.forEach(elementId => {
+      console.log('[GROUP COLOR] Processing element:', elementId);
+      
+      if (elementId.startsWith('group-')) {
+        console.log('[GROUP COLOR] Handling group-level color');
+        const originalColor = elementId.replace('group-', '');
+        
+        // Handle solid color groups
+        const slots = solidColorGroups[originalColor] || [];
+        console.log('[GROUP COLOR] Found', slots.length, 'solid color slots for', originalColor);
+        
+        slots.forEach(slot => {
+          if (updatedElementColorMap[slot.elementPath]) {
+            if (slot.colorType === 'fill') {
+              updatedElementColorMap[slot.elementPath].fill.current = newColor;
+            } else if (slot.colorType === 'stroke') {
+              updatedElementColorMap[slot.elementPath].stroke.current = newColor;
+            }
+          }
+        });
+        
+        // Handle gradient groups
+        const gradientGroup = gradientGroups[originalColor];
+        if (gradientGroup && gradientGroup.gradientId) {
+          const gradientId = gradientGroup.gradientId;
+          console.log('[GROUP COLOR] Found gradient group for', originalColor, 'with gradientId:', gradientId);
+          
+          if (updatedGradientDefinitions[gradientId]) {
+            console.log('[GROUP COLOR] Updating all stops in gradient to', newColor);
+            updatedGradientDefinitions[gradientId] = {
+              ...updatedGradientDefinitions[gradientId],
+              stops: updatedGradientDefinitions[gradientId].stops.map(stop => ({
+                ...stop,
+                color: newColor
+              }))
+            };
+          } else {
+            console.log('[GROUP COLOR] Gradient definition not found for ID:', gradientId);
+          }
+        }
+      } else if (elementId.startsWith('stop-')) {
+        console.log('[GROUP COLOR] Handling individual gradient stop');
+        // Handle individual gradient stops - need to find the slot by elementId
+        let foundSlot = null;
+        Object.values(gradientGroups).forEach(gradientGroup => {
+          const slot = gradientGroup.stops.find(s => `stop-${s.id}` === elementId);
+          if (slot) foundSlot = slot;
+        });
+        
+        if (foundSlot && foundSlot.isGradientStop) {
+          const gradientId = foundSlot.gradientId;
+          const stopIndex = foundSlot.stopIndex;
+          console.log('[GROUP COLOR] Found gradient stop - Gradient ID:', gradientId, 'Stop index:', stopIndex);
+          
+          if (updatedGradientDefinitions[gradientId]) {
+            console.log('[GROUP COLOR] Updating gradient stop');
+            updatedGradientDefinitions[gradientId] = {
+              ...updatedGradientDefinitions[gradientId],
+              stops: updatedGradientDefinitions[gradientId].stops.map((stop, idx) =>
+                idx === stopIndex ? { ...stop, color: newColor } : stop
+              )
+            };
+          } else {
+            console.log('[GROUP COLOR] Gradient definition not found for ID:', gradientId);
+          }
+        } else {
+          console.log('[GROUP COLOR] Could not find gradient slot for elementId:', elementId);
+        }
+      } else {
+        console.log('[GROUP COLOR] Handling individual element path');
+        // Handle individual element paths
+        const element = updatedElementColorMap[elementId];
+        if (element) {
+          console.log('[GROUP COLOR] Element found:', element);
+          if (element.fill && !element.fill.isGradient) {
+            console.log('[GROUP COLOR] Updating solid fill');
+            element.fill.current = newColor;
+          }
+          if (element.stroke && !element.stroke.isGradient) {
+            console.log('[GROUP COLOR] Updating solid stroke');
+            element.stroke.current = newColor;
+          }
+          if (element.fill && element.fill.isGradient) {
+            console.log('[GROUP COLOR] Converting gradient fill to solid color');
+            // Convert gradient to solid color
+            const gradientId = element.fill.gradientId;
+            if (updatedGradientDefinitions[gradientId]) {
+              console.log('[GROUP COLOR] Updating gradient fill definition');
+              updatedGradientDefinitions[gradientId] = {
+                ...updatedGradientDefinitions[gradientId],
+                stops: updatedGradientDefinitions[gradientId].stops.map(stop => ({
+                  ...stop,
+                  color: newColor
+                }))
+              };
+            } else {
+              console.log('[GROUP COLOR] Gradient definition not found for fill gradient ID:', gradientId);
+            }
+          }
+          if (element.stroke && element.stroke.isGradient) {
+            console.log('[GROUP COLOR] Converting gradient stroke to solid color');
+            // Convert gradient to solid color
+            const gradientId = element.stroke.gradientId;
+            if (updatedGradientDefinitions[gradientId]) {
+              console.log('[GROUP COLOR] Updating gradient stroke definition');
+              updatedGradientDefinitions[gradientId] = {
+                ...updatedGradientDefinitions[gradientId],
+                stops: updatedGradientDefinitions[gradientId].stops.map(stop => ({
+                  ...stop,
+                  color: newColor
+                }))
+              };
+            } else {
+              console.log('[GROUP COLOR] Gradient definition not found for stroke gradient ID:', gradientId);
+            }
+          }
+        } else {
+          console.log('[GROUP COLOR] Element not found in colorMap:', elementId);
+        }
+      }
+    });
+    
+    console.log('[GROUP COLOR] Calling onColorChange with:', {
+      elementColorMap: updatedElementColorMap,
+      gradientDefinitions: updatedGradientDefinitions
+    });
+    
+    onColorChange(updatedElementColorMap, updatedGradientDefinitions);
+  };
+
+  // Helper to get effective group membership (direct or inherited)
+  const getEffectiveGroupMembership = (elementId) => {
+    // Check inherited membership first - if parent is in a group, child should always show as inherited
+    
+    // Check inherited membership for gradient stops
+    if (elementId.startsWith('stop-')) {
+      // Find the gradient this stop belongs to
+      let parentGradientGroup = null;
+      Object.values(gradientGroups).forEach(gradientGroup => {
+        const slot = gradientGroup.stops.find(s => `stop-${s.id}` === elementId);
+        if (slot) {
+          // Find the parent group key for this gradient
+          Object.keys(gradientGroups).forEach(originalColor => {
+            if (gradientGroups[originalColor].gradientId === slot.gradientId) {
+              const parentGroupKey = `group-${originalColor}`;
+              if (elementGroups[parentGroupKey]) {
+                parentGradientGroup = elementGroups[parentGroupKey];
+              }
+            }
+          });
+        }
+      });
+      
+      if (parentGradientGroup) {
+        return { groupId: parentGradientGroup, isInherited: true };
+      }
+    }
+    
+    // Check inherited membership for solid color slots
+    if (elementId.startsWith('slot-')) {
+      // Find the solid color this slot belongs to
+      let parentSolidGroup = null;
+      Object.values(solidColorGroups).forEach(slots => {
+        const slot = slots.find(s => `slot-${s.id}` === elementId);
+        if (slot) {
+          const parentGroupKey = `group-${slot.originalColor}`;
+          if (elementGroups[parentGroupKey]) {
+            parentSolidGroup = elementGroups[parentGroupKey];
+          }
+        }
+      });
+      
+      if (parentSolidGroup) {
+        return { groupId: parentSolidGroup, isInherited: true };
+      }
+    }
+    
+    // Only check direct membership if no parent is in a group
+    if (elementGroups[elementId]) {
+      return { groupId: elementGroups[elementId], isInherited: false };
+    }
+    
+    return null;
+  };
+
   // Helper to reset a group to original colors
   const resetGroup = (groupId) => {
     // Reset group adjustments
@@ -243,8 +516,9 @@ const SvgColorCustomization = ({
       if (elementId.startsWith('group-')) {
         // Handle group-level color resets
         const originalColor = elementId.replace('group-', '');
-        const slots = solidColorGroups[originalColor] || [];
         
+        // Handle solid color groups
+        const slots = solidColorGroups[originalColor] || [];
         slots.forEach(slot => {
           if (!updatedElementColorMap[slot.elementPath]) {
             updatedElementColorMap[slot.elementPath] = {};
@@ -254,6 +528,24 @@ const SvgColorCustomization = ({
             current: slot.originalColor
           };
         });
+        
+        // Handle gradient groups
+        const gradientGroup = gradientGroups[originalColor];
+        if (gradientGroup && gradientGroup.gradientId) {
+          const gradientId = gradientGroup.gradientId;
+          const originalGradient = originalGradientDefinitions[gradientId];
+          
+          if (updatedGradientDefinitions[gradientId] && originalGradient) {
+            console.log('[RESET GROUP] Resetting gradient', gradientId, 'to original colors');
+            updatedGradientDefinitions[gradientId] = {
+              ...updatedGradientDefinitions[gradientId],
+              stops: updatedGradientDefinitions[gradientId].stops.map((stop, index) => {
+                const originalStop = originalGradient.stops[index];
+                return { ...stop, color: originalStop?.color || stop.color };
+              })
+            };
+          }
+        }
       } else if (elementId.startsWith('slot-') || elementId.startsWith('stop-')) {
         // Handle individual slot/stop resets
         let foundSlot = null;
@@ -687,8 +979,13 @@ const SvgColorCustomization = ({
       const updatedElementColorMap = { ...elementColorMap };
       const updatedGradientDefinitions = { ...gradientDefinitions };
       const processedPaths = new Set(); // Track which paths we've already processed
+      const processedGradientStops = new Set(); // Track gradient stops: "gradientId-stopIndex"
+
+      console.log('[HSL DEBUG] Elements in group:', elementsInGroup);
+      console.log('[HSL DEBUG] processedGradientStops at start:', Array.from(processedGradientStops));
 
       elementsInGroup.forEach(elementId => {
+        console.log('[HSL DEBUG] Processing element:', elementId);
         if (elementId.startsWith('group-')) {
           // Handle group-level color adjustments (e.g., group-#FF0000 or group-linearGradient123)
           const originalColor = elementId.replace('group-', '');
@@ -735,7 +1032,12 @@ const SvgColorCustomization = ({
             if (updatedGradientDefinitions[gradientId]) {
               updatedGradientDefinitions[gradientId] = {
                 ...updatedGradientDefinitions[gradientId],
-                stops: updatedGradientDefinitions[gradientId].stops.map((stop) => {
+                stops: updatedGradientDefinitions[gradientId].stops.map((stop, stopIndex) => {
+                  // Mark this specific stop as processed
+                  const stopKey = `${gradientId}-${stopIndex}`;
+                  processedGradientStops.add(stopKey);
+                  console.log(`[HSL DEBUG] Marked gradient stop as processed: ${stopKey}`);
+                  
                   // Apply HSL adjustments
                   const adjustedColor = adjustColorHsl(stop.color, deltaHue, deltaSat, deltaLight);
                   
@@ -775,6 +1077,14 @@ const SvgColorCustomization = ({
             if (foundSlot.isGradientStop) {
               // Handle gradient stop
               const gradientId = foundSlot.gradientId;
+              const stopKey = `${gradientId}-${foundSlot.stopIndex}`;
+              
+              // Skip if this stop was already processed as part of the whole gradient
+              if (processedGradientStops.has(stopKey)) {
+                console.log(`[HSL FIX] Skipping gradient stop ${foundSlot.stopIndex} in gradient ${gradientId} - already processed`);
+                return;
+              }
+              
               if (updatedGradientDefinitions[gradientId]) {
                 updatedGradientDefinitions[gradientId] = {
                   ...updatedGradientDefinitions[gradientId],
@@ -838,6 +1148,14 @@ const SvgColorCustomization = ({
           
           if (foundSlot && foundSlot.isGradientStop) {
             const gradientId = foundSlot.gradientId;
+            const stopKey = `${gradientId}-${foundSlot.stopIndex}`;
+            
+            // Skip if this stop was already processed as part of the whole gradient
+            if (processedGradientStops.has(stopKey)) {
+              console.log(`[HSL FIX] Skipping gradient stop ${foundSlot.stopIndex} in gradient ${gradientId} - already processed (stop- handler)`);
+              return;
+            }
+            
             if (updatedGradientDefinitions[gradientId]) {
               updatedGradientDefinitions[gradientId] = {
                 ...updatedGradientDefinitions[gradientId],
@@ -1628,6 +1946,13 @@ const SvgColorCustomization = ({
                       delete newElementGroups[`slot-${slot.id}`];
                     });
                     
+                    // Also remove all individual gradient stops if this is a gradient group
+                    if (isGradient && gradientGroup && gradientGroup.stops) {
+                      gradientGroup.stops.forEach(stop => {
+                        delete newElementGroups[`stop-${stop.id}`];
+                      });
+                    }
+                    
                     return newElementGroups;
                   });
                 }} 
@@ -1657,18 +1982,13 @@ const SvgColorCustomization = ({
                   optionText: e.target.options[e.target.selectedIndex]?.text 
                 });
                 if (e.target.value) {
-                  setElementGroups(prev => {
-                    const newGroups = {
-                      ...prev,
-                      [`group-${originalColor}`]: e.target.value
-                    };
-                    console.log('Assigning element to group:', {
-                      elementId: `group-${originalColor}`,
-                      groupId: e.target.value,
-                      newGroups
-                    });
-                    return newGroups;
-                  });
+                  const elementId = `group-${originalColor}`;
+                  console.log('[GROUP CONFLICT] Assigning gradient to group:', elementId, '→', e.target.value);
+                  
+                  setElementGroups(prev => ({
+                    ...prev,
+                    [elementId]: e.target.value
+                  }));
                 }
               }}
               style={{
@@ -2028,14 +2348,27 @@ const SvgColorCustomization = ({
                                       setSelectedElements(prev => {
                                         const newSet = new Set(prev);
                                         newSet.delete(elementId);
-                                        // If unchecking this gradient stop, also uncheck the parent gradient group
+                                        
+                                        // If unchecking this gradient stop, check if parent is selected
                                         if (slot.gradientId) {
                                           // Find the gradient group that contains this stop
                                           Object.keys(gradientGroups).forEach(originalColor => {
                                             const gradientGroup = gradientGroups[originalColor];
                                             if (gradientGroup.gradientId === slot.gradientId) {
                                               const parentGroupId = `group-${originalColor}`;
-                                              newSet.delete(parentGroupId);
+                                              
+                                              // If parent is selected, implement smart exclusion
+                                              if (newSet.has(parentGroupId)) {
+                                                // Remove parent from selection
+                                                newSet.delete(parentGroupId);
+                                                
+                                                // Add all OTHER stops as individual selections
+                                                gradientGroup.stops.forEach(siblingStop => {
+                                                  if (siblingStop.id !== slot.id) { // Exclude the unchecked stop
+                                                    newSet.add(`stop-${siblingStop.id}`);
+                                                  }
+                                                });
+                                              }
                                             }
                                           });
                                         }
@@ -2059,44 +2392,59 @@ const SvgColorCustomization = ({
                                     cursor: 'pointer'
                                   }}
                                 />
-                              ) : elementGroups[`stop-${slot.id}`] ? (
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
-                                  <span style={{
-                                    fontSize: '10px',
-                                    background: '#e3f2fd',
-                                    color: '#1976d2',
-                                    padding: '1px 4px',
-                                    borderRadius: '2px',
-                                    border: '1px solid #bbdefb',
-                                    fontWeight: '500'
-                                  }}>
-                                    {groups[elementGroups[`stop-${slot.id}`]]?.name || 'Unknown'}
-                                  </span>
+                              ) : (() => {
+                                const membership = getEffectiveGroupMembership(`stop-${slot.id}`);
+                                return membership ? (
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                                    <span style={{
+                                      fontSize: '10px',
+                                      background: membership.isInherited ? '#f3e5f5' : '#e3f2fd',
+                                      color: membership.isInherited ? '#7b1fa2' : '#1976d2',
+                                      padding: '1px 4px',
+                                      borderRadius: '2px',
+                                      border: membership.isInherited ? '1px solid #ce93d8' : '1px solid #bbdefb',
+                                      fontWeight: '500'
+                                    }}>
+                                      {membership.isInherited ? '↳ ' : ''}{groups[membership.groupId]?.name || 'Unknown'}
+                                    </span>
                                   <button 
                                     type="button" 
                                     onClick={() => {
-                                      // Remove from current group
-                                      setElementGroups(prev => {
-                                        const newElementGroups = { ...prev };
-                                        const currentGroupId = elementGroups[`stop-${slot.id}`];
-                                        delete newElementGroups[`stop-${slot.id}`];
-                                        
-                                        // Also remove the parent gradient group if it was in the same group
-                                        if (slot.gradientId && currentGroupId) {
-                                          // Find the gradient group that contains this stop
+                                      if (membership.isInherited) {
+                                        // Special logic for inherited children: remove parent, exclude this child, add siblings individually
+                                        setElementGroups(prev => {
+                                          const newElementGroups = { ...prev };
+                                          const currentGroupId = membership.groupId;
+                                          
+                                          // Find and remove the parent gradient
                                           Object.keys(gradientGroups).forEach(originalColor => {
                                             const gradientGroup = gradientGroups[originalColor];
                                             if (gradientGroup.gradientId === slot.gradientId) {
-                                              const parentGroupId = `group-${originalColor}`;
-                                              if (newElementGroups[parentGroupId] === currentGroupId) {
-                                                delete newElementGroups[parentGroupId];
-                                              }
+                                              const parentGroupKey = `group-${originalColor}`;
+                                              delete newElementGroups[parentGroupKey];
+                                              
+                                              // Add all OTHER stops in this gradient as individual members
+                                              gradientGroup.stops.forEach(siblingStop => {
+                                                if (siblingStop.id !== slot.id) { // Exclude the clicked stop
+                                                  newElementGroups[`stop-${siblingStop.id}`] = currentGroupId;
+                                                } else {
+                                                  // Explicitly remove the clicked stop (in case it was added by checkbox method)
+                                                  delete newElementGroups[`stop-${siblingStop.id}`];
+                                                }
+                                              });
                                             }
                                           });
-                                        }
-                                        
-                                        return newElementGroups;
-                                      });
+                                          
+                                          return newElementGroups;
+                                        });
+                                      } else {
+                                        // Normal logic for directly assigned children
+                                        setElementGroups(prev => {
+                                          const newElementGroups = { ...prev };
+                                          delete newElementGroups[`stop-${slot.id}`];
+                                          return newElementGroups;
+                                        });
+                                      }
                                     }} 
                                     style={{ 
                                       fontSize: '10px', 
@@ -2114,14 +2462,18 @@ const SvgColorCustomization = ({
                                     ×
                                   </button>
                                 </div>
-                              ) : Object.keys(groups).length > 0 ? (
+                                ) : Object.keys(groups).length > 0 ? (
                                 <select
                                   defaultValue=""
                                   onChange={(e) => {
                                     if (e.target.value) {
+                                      const elementId = `stop-${slot.id}`;
+                                      console.log('[GROUP CONFLICT] Assigning gradient stop to group:', elementId, '→', e.target.value);
+                                      console.log('[GROUP CONFLICT] Stop details:', slot);
+                                      
                                       setElementGroups(prev => ({
                                         ...prev,
-                                        [`stop-${slot.id}`]: e.target.value
+                                        [elementId]: e.target.value
                                       }));
                                     }
                                   }}
@@ -2143,7 +2495,8 @@ const SvgColorCustomization = ({
                                     <option key={groupId} value={groupId}>{group.name}</option>
                                   ))}
                                 </select>
-                              ) : null}
+                              ) : null;
+                              })()}
                               
                               {/* Current hex value */}
                               <span style={{ 
@@ -2296,9 +2649,24 @@ const SvgColorCustomization = ({
                               setSelectedElements(prev => {
                                 const newSet = new Set(prev);
                                 newSet.delete(elementId);
-                                // If unchecking this slot, also uncheck the parent group
+                                
+                                // If unchecking this slot, check if parent is selected
                                 const parentGroupId = `group-${slot.originalColor}`;
-                                newSet.delete(parentGroupId);
+                                
+                                // If parent is selected, implement smart exclusion
+                                if (newSet.has(parentGroupId)) {
+                                  // Remove parent from selection
+                                  newSet.delete(parentGroupId);
+                                  
+                                  // Add all OTHER slots with the same original color as individual selections
+                                  const siblings = solidColorGroups[slot.originalColor] || [];
+                                  siblings.forEach(siblingSlot => {
+                                    if (siblingSlot.id !== slot.id) { // Exclude the unchecked slot
+                                      newSet.add(`slot-${siblingSlot.id}`);
+                                    }
+                                  });
+                                }
+                                
                                 return newSet;
                               });
                               
@@ -2319,33 +2687,55 @@ const SvgColorCustomization = ({
                             cursor: 'pointer'
                           }}
                         />
-                      ) : elementGroups[`slot-${slot.id}`] ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
-                          <span style={{
-                            fontSize: '10px',
-                            background: '#e3f2fd',
-                            color: '#1976d2',
-                            padding: '1px 4px',
-                            borderRadius: '2px',
-                            border: '1px solid #bbdefb',
-                            fontWeight: '500'
-                          }}>
-                            {groups[elementGroups[`slot-${slot.id}`]]?.name || 'Unknown'}
-                          </span>
+                      ) : (() => {
+                        const membership = getEffectiveGroupMembership(`slot-${slot.id}`);
+                        return membership ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                            <span style={{
+                              fontSize: '10px',
+                              background: membership.isInherited ? '#f3e5f5' : '#e3f2fd',
+                              color: membership.isInherited ? '#7b1fa2' : '#1976d2',
+                              padding: '1px 4px',
+                              borderRadius: '2px',
+                              border: membership.isInherited ? '1px solid #ce93d8' : '1px solid #bbdefb',
+                              fontWeight: '500'
+                            }}>
+                              {membership.isInherited ? '↳ ' : ''}{groups[membership.groupId]?.name || 'Unknown'}
+                            </span>
                           <button 
                             type="button" 
                             onClick={() => {
-                              // Remove from current group
-                              setElementGroups(prev => {
-                                const newElementGroups = { ...prev };
-                                delete newElementGroups[`slot-${slot.id}`];
-                                // Also remove the parent solid color group if it was in the same group
-                                const parentGroupId = `group-${slot.originalColor}`;
-                                if (newElementGroups[parentGroupId] === elementGroups[`slot-${slot.id}`]) {
-                                  delete newElementGroups[parentGroupId];
-                                }
-                                return newElementGroups;
-                              });
+                              if (membership.isInherited) {
+                                // Special logic for inherited children: remove parent, exclude this child, add siblings individually
+                                setElementGroups(prev => {
+                                  const newElementGroups = { ...prev };
+                                  const currentGroupId = membership.groupId;
+                                  
+                                  // Remove the parent solid color group
+                                  const parentGroupKey = `group-${slot.originalColor}`;
+                                  delete newElementGroups[parentGroupKey];
+                                  
+                                  // Add all OTHER slots with the same original color as individual members
+                                  const siblings = solidColorGroups[slot.originalColor] || [];
+                                  siblings.forEach(siblingSlot => {
+                                    if (siblingSlot.id !== slot.id) { // Exclude the clicked slot
+                                      newElementGroups[`slot-${siblingSlot.id}`] = currentGroupId;
+                                    } else {
+                                      // Explicitly remove the clicked slot (in case it was added by checkbox method)
+                                      delete newElementGroups[`slot-${siblingSlot.id}`];
+                                    }
+                                  });
+                                  
+                                  return newElementGroups;
+                                });
+                              } else {
+                                // Normal logic for directly assigned children
+                                setElementGroups(prev => {
+                                  const newElementGroups = { ...prev };
+                                  delete newElementGroups[`slot-${slot.id}`];
+                                  return newElementGroups;
+                                });
+                              }
                             }} 
                             style={{ 
                               fontSize: '10px', 
@@ -2392,7 +2782,8 @@ const SvgColorCustomization = ({
                             <option key={groupId} value={groupId}>{group.name}</option>
                           ))}
                         </select>
-                      ) : null}
+                        ) : null;
+                      })()}
                       
                       {/* Current hex value */}
                       <span style={{ 
@@ -2825,24 +3216,60 @@ const SvgColorCustomization = ({
                 </div>
               </div>
               
-              {/* Reset button */}
-              <button
-                type="button"
-                onClick={() => {
-                  resetGroup(groupId);
-                }}
-                style={{
-                  fontSize: '11px',
-                  padding: '4px 8px',
-                  background: '#6c757d',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '3px',
-                  cursor: 'pointer'
-                }}
-              >
-                Reset Group
-              </button>
+              {/* Bottom row with Reset button and Group Color Picker */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px' }}>
+                {/* Reset button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    resetGroup(groupId);
+                  }}
+                  style={{
+                    fontSize: '11px',
+                    padding: '4px 8px',
+                    background: '#6c757d',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '3px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Reset Group
+                </button>
+                
+                {/* Group Color Picker */}
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type="color"
+                    id={`group-color-${groupId}`}
+                    onChange={(e) => {
+                      applyColorToGroup(groupId, e.target.value);
+                    }}
+                    style={{
+                      position: 'absolute',
+                      opacity: 0,
+                      width: '24px',
+                      height: '24px',
+                      cursor: 'pointer'
+                    }}
+                    title="Apply color to all elements in group"
+                  />
+                  <label 
+                    htmlFor={`group-color-${groupId}`}
+                    style={{
+                      display: 'block',
+                      width: '24px',
+                      height: '24px',
+                      border: '2px solid #dee2e6',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      background: getGroupDisplayColor(groupId),
+                      backgroundSize: 'cover'
+                    }}
+                    title="Apply color to all elements in group"
+                  />
+                </div>
+              </div>
             </div>
           );
         })}
