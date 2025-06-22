@@ -546,10 +546,6 @@ const SvgColorCustomization = ({
           
           // Check if it's a solid color group
           const solidSlots = solidColorGroups[originalColor] || [];
-          if (elementId === 'group-#EB7830FF') {
-            console.log('[GROUP-BUG] solidColorGroups[#EB7830FF] contains:', solidSlots.length, 'slots');
-            console.log('[GROUP-BUG] Slot paths:', solidSlots.map(s => s.elementPath));
-          }
           if (solidSlots.length > 0) {
             solidSlots.forEach(slot => {
               // Skip if we've already processed this path
@@ -720,13 +716,6 @@ const SvgColorCustomization = ({
       });
 
       // Notify parent of changes
-      const allPaths = Object.keys(updatedElementColorMap);
-      const modifiedPaths = Array.from(processedPaths).map(p => p.split('-')[0]); // Extract path from pathKey
-      console.log('[GROUP-BUG]', `Group ${groupId}: ${elementsInGroup.length} elements → ${modifiedPaths.length} modified paths (${allPaths.length} total in map)`);
-      if (modifiedPaths.length !== elementsInGroup.length) {
-        console.log('[GROUP-BUG] Elements in group:', elementsInGroup);
-        console.log('[GROUP-BUG] Actually modified paths:', modifiedPaths);
-      }
       onColorChange(updatedElementColorMap, updatedGradientDefinitions);
       
       // Return the unchanged elementGroups state
@@ -1451,7 +1440,7 @@ const SvgColorCustomization = ({
                 cursor: 'pointer'
               }}
             />
-          ) : (console.log('Checking elementGroups for:', `group-${originalColor}`, 'Current assignment:', elementGroups[`group-${originalColor}`], 'All elementGroups:', elementGroups), elementGroups[`group-${originalColor}`]) ? (
+          ) : elementGroups[`group-${originalColor}`] ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
               <span style={{
                 fontSize: '11px',
