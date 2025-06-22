@@ -525,7 +525,7 @@ const SvgColorCustomization = ({
           }
           updatedElementColorMap[slot.elementPath][slot.colorType] = {
             original: slot.originalColor,
-            current: slot.originalColor
+            current: slot.originalColor === 'UNSPECIFIED' ? '#000000' : slot.originalColor
           };
         });
         
@@ -585,7 +585,7 @@ const SvgColorCustomization = ({
             }
             updatedElementColorMap[foundSlot.elementPath][foundSlot.colorType] = {
               original: foundSlot.originalColor,
-              current: foundSlot.originalColor
+              current: foundSlot.originalColor === 'UNSPECIFIED' ? '#000000' : foundSlot.originalColor
             };
           }
         }
@@ -778,7 +778,6 @@ const SvgColorCustomization = ({
     if (isPulsing) return; // Prevent multiple simultaneous pulses
     
     setIsPulsing(true);
-    handlePreviewStart(elementIdentifier, 'click');
     
     // Pulse animation: 2 cycles over 1000ms
     let pulseCount = 0;
@@ -803,9 +802,9 @@ const SvgColorCustomization = ({
         
         onPreviewStateChange({
           active: true,
-          mode: 'pulse',
+          mode: 'affected-pulse',  // New mode for affected elements blinking
           affectedPaths: affectedPaths,
-          opacity: isVisible ? 0.05 : 1,
+          opacity: isVisible ? 0 : 1,  // Affected elements blink in/out of existence
           duration: pulseDuration,
           gradientStopPreview: gradientStopInfo
         });
@@ -844,7 +843,6 @@ const SvgColorCustomization = ({
     if (isPulsing) return; // Prevent multiple simultaneous pulses
     
     setIsPulsing(true);
-    handleGroupPreviewStart(groupId, 'click');
     
     // Pulse animation: 2 cycles over 1000ms
     let pulseCount = 0;
@@ -862,9 +860,9 @@ const SvgColorCustomization = ({
         
         onPreviewStateChange({
           active: true,
-          mode: 'pulse',
+          mode: 'affected-pulse',  // Same new mode for affected elements blinking
           affectedPaths: affectedPaths,
-          opacity: isVisible ? 0.05 : 1,
+          opacity: isVisible ? 0 : 1,  // Affected elements blink in/out of existence
           duration: pulseDuration,
           gradientStopPreview: null
         });
@@ -1954,7 +1952,7 @@ const SvgColorCustomization = ({
                   }
                   updatedElementColorMap[slot.elementPath][slot.colorType] = {
                     original: slot.originalColor,
-                    current: slot.originalColor
+                    current: slot.originalColor === 'UNSPECIFIED' ? '#000000' : slot.originalColor
                   };
                 });
                 
@@ -2744,7 +2742,7 @@ const SvgColorCustomization = ({
                           }
                           updatedElementColorMap[slot.elementPath][slot.colorType] = {
                             original: slot.originalColor,
-                            current: slot.originalColor
+                            current: slot.originalColor === 'UNSPECIFIED' ? '#000000' : slot.originalColor
                           };
                           onColorChange(updatedElementColorMap);
                         }} 

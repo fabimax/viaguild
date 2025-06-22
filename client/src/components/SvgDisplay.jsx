@@ -133,7 +133,10 @@ const SvgDisplay = ({
         const elementPath = getElementPath(element, svgElement);
         const isAffected = affectedPathsSet.has(elementPath);
 
-        if (!isAffected && (element.hasAttribute('fill') || element.hasAttribute('stroke') || element.tagName === 'g')) {
+        // Determine which elements to modify based on preview mode
+        const shouldModify = preview.mode === 'affected-pulse' ? isAffected : !isAffected;
+
+        if (shouldModify && (element.hasAttribute('fill') || element.hasAttribute('stroke') || element.tagName === 'g')) {
           const currentOpacity = element.getAttribute('opacity') || '1';
           const newOpacity = parseFloat(currentOpacity) * preview.opacity;
           element.setAttribute('opacity', newOpacity.toString());
@@ -238,14 +241,18 @@ const SvgDisplay = ({
         
         console.log('[SVG-PREVIEW] Checking', elementPath, 'isAffected:', isAffected);
         
-        if (!isAffected) {
-          // Find this element in the SVG and dim it
+        // Determine which elements to modify based on preview mode
+        const shouldModify = preview.mode === 'affected-pulse' ? isAffected : !isAffected;
+        
+        if (shouldModify) {
+          // Find this element in the SVG and modify its opacity
           const element = findElementByPath(svgElement, elementPath);
           if (element) {
             const currentOpacity = element.getAttribute('opacity') || '1';
             const newOpacity = parseFloat(currentOpacity) * preview.opacity;
             
-            console.log('[SVG-PREVIEW] Dimming element', elementPath, 'to opacity', newOpacity);
+            const actionDesc = preview.mode === 'affected-pulse' ? 'Pulsing affected element' : 'Dimming non-affected element';
+            console.log(`[SVG-PREVIEW] ${actionDesc}`, elementPath, 'to opacity', newOpacity);
             element.setAttribute('opacity', newOpacity.toString());
             modifiedCount++;
             

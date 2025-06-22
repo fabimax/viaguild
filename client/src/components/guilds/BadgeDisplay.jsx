@@ -396,10 +396,104 @@ const BadgeDisplay = ({ badge, previewState }) => {
     }
   };
 
+  // Helper function to find an element by its path (same logic as SvgDisplay)
+  const findElementByPath = (svgElement, elementPath) => {
+    if (elementPath === 'svg') return svgElement;
+    
+    const pathParts = elementPath.split('/');
+    let currentElement = svgElement;
+    
+    for (const part of pathParts) {
+      const match = part.match(/^(\w+)\[(\d+)\]$/);
+      if (!match) continue;
+      
+      const [, tagName, indexStr] = match;
+      const index = parseInt(indexStr);
+      
+      const children = Array.from(currentElement.children).filter(el => 
+        el.tagName.toLowerCase() === tagName.toLowerCase()
+      );
+      
+      if (index >= children.length) return null;
+      currentElement = children[index];
+    }
+    
+    return currentElement;
+  };
+
+  // Fallback function for when elementColorMap is not available
+  const applyPreviewEffectsFallback = (svgString, preview) => {
+    try {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(svgString, 'image/svg+xml');
+      const svgElement = doc.documentElement;
+
+      const parserError = svgElement.querySelector('parsererror');
+      if (parserError) {
+        console.error('SVG parsing error in fallback:', parserError.textContent);
+        return svgString;
+      }
+
+      const allElements = svgElement.querySelectorAll('*');
+      const affectedPathsSet = new Set(preview.affectedPaths);
+      
+      const getElementPath = (element, root) => {
+        if (element === root) return 'svg';
+        const tagName = element.tagName.toLowerCase();
+        const parent = element.parentElement;
+        if (!parent || parent === root) {
+          const siblings = Array.from(root.children).filter(el => el.tagName.toLowerCase() === tagName);
+          const index = siblings.indexOf(element);
+          return `${tagName}[${index}]`;
+        } else {
+          const siblings = Array.from(parent.children).filter(el => el.tagName.toLowerCase() === tagName);
+          const index = siblings.indexOf(element);
+          const parentPath = getElementPath(parent, root);
+          return `${parentPath}/${tagName}[${index}]`;
+        }
+      };
+
+      allElements.forEach((element) => {
+        const elementPath = getElementPath(element, svgElement);
+        const isAffected = affectedPathsSet.has(elementPath);
+
+        // Determine which elements to modify based on preview mode
+        const shouldModify = preview.mode === 'affected-pulse' ? isAffected : !isAffected;
+
+        if (shouldModify && (element.hasAttribute('fill') || element.hasAttribute('stroke') || element.tagName === 'g')) {
+          const currentOpacity = element.getAttribute('opacity') || '1';
+          const newOpacity = parseFloat(currentOpacity) * preview.opacity;
+          element.setAttribute('opacity', newOpacity.toString());
+          
+          if (preview.duration) {
+            element.style.transition = `opacity ${preview.duration}ms ease-in-out`;
+          }
+        }
+      });
+
+      return new XMLSerializer().serializeToString(svgElement);
+    } catch (error) {
+      console.error('Error in fallback preview effects:', error);
+      return svgString;
+    }
+  };
+
   // Function to apply preview opacity effects to SVG
   const applyPreviewEffectsToSvg = (svgString, preview) => {
+    console.log('[BADGE-PREVIEW] Applying preview effects:', preview);
+    
     if (!preview.active || !preview.affectedPaths || preview.affectedPaths.length === 0) {
+      console.log('[BADGE-PREVIEW] No preview to apply - inactive or no affected paths');
       return svgString;
+    }
+
+    // Get elementColorMap from resolved foreground config
+    const elementColorMap = resolvedForegroundConfig?.colorMappings;
+
+    // If we don't have elementColorMap, fall back to old logic
+    if (!elementColorMap) {
+      console.log('[BADGE-PREVIEW] No elementColorMap provided, using fallback logic');
+      return applyPreviewEffectsFallback(svgString, preview);
     }
 
     try {
@@ -414,52 +508,43 @@ const BadgeDisplay = ({ badge, previewState }) => {
         return svgString;
       }
 
-      // Get all elements in the SVG
-      const allElements = svgElement.querySelectorAll('*');
+      // Use the proven elementColorMap to determine which elements to dim
       const affectedPathsSet = new Set(preview.affectedPaths);
+      console.log('[BADGE-PREVIEW] Affected paths:', Array.from(affectedPathsSet));
+      console.log('[BADGE-PREVIEW] ElementColorMap keys:', Object.keys(elementColorMap));
 
-      // Helper function to generate element path (same logic as svgColorAnalysis.js)
-      const getElementPath = (element, root) => {
-        if (element === root) return 'svg';
-        
-        const tagName = element.tagName.toLowerCase();
-        const parent = element.parentElement;
-        
-        if (!parent || parent === root) {
-          // Top level element under SVG
-          const siblings = Array.from(root.children).filter(el => el.tagName.toLowerCase() === tagName);
-          const index = siblings.indexOf(element);
-          return `${tagName}[${index}]`;
-        } else {
-          // Nested element
-          const siblings = Array.from(parent.children).filter(el => el.tagName.toLowerCase() === tagName);
-          const index = siblings.indexOf(element);
-          const parentPath = getElementPath(parent, root);
-          return `${parentPath}/${tagName}[${index}]`;
-        }
-      };
+      let modifiedCount = 0;
 
-      // Apply opacity based on whether element is affected
-      allElements.forEach((element, index) => {
-        const elementPath = getElementPath(element, svgElement);
+      // Go through each element in the elementColorMap (these are the elements we know have colors)
+      Object.keys(elementColorMap).forEach(elementPath => {
         const isAffected = affectedPathsSet.has(elementPath);
-
-        console.log('[SVG-PREVIEW] Element', elementPath, 'isAffected:', isAffected);
-
-        if (!isAffected && (element.hasAttribute('fill') || element.hasAttribute('stroke') || element.tagName === 'g')) {
-          // Dim non-affected elements
-          const currentOpacity = element.getAttribute('opacity') || '1';
-          const newOpacity = parseFloat(currentOpacity) * preview.opacity;
-          
-          element.setAttribute('opacity', newOpacity.toString());
-          
-          // Add transition for smooth animation
-          if (preview.duration) {
-            element.style.transition = `opacity ${preview.duration}ms ease-in-out`;
+        
+        console.log('[BADGE-PREVIEW] Checking', elementPath, 'isAffected:', isAffected);
+        
+        // Determine which elements to modify based on preview mode
+        const shouldModify = preview.mode === 'affected-pulse' ? isAffected : !isAffected;
+        
+        if (shouldModify) {
+          // Find this element in the SVG and modify its opacity
+          const element = findElementByPath(svgElement, elementPath);
+          if (element) {
+            const currentOpacity = element.getAttribute('opacity') || '1';
+            const newOpacity = parseFloat(currentOpacity) * preview.opacity;
+            
+            const actionDesc = preview.mode === 'affected-pulse' ? 'Pulsing affected element' : 'Dimming non-affected element';
+            console.log(`[BADGE-PREVIEW] ${actionDesc}`, elementPath, 'to opacity', newOpacity);
+            element.setAttribute('opacity', newOpacity.toString());
+            modifiedCount++;
+            
+            // Add transition for smooth animation
+            if (preview.duration) {
+              element.style.transition = `opacity ${preview.duration}ms ease-in-out`;
+            }
           }
         }
       });
 
+      console.log('[BADGE-PREVIEW] Modified', modifiedCount, 'elements');
       return new XMLSerializer().serializeToString(svgElement);
     } catch (error) {
       console.error('Error applying preview effects to SVG:', error);
