@@ -818,6 +818,65 @@ const SvgColorCustomization = ({
     animatePulse();
   };
 
+  // Group preview handlers
+  const handleGroupPreviewStart = (groupId, mode = 'hover') => {
+    console.log('[GROUP PREVIEW] Starting preview for group:', groupId, 'mode:', mode);
+    setPreviewElement(`group-preview-${groupId}`);
+    setPreviewMode(mode);
+    
+    // Get all element paths for elements in this group
+    const affectedPaths = getGroupAffectedPaths(groupId);
+    console.log('[GROUP PREVIEW] Affected paths:', affectedPaths);
+    
+    // Notify parent component about preview state change
+    if (onPreviewStateChange) {
+      onPreviewStateChange({
+        active: true,
+        mode: mode,
+        affectedPaths: affectedPaths,
+        opacity: mode === 'hover' ? 0.1 : 0.05, // 10% for hover, 5% for click
+        gradientStopPreview: null
+      });
+    }
+  };
+
+  const handleGroupPreviewPulse = (groupId) => {
+    if (isPulsing) return; // Prevent multiple simultaneous pulses
+    
+    setIsPulsing(true);
+    handleGroupPreviewStart(groupId, 'click');
+    
+    // Pulse animation: 2 cycles over 1000ms
+    let pulseCount = 0;
+    const pulseDuration = 250; // 250ms per half-pulse (fade out or fade in)
+    
+    const animatePulse = () => {
+      if (pulseCount >= 4) { // 4 half-pulses = 2 full pulses
+        handlePreviewEnd();
+        return;
+      }
+      
+      const isVisible = pulseCount % 2 === 0;
+      if (onPreviewStateChange) {
+        const affectedPaths = getGroupAffectedPaths(groupId);
+        
+        onPreviewStateChange({
+          active: true,
+          mode: 'pulse',
+          affectedPaths: affectedPaths,
+          opacity: isVisible ? 0.05 : 1,
+          duration: pulseDuration,
+          gradientStopPreview: null
+        });
+      }
+      
+      pulseCount++;
+      setTimeout(animatePulse, pulseDuration);
+    };
+    
+    animatePulse();
+  };
+
   // Helper function to get all affected element paths for a given identifier
   const getAffectedPaths = (elementIdentifier) => {
     const paths = [];
@@ -867,6 +926,82 @@ const SvgColorCustomization = ({
     }
     
     return paths;
+  };
+
+  // Helper function to get all affected element paths for a group
+  const getGroupAffectedPaths = (groupId) => {
+    const paths = [];
+    
+    // Get all elements assigned to this group (both direct and inherited)
+    const elementsInGroup = Object.keys(elementGroups).filter(elementId => 
+      elementGroups[elementId] === groupId
+    );
+    
+    console.log('[GROUP PREVIEW] Elements in group:', elementsInGroup);
+    
+    elementsInGroup.forEach(elementId => {
+      if (elementId.startsWith('group-')) {
+        // Handle group-level elements (solid color groups or gradient groups)
+        const originalColor = elementId.replace('group-', '');
+        
+        // Check solid color groups
+        const solidSlots = solidColorGroups[originalColor] || [];
+        solidSlots.forEach(slot => {
+          paths.push(slot.elementPath);
+        });
+        
+        // Check gradient groups
+        const gradientGroup = gradientGroups[originalColor];
+        if (gradientGroup && gradientGroup.gradientId) {
+          // For gradients, we need to find all elements that use this gradient
+          Object.entries(elementColorMap).forEach(([path, element]) => {
+            if (element.fill?.isGradient && element.fill.gradientId === gradientGroup.gradientId) {
+              paths.push(path);
+            }
+            if (element.stroke?.isGradient && element.stroke.gradientId === gradientGroup.gradientId) {
+              paths.push(path);
+            }
+          });
+        }
+      } else if (elementId.startsWith('stop-')) {
+        // Handle individual gradient stops
+        let foundSlot = null;
+        Object.values(gradientGroups).forEach(gradientGroup => {
+          const slot = gradientGroup.stops.find(s => `stop-${s.id}` === elementId);
+          if (slot) foundSlot = slot;
+        });
+        
+        if (foundSlot && foundSlot.isGradientStop) {
+          const gradientId = foundSlot.gradientId;
+          // Find elements that use this gradient
+          Object.entries(elementColorMap).forEach(([path, element]) => {
+            if (element.fill?.isGradient && element.fill.gradientId === gradientId) {
+              paths.push(path);
+            }
+            if (element.stroke?.isGradient && element.stroke.gradientId === gradientId) {
+              paths.push(path);
+            }
+          });
+        }
+      } else if (elementId.startsWith('slot-')) {
+        // Handle individual solid color slots
+        let foundSlot = null;
+        Object.values(solidColorGroups).forEach(slots => {
+          const slot = slots.find(s => `slot-${s.id}` === elementId);
+          if (slot) foundSlot = slot;
+        });
+        
+        if (foundSlot) {
+          paths.push(foundSlot.elementPath);
+        }
+      } else {
+        // Direct element path
+        paths.push(elementId);
+      }
+    });
+    
+    // Remove duplicates
+    return [...new Set(paths)];
   };
 
   // Apply global HSL adjustments to all colors
@@ -3044,9 +3179,36 @@ const SvgColorCustomization = ({
           const adjustments = groupAdjustments[groupId] || { hue: 0, saturation: 0, lightness: 0, alpha: 0 };
           
           return (
-            <div key={groupId} style={{ marginTop: '15px', padding: '10px', background: '#ffffff', borderRadius: '4px', border: '1px solid #dee2e6' }}>
+            <div key={groupId} style={{ marginTop: '15px', padding: '10px', background: '#ffffff', borderRadius: '4px', border: '1px solid #dee2e6', position: 'relative' }}>
+              {/* Group Preview Eye Icon */}
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '8px',
+                  left: '8px',
+                  width: '18px',
+                  height: '18px',
+                  backgroundColor: '#f8f9fa',
+                  border: '1px solid #dee2e6',
+                  borderRadius: '3px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  color: '#6c757d',
+                  zIndex: 1
+                }}
+                onMouseEnter={() => handleGroupPreviewStart(groupId, 'hover')}
+                onMouseLeave={() => handlePreviewEnd()}
+                onClick={() => handleGroupPreviewPulse(groupId)}
+                title={`Preview ${group.name} group`}
+              >
+                👁
+              </div>
+              
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                <h5 style={{ margin: '0', color: '#495057' }}>{group.name} Adjustments</h5>
+                <h5 style={{ margin: '0', color: '#495057', paddingLeft: '26px' }}>{group.name} Adjustments</h5>
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <button
                     type="button"
