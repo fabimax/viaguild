@@ -124,11 +124,18 @@ const SvgColorCustomization = ({
   colorSlots: providedColorSlots,
   gradientDefinitions = {},
   originalGradientDefinitions = {},
-  onColorChange 
+  onColorChange,
+  onPreviewStateChange
 }) => {
   const [expandedGroups, setExpandedGroups] = useState({});
   const [expandedGradientSections, setExpandedGradientSections] = useState({});
   const [openGradientPicker, setOpenGradientPicker] = useState(null); // Track which gradient picker is open
+  
+  // Preview state
+  const [previewElement, setPreviewElement] = useState(null); // Which element/group is being previewed
+  const [previewMode, setPreviewMode] = useState(null); // 'hover' or 'click'
+  const [isPulsing, setIsPulsing] = useState(false); // Track pulse animation state
+  
   const [globalAdjustments, setGlobalAdjustments] = useState({
     hue: 0,      // -180 to +180
     saturation: 0, // -100 to +100  
@@ -426,6 +433,148 @@ const SvgColorCustomization = ({
       ...prev,
       [key]: !prev[key]
     }));
+  };
+
+  // Preview handler functions
+  const handlePreviewStart = (elementIdentifier, mode = 'hover') => {
+    console.log('[PREVIEW] Starting preview for:', elementIdentifier, 'mode:', mode);
+    setPreviewElement(elementIdentifier);
+    setPreviewMode(mode);
+    
+    
+    // Notify parent component about preview state change
+    if (onPreviewStateChange) {
+      const affectedPaths = getAffectedPaths(elementIdentifier);
+      console.log('[PREVIEW] Affected paths:', affectedPaths);
+      
+      // Check if this is a gradient stop preview
+      let gradientStopInfo = null;
+      if (elementIdentifier.startsWith('stop-')) {
+        const [_, gradientId, stopIndex] = elementIdentifier.split('-');
+        gradientStopInfo = { gradientId, stopIndex: parseInt(stopIndex) };
+      }
+      
+      onPreviewStateChange({
+        active: true,
+        mode: mode,
+        affectedPaths: affectedPaths,
+        opacity: mode === 'hover' ? 0.1 : 0.05, // 10% for hover, 5% for click
+        gradientStopPreview: gradientStopInfo
+      });
+    }
+  };
+
+  const handlePreviewEnd = () => {
+    console.log('[PREVIEW] Ending preview');
+    setPreviewElement(null);
+    setPreviewMode(null);
+    setIsPulsing(false);
+    
+    // Notify parent component
+    if (onPreviewStateChange) {
+      onPreviewStateChange({
+        active: false,
+        mode: null,
+        affectedPaths: [],
+        opacity: 1,
+        gradientStopPreview: null
+      });
+    }
+  };
+
+  const handlePulseAnimation = (elementIdentifier) => {
+    if (isPulsing) return; // Prevent multiple simultaneous pulses
+    
+    setIsPulsing(true);
+    handlePreviewStart(elementIdentifier, 'click');
+    
+    // Pulse animation: 2 cycles over 1000ms
+    let pulseCount = 0;
+    const pulseDuration = 250; // 250ms per half-pulse (fade out or fade in)
+    
+    const animatePulse = () => {
+      if (pulseCount >= 4) { // 4 half-pulses = 2 full pulses
+        handlePreviewEnd();
+        return;
+      }
+      
+      const isVisible = pulseCount % 2 === 0;
+      if (onPreviewStateChange) {
+        const affectedPaths = getAffectedPaths(elementIdentifier);
+        
+        // Check if this is a gradient stop preview
+        let gradientStopInfo = null;
+        if (elementIdentifier.startsWith('stop-')) {
+          const [_, gradientId, stopIndex] = elementIdentifier.split('-');
+          gradientStopInfo = { gradientId, stopIndex: parseInt(stopIndex) };
+        }
+        
+        onPreviewStateChange({
+          active: true,
+          mode: 'pulse',
+          affectedPaths: affectedPaths,
+          opacity: isVisible ? 0.05 : 1,
+          duration: pulseDuration,
+          gradientStopPreview: gradientStopInfo
+        });
+      }
+      
+      pulseCount++;
+      setTimeout(animatePulse, pulseDuration);
+    };
+    
+    animatePulse();
+  };
+
+  // Helper function to get all affected element paths for a given identifier
+  const getAffectedPaths = (elementIdentifier) => {
+    const paths = [];
+    
+    if (elementIdentifier.startsWith('group-')) {
+      // It's a color group - find all elements with this color
+      const originalColor = elementIdentifier.replace('group-', '');
+      
+      // Check solid color groups
+      Object.entries(elementColorMap).forEach(([path, element]) => {
+        if (element.fill && !element.fill.isGradient && element.fill.original === originalColor) {
+          paths.push(path);
+        }
+        if (element.stroke && !element.stroke.isGradient && element.stroke.original === originalColor) {
+          paths.push(path);
+        }
+      });
+    } else if (elementIdentifier.startsWith('gradient-')) {
+      // It's a gradient - find all elements using this gradient
+      const gradientId = elementIdentifier.replace('gradient-', '');
+      
+      Object.entries(elementColorMap).forEach(([path, element]) => {
+        if (element.fill?.isGradient && element.fill.gradientId === gradientId) {
+          paths.push(path);
+        }
+        if (element.stroke?.isGradient && element.stroke.gradientId === gradientId) {
+          paths.push(path);
+        }
+      });
+    } else if (elementIdentifier.startsWith('stop-')) {
+      // For gradient stops, we want to show the isolated effect of just that stop
+      // We return the elements that use this gradient so they stay visible
+      // while all other elements get dimmed
+      const [_, gradientId, stopIndex] = elementIdentifier.split('-');
+      
+      Object.entries(elementColorMap).forEach(([path, element]) => {
+        if (element.fill?.isGradient && element.fill.gradientId === gradientId) {
+          paths.push(path);
+        }
+        if (element.stroke?.isGradient && element.stroke.gradientId === gradientId) {
+          paths.push(path);
+        }
+      });
+    } else {
+      // It's a single element path
+      paths.push(elementIdentifier);
+    }
+    
+    return paths;
   };
 
   // Apply global HSL adjustments to all colors
@@ -931,6 +1080,9 @@ const SvgColorCustomization = ({
               type="color" 
               value={allSameColor ? currentHex : '#000000'}
               onChange={(e) => handleGroupColorChange(originalColor, e.target.value, currentAlpha, isGradient)}
+              onMouseEnter={() => handlePreviewStart(`group-${originalColor}`, 'hover')}
+              onMouseLeave={() => handlePreviewEnd()}
+              onClick={() => handlePulseAnimation(`group-${originalColor}`)}
               disabled={!allSameColor}
               style={{ 
                 opacity: allSameColor ? 1 : 0.5,
@@ -939,7 +1091,8 @@ const SvgColorCustomization = ({
                 appearance: 'auto',
                 WebkitAppearance: 'auto',
                 padding: '0',
-                border: 'none'
+                border: 'none',
+                cursor: allSameColor ? 'pointer' : 'default'
               }}
             />
           )}
@@ -951,9 +1104,17 @@ const SvgColorCustomization = ({
               onClick={() => {
                 const gradientId = gradientGroup?.gradientId;
                 if (gradientId) {
+                  handlePulseAnimation(`gradient-${gradientId}`);
                   setOpenGradientPicker(openGradientPicker === gradientId ? null : gradientId);
                 }
               }}
+              onMouseEnter={() => {
+                const gradientId = gradientGroup?.gradientId;
+                if (gradientId) {
+                  handlePreviewStart(`gradient-${gradientId}`, 'hover');
+                }
+              }}
+              onMouseLeave={() => handlePreviewEnd()}
               style={{
                 display: 'inline-block',
                 width: '32px',
@@ -1762,13 +1923,17 @@ const SvgColorCustomization = ({
                                     onColorChange(elementColorMap, updatedGradientDefinitions);
                                   }
                                 }}
+                                onMouseEnter={() => handlePreviewStart(`stop-${slot.gradientId}-${slot.stopIndex}`, 'hover')}
+                                onMouseLeave={() => handlePreviewEnd()}
+                                onClick={() => handlePulseAnimation(`stop-${slot.gradientId}-${slot.stopIndex}`)}
                                 style={{ 
                                   width: '28px', 
                                   height: '20px',
                                   appearance: 'auto',
                                   WebkitAppearance: 'auto',
                                   padding: '0',
-                                  border: 'none'
+                                  border: 'none',
+                                  cursor: 'pointer'
                                 }}
                               />
                               
@@ -2035,13 +2200,17 @@ const SvgColorCustomization = ({
                           };
                           onColorChange(updatedElementColorMap);
                         }}
+                        onMouseEnter={() => handlePreviewStart(slot.elementPath, 'hover')}
+                        onMouseLeave={() => handlePreviewEnd()}
+                        onClick={() => handlePulseAnimation(slot.elementPath)}
                         style={{ 
                           width: '28px', 
                           height: '20px',
                           appearance: 'auto',
                           WebkitAppearance: 'auto',
                           padding: '0',
-                          border: 'none'
+                          border: 'none',
+                          cursor: 'pointer'
                         }}
                       />
                       

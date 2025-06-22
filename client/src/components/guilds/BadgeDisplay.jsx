@@ -23,7 +23,7 @@ const shapePaths = {
   HEXAGON: "polygon(93.56% 74.55%, 50.52% 100%, 6.96% 75.45%, 6.44% 25.45%, 49.48% 0%, 93.04% 24.55%)",
 };
 
-const BadgeDisplay = ({ badge }) => {
+const BadgeDisplay = ({ badge, previewState }) => {
   
   if (!badge) return null;
 
@@ -278,52 +278,206 @@ const BadgeDisplay = ({ badge }) => {
   const currentForegroundScale = (foregroundScale && !isNaN(parseFloat(foregroundScale))) ? parseFloat(foregroundScale) / 100 : 1;
 
   // Apply color transformations to SVG content if needed
-  const getTransformedForegroundValue = () => {
+  const getTransformedForegroundValue = async () => {
     console.log(`[TRANSFORM] Starting - type: ${foregroundType}, isSvg: ${isSvgContent(foregroundValue)}, hasConfig: ${!!resolvedForegroundConfig}`);
     
+    let transformedValue = foregroundValue;
+    
+    // Get actual SVG content if we have a blob URL
+    let actualSvgContent = foregroundValue;
+    if (typeof foregroundValue === 'string' && foregroundValue.startsWith('blob:') && isSvgContent(foregroundValue)) {
+      try {
+        console.log('[TRANSFORM] Fetching content from blob URL:', foregroundValue);
+        const response = await fetch(foregroundValue);
+        actualSvgContent = await response.text();
+        console.log('[TRANSFORM] Fetched SVG content length:', actualSvgContent.length);
+      } catch (error) {
+        console.error('[TRANSFORM] Failed to fetch blob content:', error);
+        actualSvgContent = foregroundValue; // Fallback to original
+      }
+    }
+    
     // For system icons with color config, apply transformations
-    if (foregroundType === 'SYSTEM_ICON' && isSvgContent(foregroundValue)) {
+    if (foregroundType === 'SYSTEM_ICON' && isSvgContent(actualSvgContent)) {
       if (resolvedForegroundConfig) {
-        return applySvgColorTransform(foregroundValue, resolvedForegroundConfig);
+        transformedValue = applySvgColorTransform(actualSvgContent, resolvedForegroundConfig);
+      } else {
+        transformedValue = actualSvgContent;
       }
     }
     // For uploaded icons with color config, apply transformations
-    if (foregroundType === 'UPLOADED_ICON' && isSvgContent(foregroundValue)) {
+    else if (foregroundType === 'UPLOADED_ICON' && isSvgContent(actualSvgContent)) {
       console.log(`[TRANSFORM] Uploaded icon detected`);
       if (resolvedForegroundConfig) {
         console.log(`[TRANSFORM] Config found:`, {
           type: resolvedForegroundConfig.type,
           hasColorMappings: !!resolvedForegroundConfig.colorMappings,
-          includesBlob: foregroundValue.includes('blob:'),
-          lengthOver50k: foregroundValue.length > 50000
+          actualContentLength: actualSvgContent.length
         });
         
-        // Check if this is already a transformed SVG from BadgeIconUpload (contains blob: URL references)
-        // or if it's a complex SVG that should not be double-transformed
-        if (foregroundValue.includes('blob:') || foregroundValue.length > 50000) {
-          console.log(`[TRANSFORM] Using viewBox fix for blob/large SVG`);
-          // Even for large/blob SVGs, ensure viewBox for proper scaling
-          return ensureSvgViewBox(foregroundValue);
-        }
+        // Apply color transform to actual SVG content
         console.log(`[TRANSFORM] Applying color transform...`);
-        // Only transform if we have SVG content that needs transformation
-        const transformed = applySvgColorTransform(foregroundValue, resolvedForegroundConfig);
-        if (transformed.length < foregroundValue.length * 0.5) {
+        const transformed = applySvgColorTransform(actualSvgContent, resolvedForegroundConfig);
+        if (transformed.length < actualSvgContent.length * 0.5) {
           console.warn('[TRANSFORM] SVG significantly reduced in size - possible corruption!');
           // Return original with viewBox fix if corruption detected
-          return ensureSvgViewBox(foregroundValue);
+          transformedValue = ensureSvgViewBox(actualSvgContent);
+        } else {
+          console.log(`[TRANSFORM] Complete, length: ${transformed.length}`);
+          transformedValue = transformed;
         }
-        console.log(`[TRANSFORM] Complete, length: ${transformed.length}`);
-        return transformed;
       } else {
         // No color config but still ensure viewBox for proper scaling
-        return ensureSvgViewBox(foregroundValue);
+        transformedValue = ensureSvgViewBox(actualSvgContent);
       }
+    } else {
+      transformedValue = actualSvgContent;
     }
-    return foregroundValue;
+    
+    // Apply gradient stop isolation if previewing a specific stop
+    if (previewState && previewState.active && previewState.gradientStopPreview && isSvgContent(transformedValue)) {
+      console.log('[TRANSFORM] Isolating gradient stop:', previewState.gradientStopPreview);
+      transformedValue = isolateGradientStopInSvg(transformedValue, previewState.gradientStopPreview);
+    }
+
+    // Apply preview effects if active and we have SVG content
+    if (previewState && previewState.active && isSvgContent(transformedValue)) {
+      console.log('[TRANSFORM] Applying preview effects to actual SVG content');
+      transformedValue = applyPreviewEffectsToSvg(transformedValue, previewState);
+    }
+    
+    return transformedValue || '';
   };
 
-  const transformedForegroundValue = getTransformedForegroundValue();
+  // Function to isolate a specific gradient stop by making all other stops transparent
+  const isolateGradientStopInSvg = (svgString, gradientStopInfo) => {
+    try {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(svgString, 'image/svg+xml');
+      const svgElement = doc.documentElement;
+
+      // Check for parser errors
+      const parserError = svgElement.querySelector('parsererror');
+      if (parserError) {
+        console.error('SVG parsing error in isolateGradientStopInSvg:', parserError.textContent);
+        return svgString;
+      }
+
+      // Find the specific gradient
+      const targetGradientId = gradientStopInfo.gradientId;
+      const targetStopIndex = gradientStopInfo.stopIndex;
+      
+      console.log('[TRANSFORM] Looking for gradient:', targetGradientId, 'stop:', targetStopIndex);
+
+      // Find gradient definitions (in <defs> or anywhere in the SVG)
+      const gradients = svgElement.querySelectorAll(`linearGradient[id="${targetGradientId}"], radialGradient[id="${targetGradientId}"]`);
+      
+      gradients.forEach(gradient => {
+        const stops = gradient.querySelectorAll('stop');
+        console.log('[TRANSFORM] Found gradient with', stops.length, 'stops');
+        
+        stops.forEach((stop, index) => {
+          if (index !== targetStopIndex) {
+            // Make other stops mostly transparent but not completely
+            stop.setAttribute('stop-opacity', '0.1');
+            console.log('[TRANSFORM] Made stop', index, 'mostly transparent');
+          } else {
+            // Ensure target stop is fully opaque
+            stop.setAttribute('stop-opacity', '1');
+            console.log('[TRANSFORM] Ensured stop', index, 'is opaque');
+          }
+        });
+      });
+
+      return new XMLSerializer().serializeToString(svgElement);
+    } catch (error) {
+      console.error('Error isolating gradient stop:', error);
+      return svgString;
+    }
+  };
+
+  // Function to apply preview opacity effects to SVG
+  const applyPreviewEffectsToSvg = (svgString, preview) => {
+    if (!preview.active || !preview.affectedPaths || preview.affectedPaths.length === 0) {
+      return svgString;
+    }
+
+    try {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(svgString, 'image/svg+xml');
+      const svgElement = doc.documentElement;
+
+      // Check for parser errors
+      const parserError = svgElement.querySelector('parsererror');
+      if (parserError) {
+        console.error('SVG parsing error in applyPreviewEffectsToSvg:', parserError.textContent);
+        return svgString;
+      }
+
+      // Get all elements in the SVG
+      const allElements = svgElement.querySelectorAll('*');
+      const affectedPathsSet = new Set(preview.affectedPaths);
+
+      // Helper function to generate element path (same logic as svgColorAnalysis.js)
+      const getElementPath = (element, root) => {
+        if (element === root) return 'svg';
+        
+        const tagName = element.tagName.toLowerCase();
+        const parent = element.parentElement;
+        
+        if (!parent || parent === root) {
+          // Top level element under SVG
+          const siblings = Array.from(root.children).filter(el => el.tagName.toLowerCase() === tagName);
+          const index = siblings.indexOf(element);
+          return `${tagName}[${index}]`;
+        } else {
+          // Nested element
+          const siblings = Array.from(parent.children).filter(el => el.tagName.toLowerCase() === tagName);
+          const index = siblings.indexOf(element);
+          const parentPath = getElementPath(parent, root);
+          return `${parentPath}/${tagName}[${index}]`;
+        }
+      };
+
+      // Apply opacity based on whether element is affected
+      allElements.forEach((element, index) => {
+        const elementPath = getElementPath(element, svgElement);
+        const isAffected = affectedPathsSet.has(elementPath);
+
+        console.log('[SVG-PREVIEW] Element', elementPath, 'isAffected:', isAffected);
+
+        if (!isAffected && (element.hasAttribute('fill') || element.hasAttribute('stroke') || element.tagName === 'g')) {
+          // Dim non-affected elements
+          const currentOpacity = element.getAttribute('opacity') || '1';
+          const newOpacity = parseFloat(currentOpacity) * preview.opacity;
+          
+          element.setAttribute('opacity', newOpacity.toString());
+          
+          // Add transition for smooth animation
+          if (preview.duration) {
+            element.style.transition = `opacity ${preview.duration}ms ease-in-out`;
+          }
+        }
+      });
+
+      return new XMLSerializer().serializeToString(svgElement);
+    } catch (error) {
+      console.error('Error applying preview effects to SVG:', error);
+      return svgString;
+    }
+  };
+
+  const [transformedForegroundValue, setTransformedForegroundValue] = useState(foregroundValue || '');
+
+  // Update transformed value when dependencies change
+  useEffect(() => {
+    const updateTransformedValue = async () => {
+      const transformed = await getTransformedForegroundValue();
+      setTransformedForegroundValue(transformed);
+    };
+    
+    updateTransformedValue();
+  }, [foregroundValue, foregroundType, resolvedForegroundConfig, previewState]);
 
   const renderForeground = () => (
     <div 
@@ -370,7 +524,7 @@ const BadgeDisplay = ({ badge }) => {
         return null;
       })()}
       {foregroundType === 'UPLOADED_ICON' && (
-        transformedForegroundValue && transformedForegroundValue.trim() && 
+        transformedForegroundValue && typeof transformedForegroundValue === 'string' && transformedForegroundValue.trim() && 
         (isSvgContent(transformedForegroundValue) || transformedForegroundValue.startsWith('http') || transformedForegroundValue.startsWith('upload://')) ? (
           // Check if it's SVG content using our robust SVG detection
           isSvgContent(transformedForegroundValue) ? (

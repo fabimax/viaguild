@@ -80,6 +80,15 @@ const BadgeTemplateCreatePage = () => {
   const [slugWasIncremented, setSlugWasIncremented] = useState(false);
   const [existingTemplateSlugs, setExistingTemplateSlugs] = useState([]);
   
+  // Preview state for color customization
+  const [previewState, setPreviewState] = useState({
+    active: false,
+    mode: null,
+    affectedPaths: [],
+    opacity: 1,
+    duration: 200
+  });
+  
   const isOwnPage = user && user.username.toLowerCase() === username.toLowerCase();
   
   useEffect(() => {
@@ -977,6 +986,7 @@ const BadgeTemplateCreatePage = () => {
                       currentIcon={template.defaultForegroundValue}
                       onIconChange={handleIconChange}
                       onSvgDataChange={handleSvgDataChange}
+                      onPreviewStateChange={setPreviewState}
                       templateSlug={template.templateSlug}
                       isLoading={isSubmitting}
                     />
@@ -1021,6 +1031,7 @@ const BadgeTemplateCreatePage = () => {
                         lastUpdated: Date.now() // Force re-render
                       }));
                     }}
+                    onPreviewStateChange={setPreviewState}
                   />
                 )}
               </div>
@@ -1375,7 +1386,7 @@ const BadgeTemplateCreatePage = () => {
               <div className="badge-preview-area">
                 <div className="badge-card preview-badge-card">
                   <div className="badge-card-visual">
-                    <BadgeDisplay badge={badgePreviewProps} />
+                    <BadgeDisplay badge={badgePreviewProps} previewState={previewState} />
                   </div>
                   {template.defaultDisplayDescription && (
                     <div className="badge-card-content">

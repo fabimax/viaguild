@@ -17,7 +17,8 @@ const BadgeForegroundDisplay = ({
   className = '',
   alt = 'Badge foreground',
   style = {},
-  placeholder = 'No icon'
+  placeholder = 'No icon',
+  previewState = null
 }) => {
   // Determine the actual content type
   // Priority: explicit contentType > isSvg prop > auto-detect
@@ -50,6 +51,7 @@ const BadgeForegroundDisplay = ({
           alt={alt}
           style={style}
           placeholder={placeholder}
+          previewState={previewState}
         />
       );
       
@@ -130,7 +132,14 @@ BadgeForegroundDisplay.propTypes = {
   className: PropTypes.string,
   alt: PropTypes.string,
   style: PropTypes.object,
-  placeholder: PropTypes.string
+  placeholder: PropTypes.string,
+  previewState: PropTypes.shape({
+    active: PropTypes.bool,
+    mode: PropTypes.string,
+    affectedPaths: PropTypes.array,
+    opacity: PropTypes.number,
+    duration: PropTypes.number
+  })
 };
 
 export default BadgeForegroundDisplay;

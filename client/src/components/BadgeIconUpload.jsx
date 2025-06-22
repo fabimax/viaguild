@@ -143,6 +143,7 @@ function BadgeIconUpload({
   colorOnlyMode = false, // New prop to hide upload UI and only show color controls
   onIconChange,
   onSvgDataChange,
+  onPreviewStateChange, // New prop for parent preview state sync
   isLoading = false,
   templateSlug = 'badge-icon'
 }) {
@@ -157,6 +158,15 @@ function BadgeIconUpload({
   const [svgColorData, setSvgColorData] = useState(null);
   const [fallbackColor, setFallbackColor] = useState('#000000');
   const [fallbackAlpha, setFallbackAlpha] = useState(1);
+  
+  // Preview state for color customization
+  const [previewState, setPreviewState] = useState({
+    active: false,
+    mode: null,
+    affectedPaths: [],
+    opacity: 1,
+    duration: 200
+  });
   const [expandedGroups, setExpandedGroups] = useState({});
   const fileInputRef = useRef(null);
   const svgCustomizer = useRef(new SVGColorCustomizer());
@@ -1335,6 +1345,7 @@ function BadgeIconUpload({
           colorData={svgColorData}
           size={80}
           alt="Icon preview"
+          previewState={previewState}
           placeholder="No Icon"
         />
         {/* Only show remove button when not in color-only mode and we have an icon */}
@@ -1407,6 +1418,14 @@ function BadgeIconUpload({
           colorSlots={svgColorData.colorSlots}
           gradientDefinitions={svgColorData.gradientDefinitions || {}}
           originalGradientDefinitions={svgColorData.originalGradientDefinitions || {}}
+          onPreviewStateChange={(previewState) => {
+            // Update local state for left column preview
+            setPreviewState(previewState);
+            // Also notify parent for right column preview
+            if (onPreviewStateChange) {
+              onPreviewStateChange(previewState);
+            }
+          }}
           onColorChange={(updatedColorMap, updatedGradientDefinitions) => {
             if (!svgContent) return;
             
@@ -1511,6 +1530,7 @@ BadgeIconUpload.propTypes = {
   currentIcon: PropTypes.string,
   onIconChange: PropTypes.func.isRequired,
   onSvgDataChange: PropTypes.func,
+  onPreviewStateChange: PropTypes.func,
   isLoading: PropTypes.bool,
   templateSlug: PropTypes.string
 };
