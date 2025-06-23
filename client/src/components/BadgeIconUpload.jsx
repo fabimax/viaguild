@@ -322,7 +322,7 @@ function BadgeIconUpload({
       const uploadReference = `upload://${tempAsset.id}`;
       onIconChange(uploadReference, processedSvgContent, tempAsset.hostedUrl);
       
-      console.log('Loaded existing temp upload:', tempAsset.id);
+      // console.log('Loaded existing temp upload:', tempAsset.id);
     } catch (error) {
       console.error('Error loading temp upload:', error);
     }
@@ -339,7 +339,7 @@ function BadgeIconUpload({
         // Check if the sync data is recent (less than 1 hour old)
         const isRecent = Date.now() - parsed.timestamp < 60 * 60 * 1000;
         if (isRecent) {
-          console.log('Found recent sync data in localStorage for asset:', parsed.assetId);
+          // console.log('Found recent sync data in localStorage for asset:', parsed.assetId);
           return parsed;
         }
       }
@@ -361,7 +361,7 @@ function BadgeIconUpload({
         metadata
       };
       localStorage.setItem('badgeIconPreview', JSON.stringify(syncData));
-      console.log('Stored icon sync data in localStorage for asset:', assetId);
+      // console.log('Stored icon sync data in localStorage for asset:', assetId);
     } catch (error) {
       console.error('Error storing sync data:', error);
     }
@@ -373,12 +373,12 @@ function BadgeIconUpload({
       // Skip if already have an upload or icon
       if (uploadId || previewIcon || currentIcon) return;
       
-      console.log('Initializing badge icon component...');
+      // console.log('Initializing badge icon component...');
       
       // First check localStorage for recent sync
       const localSync = checkLocalStorageSync();
       if (localSync) {
-        console.log('Using localStorage sync data');
+        // console.log('Using localStorage sync data');
         // Quick load from localStorage, but still verify with server
         setUploadedUrl(localSync.iconUrl);
         setUploadId(localSync.assetId);
@@ -392,7 +392,7 @@ function BadgeIconUpload({
       // Then check server for authoritative data
       const serverAsset = await discoverExistingUpload();
       if (serverAsset) {
-        console.log('Found existing upload on server, loading...');
+        // console.log('Found existing upload on server, loading...');
         await loadTempUpload(serverAsset);
       }
     };
@@ -404,10 +404,10 @@ function BadgeIconUpload({
   useEffect(() => {
     const handleStorageChange = (e) => {
       if (e.key === 'badgeIconPreview') {
-        console.log('Storage change detected from another tab');
+        // console.log('Storage change detected from another tab');
         try {
           const newSyncData = JSON.parse(e.newValue);
-          console.log('New sync data received from another tab, asset:', newSyncData.assetId);
+          // console.log('New sync data received from another tab, asset:', newSyncData.assetId);
           
           // Update component state with new data from other tab
           if (newSyncData.assetId !== uploadId) {
@@ -441,7 +441,7 @@ function BadgeIconUpload({
             setSvgContent('');
             setSvgColorData(null);
             
-            console.log('Updated component state from other tab');
+            // console.log('Updated component state from other tab');
           }
         } catch (error) {
           console.error('Error handling storage change:', error);
@@ -634,7 +634,7 @@ function BadgeIconUpload({
       });
       
       if (response.ok) {
-        console.log('Deleted previous temp upload:', assetId);
+        // console.log('Deleted previous temp upload:', assetId);
       } else if (response.status === 404) {
         console.log('Previous temp upload already deleted:', assetId);
       } else {

@@ -136,7 +136,7 @@ const ensureViewBox = (svgElement) => {
     if (!isNaN(numericWidth) && !isNaN(numericHeight) && numericWidth > 0 && numericHeight > 0) {
       // Add viewBox starting at origin with width/height dimensions
       svgElement.setAttribute('viewBox', `0 0 ${numericWidth} ${numericHeight}`);
-      console.log(`Auto-added viewBox: "0 0 ${numericWidth} ${numericHeight}" to SVG`);
+      // console.log(`Auto-added viewBox: "0 0 ${numericWidth} ${numericHeight}" to SVG`);
     }
   }
 };

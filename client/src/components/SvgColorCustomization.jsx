@@ -293,16 +293,16 @@ const SvgColorCustomization = ({
 
   // Helper to apply a color to all elements in a group
   const applyColorToGroup = (groupId, newColor) => {
-    console.log('[GROUP COLOR] Applying color', newColor, 'to group', groupId);
+    // console.log('[GROUP COLOR] Applying color', newColor, 'to group', groupId);
     
     const elementsInGroup = Object.keys(elementGroups).filter(elementId => 
       elementGroups[elementId] === groupId
     );
     
-    console.log('[GROUP COLOR] Elements in group:', elementsInGroup);
+    // console.log('[GROUP COLOR] Elements in group:', elementsInGroup);
     
     if (elementsInGroup.length === 0) {
-      console.log('[GROUP COLOR] No elements in group, returning');
+      // console.log('[GROUP COLOR] No elements in group, returning');
       return;
     }
     
@@ -310,15 +310,15 @@ const SvgColorCustomization = ({
     const updatedGradientDefinitions = { ...gradientDefinitions };
     
     elementsInGroup.forEach(elementId => {
-      console.log('[GROUP COLOR] Processing element:', elementId);
+      // console.log('[GROUP COLOR] Processing element:', elementId);
       
       if (elementId.startsWith('group-')) {
-        console.log('[GROUP COLOR] Handling group-level color');
+        // console.log('[GROUP COLOR] Handling group-level color');
         const originalColor = elementId.replace('group-', '');
         
         // Handle solid color groups
         const slots = solidColorGroups[originalColor] || [];
-        console.log('[GROUP COLOR] Found', slots.length, 'solid color slots for', originalColor);
+        // console.log('[GROUP COLOR] Found', slots.length, 'solid color slots for', originalColor);
         
         slots.forEach(slot => {
           if (updatedElementColorMap[slot.elementPath]) {
@@ -334,10 +334,10 @@ const SvgColorCustomization = ({
         const gradientGroup = gradientGroups[originalColor];
         if (gradientGroup && gradientGroup.gradientId) {
           const gradientId = gradientGroup.gradientId;
-          console.log('[GROUP COLOR] Found gradient group for', originalColor, 'with gradientId:', gradientId);
+          // console.log('[GROUP COLOR] Found gradient group for', originalColor, 'with gradientId:', gradientId);
           
           if (updatedGradientDefinitions[gradientId]) {
-            console.log('[GROUP COLOR] Updating all stops in gradient to', newColor);
+            // console.log('[GROUP COLOR] Updating all stops in gradient to', newColor);
             updatedGradientDefinitions[gradientId] = {
               ...updatedGradientDefinitions[gradientId],
               stops: updatedGradientDefinitions[gradientId].stops.map(stop => ({
@@ -346,11 +346,11 @@ const SvgColorCustomization = ({
               }))
             };
           } else {
-            console.log('[GROUP COLOR] Gradient definition not found for ID:', gradientId);
+            // console.log('[GROUP COLOR] Gradient definition not found for ID:', gradientId);
           }
         }
       } else if (elementId.startsWith('stop-')) {
-        console.log('[GROUP COLOR] Handling individual gradient stop');
+        // console.log('[GROUP COLOR] Handling individual gradient stop');
         // Handle individual gradient stops - need to find the slot by elementId
         let foundSlot = null;
         Object.values(gradientGroups).forEach(gradientGroup => {
@@ -361,10 +361,10 @@ const SvgColorCustomization = ({
         if (foundSlot && foundSlot.isGradientStop) {
           const gradientId = foundSlot.gradientId;
           const stopIndex = foundSlot.stopIndex;
-          console.log('[GROUP COLOR] Found gradient stop - Gradient ID:', gradientId, 'Stop index:', stopIndex);
+          // console.log('[GROUP COLOR] Found gradient stop - Gradient ID:', gradientId, 'Stop index:', stopIndex);
           
           if (updatedGradientDefinitions[gradientId]) {
-            console.log('[GROUP COLOR] Updating gradient stop');
+            // console.log('[GROUP COLOR] Updating gradient stop');
             updatedGradientDefinitions[gradientId] = {
               ...updatedGradientDefinitions[gradientId],
               stops: updatedGradientDefinitions[gradientId].stops.map((stop, idx) =>
@@ -372,31 +372,31 @@ const SvgColorCustomization = ({
               )
             };
           } else {
-            console.log('[GROUP COLOR] Gradient definition not found for ID:', gradientId);
+            // console.log('[GROUP COLOR] Gradient definition not found for ID:', gradientId);
           }
         } else {
-          console.log('[GROUP COLOR] Could not find gradient slot for elementId:', elementId);
+          // console.log('[GROUP COLOR] Could not find gradient slot for elementId:', elementId);
         }
       } else {
-        console.log('[GROUP COLOR] Handling individual element path');
+        // console.log('[GROUP COLOR] Handling individual element path');
         // Handle individual element paths
         const element = updatedElementColorMap[elementId];
         if (element) {
-          console.log('[GROUP COLOR] Element found:', element);
+          // console.log('[GROUP COLOR] Element found:', element);
           if (element.fill && !element.fill.isGradient) {
-            console.log('[GROUP COLOR] Updating solid fill');
+            // console.log('[GROUP COLOR] Updating solid fill');
             element.fill.current = newColor;
           }
           if (element.stroke && !element.stroke.isGradient) {
-            console.log('[GROUP COLOR] Updating solid stroke');
+            // console.log('[GROUP COLOR] Updating solid stroke');
             element.stroke.current = newColor;
           }
           if (element.fill && element.fill.isGradient) {
-            console.log('[GROUP COLOR] Converting gradient fill to solid color');
+            // console.log('[GROUP COLOR] Converting gradient fill to solid color');
             // Convert gradient to solid color
             const gradientId = element.fill.gradientId;
             if (updatedGradientDefinitions[gradientId]) {
-              console.log('[GROUP COLOR] Updating gradient fill definition');
+              // console.log('[GROUP COLOR] Updating gradient fill definition');
               updatedGradientDefinitions[gradientId] = {
                 ...updatedGradientDefinitions[gradientId],
                 stops: updatedGradientDefinitions[gradientId].stops.map(stop => ({
@@ -405,15 +405,15 @@ const SvgColorCustomization = ({
                 }))
               };
             } else {
-              console.log('[GROUP COLOR] Gradient definition not found for fill gradient ID:', gradientId);
+              // console.log('[GROUP COLOR] Gradient definition not found for fill gradient ID:', gradientId);
             }
           }
           if (element.stroke && element.stroke.isGradient) {
-            console.log('[GROUP COLOR] Converting gradient stroke to solid color');
+            // console.log('[GROUP COLOR] Converting gradient stroke to solid color');
             // Convert gradient to solid color
             const gradientId = element.stroke.gradientId;
             if (updatedGradientDefinitions[gradientId]) {
-              console.log('[GROUP COLOR] Updating gradient stroke definition');
+              // console.log('[GROUP COLOR] Updating gradient stroke definition');
               updatedGradientDefinitions[gradientId] = {
                 ...updatedGradientDefinitions[gradientId],
                 stops: updatedGradientDefinitions[gradientId].stops.map(stop => ({
@@ -422,19 +422,19 @@ const SvgColorCustomization = ({
                 }))
               };
             } else {
-              console.log('[GROUP COLOR] Gradient definition not found for stroke gradient ID:', gradientId);
+              // console.log('[GROUP COLOR] Gradient definition not found for stroke gradient ID:', gradientId);
             }
           }
         } else {
-          console.log('[GROUP COLOR] Element not found in colorMap:', elementId);
+          // console.log('[GROUP COLOR] Element not found in colorMap:', elementId);
         }
       }
     });
     
-    console.log('[GROUP COLOR] Calling onColorChange with:', {
-      elementColorMap: updatedElementColorMap,
-      gradientDefinitions: updatedGradientDefinitions
-    });
+    // console.log('[GROUP COLOR] Calling onColorChange with:', {
+    //   elementColorMap: updatedElementColorMap,
+    //   gradientDefinitions: updatedGradientDefinitions
+    // });
     
     onColorChange(updatedElementColorMap, updatedGradientDefinitions);
   };
@@ -536,7 +536,7 @@ const SvgColorCustomization = ({
           const originalGradient = originalGradientDefinitions[gradientId];
           
           if (updatedGradientDefinitions[gradientId] && originalGradient) {
-            console.log('[RESET GROUP] Resetting gradient', gradientId, 'to original colors');
+            // console.log('[RESET GROUP] Resetting gradient', gradientId, 'to original colors');
             updatedGradientDefinitions[gradientId] = {
               ...updatedGradientDefinitions[gradientId],
               stops: updatedGradientDefinitions[gradientId].stops.map((stop, index) => {
@@ -729,7 +729,7 @@ const SvgColorCustomization = ({
 
   // Preview handler functions
   const handlePreviewStart = (elementIdentifier, mode = 'hover') => {
-    console.log('[PREVIEW] Starting preview for:', elementIdentifier, 'mode:', mode);
+    // console.log('[PREVIEW] Starting preview for:', elementIdentifier, 'mode:', mode);
     setPreviewElement(elementIdentifier);
     setPreviewMode(mode);
     
@@ -737,7 +737,7 @@ const SvgColorCustomization = ({
     // Notify parent component about preview state change
     if (onPreviewStateChange) {
       const affectedPaths = getAffectedPaths(elementIdentifier);
-      console.log('[PREVIEW] Affected paths:', affectedPaths);
+      // console.log('[PREVIEW] Affected paths:', affectedPaths);
       
       // Check if this is a gradient stop preview
       let gradientStopInfo = null;
@@ -757,7 +757,7 @@ const SvgColorCustomization = ({
   };
 
   const handlePreviewEnd = () => {
-    console.log('[PREVIEW] Ending preview');
+    // console.log('[PREVIEW] Ending preview');
     setPreviewElement(null);
     setPreviewMode(null);
     setIsPulsing(false);
@@ -819,13 +819,13 @@ const SvgColorCustomization = ({
 
   // Group preview handlers
   const handleGroupPreviewStart = (groupId, mode = 'hover') => {
-    console.log('[GROUP PREVIEW] Starting preview for group:', groupId, 'mode:', mode);
+    // console.log('[GROUP PREVIEW] Starting preview for group:', groupId, 'mode:', mode);
     setPreviewElement(`group-preview-${groupId}`);
     setPreviewMode(mode);
     
     // Get all element paths for elements in this group
     const affectedPaths = getGroupAffectedPaths(groupId);
-    console.log('[GROUP PREVIEW] Affected paths:', affectedPaths);
+    // console.log('[GROUP PREVIEW] Affected paths:', affectedPaths);
     
     // Notify parent component about preview state change
     if (onPreviewStateChange) {
@@ -935,7 +935,7 @@ const SvgColorCustomization = ({
       elementGroups[elementId] === groupId
     );
     
-    console.log('[GROUP PREVIEW] Elements in group:', elementsInGroup);
+    // console.log('[GROUP PREVIEW] Elements in group:', elementsInGroup);
     
     elementsInGroup.forEach(elementId => {
       if (elementId.startsWith('group-')) {
@@ -1114,11 +1114,11 @@ const SvgColorCustomization = ({
       const processedPaths = new Set(); // Track which paths we've already processed
       const processedGradientStops = new Set(); // Track gradient stops: "gradientId-stopIndex"
 
-      console.log('[HSL DEBUG] Elements in group:', elementsInGroup);
-      console.log('[HSL DEBUG] processedGradientStops at start:', Array.from(processedGradientStops));
+      // console.log('[HSL DEBUG] Elements in group:', elementsInGroup);
+      // console.log('[HSL DEBUG] processedGradientStops at start:', Array.from(processedGradientStops));
 
       elementsInGroup.forEach(elementId => {
-        console.log('[HSL DEBUG] Processing element:', elementId);
+        // console.log('[HSL DEBUG] Processing element:', elementId);
         if (elementId.startsWith('group-')) {
           // Handle group-level color adjustments (e.g., group-#FF0000 or group-linearGradient123)
           const originalColor = elementId.replace('group-', '');
@@ -1169,7 +1169,7 @@ const SvgColorCustomization = ({
                   // Mark this specific stop as processed
                   const stopKey = `${gradientId}-${stopIndex}`;
                   processedGradientStops.add(stopKey);
-                  console.log(`[HSL DEBUG] Marked gradient stop as processed: ${stopKey}`);
+                  // console.log(`[HSL DEBUG] Marked gradient stop as processed: ${stopKey}`);
                   
                   // Apply HSL adjustments
                   const adjustedColor = adjustColorHsl(stop.color, deltaHue, deltaSat, deltaLight);
@@ -1214,7 +1214,7 @@ const SvgColorCustomization = ({
               
               // Skip if this stop was already processed as part of the whole gradient
               if (processedGradientStops.has(stopKey)) {
-                console.log(`[HSL FIX] Skipping gradient stop ${foundSlot.stopIndex} in gradient ${gradientId} - already processed`);
+                // console.log(`[HSL FIX] Skipping gradient stop ${foundSlot.stopIndex} in gradient ${gradientId} - already processed`);
                 return;
               }
               
@@ -1285,7 +1285,7 @@ const SvgColorCustomization = ({
             
             // Skip if this stop was already processed as part of the whole gradient
             if (processedGradientStops.has(stopKey)) {
-              console.log(`[HSL FIX] Skipping gradient stop ${foundSlot.stopIndex} in gradient ${gradientId} - already processed (stop- handler)`);
+              // console.log(`[HSL FIX] Skipping gradient stop ${foundSlot.stopIndex} in gradient ${gradientId} - already processed (stop- handler)`);
               return;
             }
             
@@ -2109,14 +2109,14 @@ const SvgColorCustomization = ({
             <select
               defaultValue=""
               onChange={(e) => {
-                console.log('Dropdown changed:', { 
-                  selectedValue: e.target.value,
-                  selectedIndex: e.target.selectedIndex,
-                  optionText: e.target.options[e.target.selectedIndex]?.text 
-                });
+                // console.log('Dropdown changed:', { 
+                //   selectedValue: e.target.value,
+                //   selectedIndex: e.target.selectedIndex,
+                //   optionText: e.target.options[e.target.selectedIndex]?.text 
+                // });
                 if (e.target.value) {
                   const elementId = `group-${originalColor}`;
-                  console.log('[GROUP CONFLICT] Assigning gradient to group:', elementId, '→', e.target.value);
+                  // console.log('[GROUP CONFLICT] Assigning gradient to group:', elementId, '→', e.target.value);
                   
                   setElementGroups(prev => ({
                     ...prev,
@@ -2601,8 +2601,8 @@ const SvgColorCustomization = ({
                                   onChange={(e) => {
                                     if (e.target.value) {
                                       const elementId = `stop-${slot.id}`;
-                                      console.log('[GROUP CONFLICT] Assigning gradient stop to group:', elementId, '→', e.target.value);
-                                      console.log('[GROUP CONFLICT] Stop details:', slot);
+                                      // console.log('[GROUP CONFLICT] Assigning gradient stop to group:', elementId, '→', e.target.value);
+                                      // console.log('[GROUP CONFLICT] Stop details:', slot);
                                       
                                       setElementGroups(prev => ({
                                         ...prev,

@@ -357,9 +357,9 @@ const BadgeTemplateCreatePage = () => {
     // Debug: Check what color data we're receiving
     if (colorData?.elementColorMap) {
       Object.entries(colorData.elementColorMap).forEach(([path, colors]) => {
-        if (colors.fill?.original === 'UNSPECIFIED') {
-          console.log(`Preview will use UNSPECIFIED fill at ${path}, current:`, colors.fill.current);
-        }
+        // if (colors.fill?.original === 'UNSPECIFIED') {
+        //   console.log(`Preview will use UNSPECIFIED fill at ${path}, current:`, colors.fill.current);
+        // }
       });
     }
   };
@@ -399,17 +399,17 @@ const BadgeTemplateCreatePage = () => {
             value: template.defaultForegroundValue, // The icon name
             color: template.defaultForegroundColor,
           };
-          console.log(`[CreatePage] Created simple system icon config:`, config);
+          // console.log(`[CreatePage] Created simple system icon config:`, config);
           return config;
         }
       case ForegroundContentType.UPLOADED_ICON:
         if (template.defaultForegroundValue?.startsWith('upload://')) {
-          console.log(`[CreatePage] Uploaded icon config check:`, {
-            hasColorData: !!iconSvgColorData,
-            hasElementColorMap: !!(iconSvgColorData?.elementColorMap),
-            mapSize: iconSvgColorData?.elementColorMap ? Object.keys(iconSvgColorData.elementColorMap).length : 0,
-            elementColorMap: iconSvgColorData?.elementColorMap
-          });
+          // console.log(`[CreatePage] Uploaded icon config check:`, {
+          //   hasColorData: !!iconSvgColorData,
+          //   hasElementColorMap: !!(iconSvgColorData?.elementColorMap),
+          //   mapSize: iconSvgColorData?.elementColorMap ? Object.keys(iconSvgColorData.elementColorMap).length : 0,
+          //   elementColorMap: iconSvgColorData?.elementColorMap
+          // });
           
           if (iconSvgColorData && iconSvgColorData.elementColorMap && Object.keys(iconSvgColorData.elementColorMap).length > 0) {
             const config = {
@@ -418,11 +418,11 @@ const BadgeTemplateCreatePage = () => {
               url: template.defaultForegroundValue,
               colorMappings: iconSvgColorData.elementColorMap,
             };
-            console.log(`[CreatePage] Created customizable SVG config:`, config);
+            // console.log(`[CreatePage] Created customizable SVG config:`, config);
             return config;
           } else {
             const config = createHostedAssetConfig(template.defaultForegroundValue);
-            console.log(`[CreatePage] Created static asset config (no color mappings):`, config);
+            // console.log(`[CreatePage] Created static asset config (no color mappings):`, config);
             return config;
           }
         }
@@ -663,11 +663,11 @@ const BadgeTemplateCreatePage = () => {
           iconSvgColorData.elementColorMap && 
           Object.keys(iconSvgColorData.elementColorMap).length > 0) {
         
-        console.log('Sending transformed SVG content instead of upload reference');
+        // console.log('Sending transformed SVG content instead of upload reference');
         templateData.transformedForegroundSvgContent = uploadedIconSvg;
       }
 
-      console.log('Creating badge template:', templateData);
+      // console.log('Creating badge template:', templateData);
       
       await badgeService.createBadgeTemplate(templateData);
       

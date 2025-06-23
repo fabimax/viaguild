@@ -32,10 +32,10 @@ const SvgDisplay = ({
         // Get the actual SVG content (handle blob URLs)
         let actualSvgContent = svgContent;
         if (typeof svgContent === 'string' && svgContent.startsWith('blob:')) {
-          console.log('[SVG-PREVIEW] Fetching content from blob URL:', svgContent);
+          // console.log('[SVG-PREVIEW] Fetching content from blob URL:', svgContent);
           const response = await fetch(svgContent);
           actualSvgContent = await response.text();
-          console.log('[SVG-PREVIEW] Fetched SVG content length:', actualSvgContent.length);
+          // console.log('[SVG-PREVIEW] Fetched SVG content length:', actualSvgContent.length);
         }
 
         // Apply color transformations if colorData is provided
@@ -50,13 +50,13 @@ const SvgDisplay = ({
 
         // Apply gradient stop isolation if previewing a specific stop
         if (previewState && previewState.active && previewState.gradientStopPreview && transformedSvg) {
-          console.log('[SVG-PREVIEW] Isolating gradient stop:', previewState.gradientStopPreview);
+          // console.log('[SVG-PREVIEW] Isolating gradient stop:', previewState.gradientStopPreview);
           transformedSvg = isolateGradientStop(transformedSvg, previewState.gradientStopPreview);
         }
 
         // Apply preview effects if preview state is active
         if (previewState && previewState.active && transformedSvg) {
-          console.log('[SVG-PREVIEW] Applying preview effects to actual SVG content');
+          // console.log('[SVG-PREVIEW] Applying preview effects to actual SVG content');
           transformedSvg = applyPreviewEffects(transformedSvg, previewState, colorData?.elementColorMap);
         }
 
@@ -172,24 +172,24 @@ const SvgDisplay = ({
       const targetGradientId = gradientStopInfo.gradientId;
       const targetStopIndex = gradientStopInfo.stopIndex;
       
-      console.log('[SVG-PREVIEW] Looking for gradient:', targetGradientId, 'stop:', targetStopIndex);
+      // console.log('[SVG-PREVIEW] Looking for gradient:', targetGradientId, 'stop:', targetStopIndex);
 
       // Find gradient definitions (in <defs> or anywhere in the SVG)
       const gradients = svgElement.querySelectorAll(`linearGradient[id="${targetGradientId}"], radialGradient[id="${targetGradientId}"]`);
       
       gradients.forEach(gradient => {
         const stops = gradient.querySelectorAll('stop');
-        console.log('[SVG-PREVIEW] Found gradient with', stops.length, 'stops');
+        // console.log('[SVG-PREVIEW] Found gradient with', stops.length, 'stops');
         
         stops.forEach((stop, index) => {
           if (index !== targetStopIndex) {
             // Make other stops mostly transparent but not completely
             stop.setAttribute('stop-opacity', '0.1');
-            console.log('[SVG-PREVIEW] Made stop', index, 'mostly transparent');
+            // console.log('[SVG-PREVIEW] Made stop', index, 'mostly transparent');
           } else {
             // Ensure target stop is fully opaque
             stop.setAttribute('stop-opacity', '1');
-            console.log('[SVG-PREVIEW] Ensured stop', index, 'is opaque');
+            // console.log('[SVG-PREVIEW] Ensured stop', index, 'is opaque');
           }
         });
       });
@@ -203,16 +203,16 @@ const SvgDisplay = ({
 
   // Function to apply preview opacity effects to SVG
   const applyPreviewEffects = (svgString, preview, elementColorMap) => {
-    console.log('[SVG-PREVIEW] Applying preview effects:', preview);
+    // console.log('[SVG-PREVIEW] Applying preview effects:', preview);
     
     if (!preview.active || !preview.affectedPaths || preview.affectedPaths.length === 0) {
-      console.log('[SVG-PREVIEW] No preview to apply - inactive or no affected paths');
+      // console.log('[SVG-PREVIEW] No preview to apply - inactive or no affected paths');
       return svgString;
     }
 
     // If we don't have elementColorMap, fall back to old logic
     if (!elementColorMap) {
-      console.log('[SVG-PREVIEW] No elementColorMap provided, using fallback logic');
+      // console.log('[SVG-PREVIEW] No elementColorMap provided, using fallback logic');
       return applyPreviewEffectsFallback(svgString, preview);
     }
 
@@ -230,8 +230,8 @@ const SvgDisplay = ({
 
       // Use the proven elementColorMap to determine which elements to dim
       const affectedPathsSet = new Set(preview.affectedPaths);
-      console.log('[SVG-PREVIEW] Affected paths:', Array.from(affectedPathsSet));
-      console.log('[SVG-PREVIEW] ElementColorMap keys:', Object.keys(elementColorMap));
+      // console.log('[SVG-PREVIEW] Affected paths:', Array.from(affectedPathsSet));
+      // console.log('[SVG-PREVIEW] ElementColorMap keys:', Object.keys(elementColorMap));
 
       let modifiedCount = 0;
 
@@ -239,7 +239,7 @@ const SvgDisplay = ({
       Object.keys(elementColorMap).forEach(elementPath => {
         const isAffected = affectedPathsSet.has(elementPath);
         
-        console.log('[SVG-PREVIEW] Checking', elementPath, 'isAffected:', isAffected);
+        // console.log('[SVG-PREVIEW] Checking', elementPath, 'isAffected:', isAffected);
         
         // Determine which elements to modify based on preview mode
         const shouldModify = preview.mode === 'affected-pulse' ? isAffected : !isAffected;
@@ -252,7 +252,7 @@ const SvgDisplay = ({
             const newOpacity = parseFloat(currentOpacity) * preview.opacity;
             
             const actionDesc = preview.mode === 'affected-pulse' ? 'Pulsing affected element' : 'Dimming non-affected element';
-            console.log(`[SVG-PREVIEW] ${actionDesc}`, elementPath, 'to opacity', newOpacity);
+            // console.log(`[SVG-PREVIEW] ${actionDesc}`, elementPath, 'to opacity', newOpacity);
             element.setAttribute('opacity', newOpacity.toString());
             modifiedCount++;
             
@@ -264,7 +264,7 @@ const SvgDisplay = ({
         }
       });
 
-      console.log('[SVG-PREVIEW] Modified', modifiedCount, 'elements');
+      // console.log('[SVG-PREVIEW] Modified', modifiedCount, 'elements');
       return new XMLSerializer().serializeToString(svgElement);
     } catch (error) {
       console.error('Error applying preview effects:', error);

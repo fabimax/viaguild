@@ -68,10 +68,10 @@ const BadgeDisplay = ({ badge, previewState }) => {
     
     // If we have a system icon name, fetch its SVG content
     if (type === 'SYSTEM_ICON' && value && !isSvgContent(value)) {
-      console.log(`[BadgeDisplay] Fetching system icon: ${value}`);
+      // console.log(`[BadgeDisplay] Fetching system icon: ${value}`);
       SystemIconService.getSystemIconSvg(value)
         .then(svgContent => {
-          console.log(`[BadgeDisplay] ✓ Fetched '${value}' (${svgContent?.length} chars)`);
+          // console.log(`[BadgeDisplay] ✓ Fetched '${value}' (${svgContent?.length} chars)`);
           if (isMounted) setCurrentFg({ type, value: svgContent });
         })
         .catch(err => {
@@ -279,7 +279,7 @@ const BadgeDisplay = ({ badge, previewState }) => {
 
   // Apply color transformations to SVG content if needed
   const getTransformedForegroundValue = async () => {
-    console.log(`[TRANSFORM] Starting - type: ${foregroundType}, isSvg: ${isSvgContent(foregroundValue)}, hasConfig: ${!!resolvedForegroundConfig}`);
+    // console.log(`[TRANSFORM] Starting - type: ${foregroundType}, isSvg: ${isSvgContent(foregroundValue)}, hasConfig: ${!!resolvedForegroundConfig}`);
     
     let transformedValue = foregroundValue;
     
@@ -287,10 +287,10 @@ const BadgeDisplay = ({ badge, previewState }) => {
     let actualSvgContent = foregroundValue;
     if (typeof foregroundValue === 'string' && foregroundValue.startsWith('blob:') && isSvgContent(foregroundValue)) {
       try {
-        console.log('[TRANSFORM] Fetching content from blob URL:', foregroundValue);
+        // console.log('[TRANSFORM] Fetching content from blob URL:', foregroundValue);
         const response = await fetch(foregroundValue);
         actualSvgContent = await response.text();
-        console.log('[TRANSFORM] Fetched SVG content length:', actualSvgContent.length);
+        // console.log('[TRANSFORM] Fetched SVG content length:', actualSvgContent.length);
       } catch (error) {
         console.error('[TRANSFORM] Failed to fetch blob content:', error);
         actualSvgContent = foregroundValue; // Fallback to original
@@ -307,23 +307,23 @@ const BadgeDisplay = ({ badge, previewState }) => {
     }
     // For uploaded icons with color config, apply transformations
     else if (foregroundType === 'UPLOADED_ICON' && isSvgContent(actualSvgContent)) {
-      console.log(`[TRANSFORM] Uploaded icon detected`);
+      // console.log(`[TRANSFORM] Uploaded icon detected`);
       if (resolvedForegroundConfig) {
-        console.log(`[TRANSFORM] Config found:`, {
-          type: resolvedForegroundConfig.type,
-          hasColorMappings: !!resolvedForegroundConfig.colorMappings,
-          actualContentLength: actualSvgContent.length
-        });
+        // console.log(`[TRANSFORM] Config found:`, {
+        //   type: resolvedForegroundConfig.type,
+        //   hasColorMappings: !!resolvedForegroundConfig.colorMappings,
+        //   actualContentLength: actualSvgContent.length
+        // });
         
         // Apply color transform to actual SVG content
-        console.log(`[TRANSFORM] Applying color transform...`);
+        // console.log(`[TRANSFORM] Applying color transform...`);
         const transformed = applySvgColorTransform(actualSvgContent, resolvedForegroundConfig);
         if (transformed.length < actualSvgContent.length * 0.5) {
           console.warn('[TRANSFORM] SVG significantly reduced in size - possible corruption!');
           // Return original with viewBox fix if corruption detected
           transformedValue = ensureSvgViewBox(actualSvgContent);
         } else {
-          console.log(`[TRANSFORM] Complete, length: ${transformed.length}`);
+          // console.log(`[TRANSFORM] Complete, length: ${transformed.length}`);
           transformedValue = transformed;
         }
       } else {
@@ -336,13 +336,13 @@ const BadgeDisplay = ({ badge, previewState }) => {
     
     // Apply gradient stop isolation if previewing a specific stop
     if (previewState && previewState.active && previewState.gradientStopPreview && isSvgContent(transformedValue)) {
-      console.log('[TRANSFORM] Isolating gradient stop:', previewState.gradientStopPreview);
+      // console.log('[TRANSFORM] Isolating gradient stop:', previewState.gradientStopPreview);
       transformedValue = isolateGradientStopInSvg(transformedValue, previewState.gradientStopPreview);
     }
 
     // Apply preview effects if active and we have SVG content
     if (previewState && previewState.active && isSvgContent(transformedValue)) {
-      console.log('[TRANSFORM] Applying preview effects to actual SVG content');
+      // console.log('[TRANSFORM] Applying preview effects to actual SVG content');
       transformedValue = applyPreviewEffectsToSvg(transformedValue, previewState);
     }
     
@@ -367,24 +367,24 @@ const BadgeDisplay = ({ badge, previewState }) => {
       const targetGradientId = gradientStopInfo.gradientId;
       const targetStopIndex = gradientStopInfo.stopIndex;
       
-      console.log('[TRANSFORM] Looking for gradient:', targetGradientId, 'stop:', targetStopIndex);
+      // console.log('[TRANSFORM] Looking for gradient:', targetGradientId, 'stop:', targetStopIndex);
 
       // Find gradient definitions (in <defs> or anywhere in the SVG)
       const gradients = svgElement.querySelectorAll(`linearGradient[id="${targetGradientId}"], radialGradient[id="${targetGradientId}"]`);
       
       gradients.forEach(gradient => {
         const stops = gradient.querySelectorAll('stop');
-        console.log('[TRANSFORM] Found gradient with', stops.length, 'stops');
+        // console.log('[TRANSFORM] Found gradient with', stops.length, 'stops');
         
         stops.forEach((stop, index) => {
           if (index !== targetStopIndex) {
             // Make other stops mostly transparent but not completely
             stop.setAttribute('stop-opacity', '0.1');
-            console.log('[TRANSFORM] Made stop', index, 'mostly transparent');
+            // console.log('[TRANSFORM] Made stop', index, 'mostly transparent');
           } else {
             // Ensure target stop is fully opaque
             stop.setAttribute('stop-opacity', '1');
-            console.log('[TRANSFORM] Ensured stop', index, 'is opaque');
+            // console.log('[TRANSFORM] Ensured stop', index, 'is opaque');
           }
         });
       });
@@ -480,10 +480,10 @@ const BadgeDisplay = ({ badge, previewState }) => {
 
   // Function to apply preview opacity effects to SVG
   const applyPreviewEffectsToSvg = (svgString, preview) => {
-    console.log('[BADGE-PREVIEW] Applying preview effects:', preview);
+    // console.log('[BADGE-PREVIEW] Applying preview effects:', preview);
     
     if (!preview.active || !preview.affectedPaths || preview.affectedPaths.length === 0) {
-      console.log('[BADGE-PREVIEW] No preview to apply - inactive or no affected paths');
+      // console.log('[BADGE-PREVIEW] No preview to apply - inactive or no affected paths');
       return svgString;
     }
 
@@ -492,7 +492,7 @@ const BadgeDisplay = ({ badge, previewState }) => {
 
     // If we don't have elementColorMap, fall back to old logic
     if (!elementColorMap) {
-      console.log('[BADGE-PREVIEW] No elementColorMap provided, using fallback logic');
+      // console.log('[BADGE-PREVIEW] No elementColorMap provided, using fallback logic');
       return applyPreviewEffectsFallback(svgString, preview);
     }
 
@@ -510,8 +510,8 @@ const BadgeDisplay = ({ badge, previewState }) => {
 
       // Use the proven elementColorMap to determine which elements to dim
       const affectedPathsSet = new Set(preview.affectedPaths);
-      console.log('[BADGE-PREVIEW] Affected paths:', Array.from(affectedPathsSet));
-      console.log('[BADGE-PREVIEW] ElementColorMap keys:', Object.keys(elementColorMap));
+      // console.log('[BADGE-PREVIEW] Affected paths:', Array.from(affectedPathsSet));
+      // console.log('[BADGE-PREVIEW] ElementColorMap keys:', Object.keys(elementColorMap));
 
       let modifiedCount = 0;
 
@@ -519,7 +519,7 @@ const BadgeDisplay = ({ badge, previewState }) => {
       Object.keys(elementColorMap).forEach(elementPath => {
         const isAffected = affectedPathsSet.has(elementPath);
         
-        console.log('[BADGE-PREVIEW] Checking', elementPath, 'isAffected:', isAffected);
+        // console.log('[BADGE-PREVIEW] Checking', elementPath, 'isAffected:', isAffected);
         
         // Determine which elements to modify based on preview mode
         const shouldModify = preview.mode === 'affected-pulse' ? isAffected : !isAffected;
@@ -532,7 +532,7 @@ const BadgeDisplay = ({ badge, previewState }) => {
             const newOpacity = parseFloat(currentOpacity) * preview.opacity;
             
             const actionDesc = preview.mode === 'affected-pulse' ? 'Pulsing affected element' : 'Dimming non-affected element';
-            console.log(`[BADGE-PREVIEW] ${actionDesc}`, elementPath, 'to opacity', newOpacity);
+            // console.log(`[BADGE-PREVIEW] ${actionDesc}`, elementPath, 'to opacity', newOpacity);
             element.setAttribute('opacity', newOpacity.toString());
             modifiedCount++;
             
@@ -544,7 +544,7 @@ const BadgeDisplay = ({ badge, previewState }) => {
         }
       });
 
-      console.log('[BADGE-PREVIEW] Modified', modifiedCount, 'elements');
+      // console.log('[BADGE-PREVIEW] Modified', modifiedCount, 'elements');
       return new XMLSerializer().serializeToString(svgElement);
     } catch (error) {
       console.error('Error applying preview effects to SVG:', error);
@@ -589,7 +589,7 @@ const BadgeDisplay = ({ badge, previewState }) => {
         if (foregroundType === 'SYSTEM_ICON') {
           const hasValue = !!foregroundValue;
           const hasTransformed = !!transformedForegroundValue;
-          console.log(`[BadgeDisplay] Render: value=${hasValue}, transformed=${hasTransformed}`);
+          // console.log(`[BadgeDisplay] Render: value=${hasValue}, transformed=${hasTransformed}`);
           
           if (foregroundValue) {
             return (
