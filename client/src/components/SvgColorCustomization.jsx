@@ -1344,7 +1344,7 @@ const SvgColorCustomization = ({
       };
     });
     
-    onColorChange(updatedElementColorMap);
+    onColorChange(updatedElementColorMap, gradientDefinitions);
   };
 
   // Helper function to create CSS gradient string from gradient definition
@@ -1791,14 +1791,14 @@ const SvgColorCustomization = ({
                         className="transparency-slider"
                         style={{ 
                           width: '100%',
-                          height: '4px',
+                          height: '8px',
                           appearance: 'none',
                           WebkitAppearance: 'none',
                           background: 'linear-gradient(to right, transparent, #000)',
                           borderRadius: '4px',
                           outline: 'none',
                           border: 'none',
-                          padding: '4px',
+                          padding: '0',
                           margin: '5px 0'
                         }}
                       />
@@ -1956,7 +1956,7 @@ const SvgColorCustomization = ({
                   };
                 });
                 
-                onColorChange(updatedElementColorMap);
+                onColorChange(updatedElementColorMap, gradientDefinitions);
               }
             }} 
             style={{ 
@@ -2684,7 +2684,7 @@ const SvgColorCustomization = ({
                             original: slot.originalColor,
                             current: newColor
                           };
-                          onColorChange(updatedElementColorMap);
+                          onColorChange(updatedElementColorMap, gradientDefinitions);
                         }}
                         onMouseEnter={() => handlePreviewStart(slot.elementPath, 'hover')}
                         onMouseLeave={() => handlePreviewEnd()}
@@ -2715,7 +2715,7 @@ const SvgColorCustomization = ({
                             original: slot.originalColor,
                             current: newColor
                           };
-                          onColorChange(updatedElementColorMap);
+                          onColorChange(updatedElementColorMap, gradientDefinitions);
                         }}
                         className="transparency-slider"
                         style={{ 
@@ -2744,7 +2744,7 @@ const SvgColorCustomization = ({
                             original: slot.originalColor,
                             current: slot.originalColor === 'UNSPECIFIED' ? '#000000' : slot.originalColor
                           };
-                          onColorChange(updatedElementColorMap);
+                          onColorChange(updatedElementColorMap, gradientDefinitions);
                         }} 
                         style={{ 
                           fontSize: '12px', 
@@ -2951,7 +2951,15 @@ const SvgColorCustomization = ({
             setGlobalAdjustments({ hue: 0, saturation: 0, lightness: 0, alpha: 0 });
             
             // Reset gradient adjustments state
-            setGradientAdjustments({});
+            // Initialize all existing gradients with zero adjustments to ensure sliders reset properly
+            const resetGradientAdj = {};
+            Object.keys(gradientDefinitions).forEach(gradientId => {
+              resetGradientAdj[gradientId] = { hue: 0, saturation: 0, lightness: 0, alpha: 0 };
+            });
+            setGradientAdjustments(resetGradientAdj);
+            
+            // Reset gradient transparency state (this controls the alpha slider position)
+            setGradientTransparency({});
             
             // Reset all solid colors to original
             const updatedElementColorMap = { ...elementColorMap };
@@ -3133,14 +3141,14 @@ const SvgColorCustomization = ({
               className="transparency-slider"
               style={{ 
                 width: '100%',
-                height: '4px',
+                height: '8px',
                 appearance: 'none',
                 WebkitAppearance: 'none',
                 background: 'linear-gradient(to right, transparent, #000)',
                 borderRadius: '4px',
                 outline: 'none',
                 border: 'none',
-                padding: '4px',
+                padding: '0',
                 margin: '5px 0'
               }}
             />
@@ -3362,14 +3370,14 @@ const SvgColorCustomization = ({
                     className="transparency-slider"
                     style={{ 
                       width: '100%',
-                      height: '4px',
+                      height: '8px',
                       appearance: 'none',
                       WebkitAppearance: 'none',
                       background: 'linear-gradient(to right, transparent, #000)',
                       borderRadius: '4px',
                       outline: 'none',
                       border: 'none',
-                      padding: '4px',
+                      padding: '0',
                       margin: '5px 0'
                     }}
                   />
